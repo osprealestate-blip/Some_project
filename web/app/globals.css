@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #f7f7f5;
+  --fg: #1c1f23;
+  --muted: #5d6670;
+  --panel: #ffffff;
+  --border: #e2e4e7;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111315;
+    --fg: #eceef0;
+    --muted: #9aa3ad;
+    --panel: #1a1d20;
+    --border: #2b2f34;
+  }
+}
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--fg); }
