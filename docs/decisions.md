@@ -13,3 +13,4 @@
 | 2026-11-04 | No photos copied from the internet; free-licence, own photos or map snapshots only. |
 | 2026-11-04 | Opus plans, Sonnet builds from task sheets in `docs/plan/`. No calendar weeks. |
 | 2026-11-04 | App name and domain decided later; working name until then. |
+| 2026-11-04 | Rent contracts and sales are shown per project/building from the public DLD files; the Green List workbooks are optional and market columns only. |
