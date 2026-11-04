@@ -15,3 +15,5 @@ See `CLAUDE.md` for project rules and commands.
 
 Map data © OpenStreetMap contributors (ODbL), tiles by OpenFreeMap. Community boundaries: Dubai Municipality,
 Dubai Government open data licence.
+
+Run the web app locally: `cd web && npm ci && npm run dev`, then open http://localhost:3100 (port 3100, not 3000).

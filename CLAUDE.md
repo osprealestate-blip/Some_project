@@ -38,7 +38,7 @@ Before writing matching or calculation code, inspect dataset columns with `dpi p
 them in `docs/datasets.md`.
 
 ## Commands
-- Web: `cd web && npm ci && npm run dev` · checks: `npm run typecheck && npm test && npm run build`
+- Web: `cd web && npm ci && npm run dev` (serves on port 3100) · checks: `npm run typecheck && npm test && npm run build`
 - Pipeline: `cd pipeline && python -m venv .venv && .venv/bin/pip install -e '.[dev]' && .venv/bin/pytest`
 - Local database: `docker compose up -d db` (applies `db/migrations/` on first start). `DATABASE_URL` is in
   `pipeline/.env.example`.
