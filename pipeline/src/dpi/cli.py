@@ -15,11 +15,39 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("path", type=Path)
     p.add_argument("--title", default=None)
     p.add_argument("--limit", type=int, default=200_000, help="rows to read (default 200,000)")
+    lc = sub.add_parser("load-communities", help="Load community polygons into the database")
+    lc.add_argument("--path", type=Path, default=Path("web/public/data/dubai_communities.geojson"))
+    imp = sub.add_parser("import-dld", help="Import a DLD sales or rent contracts CSV")
+    imp.add_argument("--kind", choices=["sale", "rent"], required=True)
+    imp.add_argument("--source-date", required=True, help="YYYY-MM-DD, the date of the downloaded file")
+    imp.add_argument("path", type=Path)
     args = parser.parse_args(argv)
 
     if args.cmd == "profile":
         cols = profile_csv(args.path, args.limit)
         sys.stdout.write(to_markdown(args.title or args.path.name, cols))
+    elif args.cmd == "load-communities":
+        from dpi import communities
+        from dpi.db import connect
+
+        with connect() as conn:
+            total, launch = communities.load(conn, args.path)
+        print(f"communities: {total} rows, {launch} launch")
+    elif args.cmd == "import-dld":
+        from datetime import date
+
+        from dpi.db import connect
+        from dpi.importers import dld
+        from dpi.names import CommunityRef, CommunityResolver
+
+        with connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("select id, name_official, name_common from communities")
+                resolver = CommunityResolver([CommunityRef(*r) for r in cur.fetchall()])
+            if not resolver._by_key:
+                raise SystemExit("No communities loaded. Run `dpi load-communities` first.")
+            report = dld.import_file(conn, args.path, args.kind, date.fromisoformat(args.source_date), resolver)
+        print(report.render())
     return 0
 
 
