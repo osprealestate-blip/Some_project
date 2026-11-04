@@ -1,0 +1,15 @@
+# Local database for development. Start with: docker compose up -d db
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: dpi
+      POSTGRES_PASSWORD: dpi_local_only
+      POSTGRES_DB: dpi
+    ports:
+      - "5432:5432"
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+      - ./db/migrations:/docker-entrypoint-initdb.d:ro
+volumes:
+  dbdata:
