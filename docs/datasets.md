@@ -72,6 +72,9 @@ Emirates ID numbers, birth dates and nationality.
 | Unit | Building | `units.parent_property_id` to `buildings.property_id` | 98% / 100% / 95% |
 | Building, Unit | Plot | `land_number` | 100% of units and buildings |
 | Sale | Building | `building_name_en`, then fuzzy name match | names always present, spelling varies |
+| Sale | Plot | `building_name_en` → Green List `BuildingNameEn` → `LandNumber` | 97% / 86% / 89% of sales (see `docs/matching-test.md`) |
+
+The buildings file has no building name column, so the Green List name-to-land link is the main bridge.
 
 ## Still open
 
