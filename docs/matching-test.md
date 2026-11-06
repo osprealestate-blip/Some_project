@@ -42,10 +42,21 @@ Areas near 0% are communities with no Green List workbook (for example Nadd Hess
    on a single-building plot. The rest need the tower picked from the name ("Tower 2") against `building_number`,
    or through the units file.
 
-## Not solved by this
+## Part B: map positions from OpenStreetMap (first pass, 6 Nov)
 
-No DLD file or Green List column has coordinates. Part B (footprints: OpenStreetMap names inside the community
-polygon, or Dubai Pulse `dsc_buildings`) is still needed to place buildings on the map.
+No DLD file or Green List column has coordinates. Named OSM buildings (Overpass, `building` + `name`) whose centre
+falls inside the community polygon were compared with the sale names:
+
+| Area | Named OSM buildings | Sales matched, exact name | Sales matched, loose (one name contains the other) |
+| --- | --- | --- | --- |
+| Marsa Dubai | 320 | 38.2% | 78.2% |
+| Al Barsha South Fourth (JVC) | 243 | 30.6% | 53.7% |
+| Business Bay | 220 | 18.1% | 48.2% |
+
+The loose rate is an upper bound: it has not been hand-checked and will include wrong pairs. OSM names alone will
+not place most buildings. The better route is to place **plots**, not names: once a land number has an OSM
+position from one of its exact matches, every DLD building on that plot inherits it. Dubai Pulse `dsc_buildings`
+was not reachable by web search and needs a direct look on the portal.
 
 ## Recommendation for M2
 
