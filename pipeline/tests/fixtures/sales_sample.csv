@@ -1,0 +1,7 @@
+transaction_id,instance_date,trans_group_en,procedure_name_en,reg_type_en,property_usage_en,area_name_en,property_type_en,property_sub_type_en,procedure_area,actual_worth,rooms_en,master_project_en,project_name_en,building_name_en,buyer,seller
+T1,2025-03-10,Sales,Sell,Existing Properties,Residential,Marsa Dubai,Unit,Flat,100,2000000,2 B/R,Dubai Marina,Marina Gate,Marina Gate 1,Buyer A,Seller A
+T2,2025-03-11,Sales,Sell - Pre registration,Off-Plan Properties,Residential,Business Bay,Unit,Flat,60,1200000,Studio,,Some Tower,,Buyer B,Seller B
+T3,2025-03-12,Mortgages,Mortgage Registration,Existing Properties,Residential,Marsa Dubai,Unit,Flat,100,500000,1 B/R,,,,,
+T4,2025-03-13,Sales,Sell,Existing Properties,Residential,Marsa Dubai,Parking,,5,900000,,,,,,
+T5,2025-03-14,Sales,Sell,Existing Properties,Residential,Atlantis Nowhere,Unit,Flat,80,30000,1 B/R,,,,,
+T6,not-a-date,Sales,Sell,Existing Properties,Residential,Marsa Dubai,Unit,Flat,80,900000,1 B/R,,,,,

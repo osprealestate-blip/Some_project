@@ -1,0 +1,5 @@
+contract_id,line_number,contract_start_date,contract_end_date,contract_reg_type_en,property_usage_en,area_name_en,ejari_property_sub_type_en,actual_area,annual_amount,no_of_prop,master_project_en,project_name_en,tenant_name
+C1,1,2025-01-01,2025-12-31,New,Residential,Al Barsha South Fourth,1bed room+Hall,70,60000,1,JVC,Some JVC Tower,Tenant A
+C2,1,2204-01-01,2205-01-01,Renew,Residential,Business Bay,Studio,40,50000,1,,Bay Tower,Tenant B
+C3,1,2025-02-01,2026-01-31,New,Residential,Marsa Dubai,Flat,80,90000,12,,Marina Tower,Tenant C
+C4,1,2025-02-01,2026-01-31,New,Residential,Marsa Dubai,Flat,80,1000,1,,Marina Tower,Tenant D

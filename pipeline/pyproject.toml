@@ -3,7 +3,7 @@ name = "dpi-pipeline"
 version = "0.1.0"
 description = "Data pipeline: download, clean, match and compute metrics for Dubai buildings"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = ["psycopg[binary]>=3.2"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
