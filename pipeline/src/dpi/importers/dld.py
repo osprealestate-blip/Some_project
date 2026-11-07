@@ -301,3 +301,24 @@ def import_file(conn, path: Path, kind: str, source_date: date, resolver: Commun
     for area, n in resolver.unmatched.items():
         report.unmatched_areas[area] += n
     return report
+
+
+def rematch_communities(conn, resolver: CommunityResolver) -> dict[str, int]:
+    """Fill community_id for stored rows that have none, from their raw_area, without re-importing.
+
+    Run after the name resolver learns new spellings. Rows that already have a community are not touched.
+    Returns rows updated per table.
+    """
+    updated = {}
+    with conn.cursor() as cur:
+        for table in ("transactions", "rent_contracts"):
+            cur.execute(f"select distinct raw_area from {table} where community_id is null and raw_area is not null")
+            fixes = [(cid, raw) for (raw,) in cur.fetchall() if (cid := resolver.resolve(raw)) is not None]
+            n = 0
+            for cid, raw in fixes:
+                cur.execute(f"update {table} set community_id = %s where community_id is null and raw_area = %s",
+                            (cid, raw))
+                n += cur.rowcount
+            updated[table] = n
+    conn.commit()
+    return updated

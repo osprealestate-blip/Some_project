@@ -76,6 +76,29 @@ Emirates ID numbers, birth dates and nationality.
 
 The buildings file has no building name column, so the Green List name-to-land link is the main bridge.
 
+## Community names (DLD area to Dubai Municipality community)
+
+Sales and rents carry DLD's `area_name_en`, which often spells the Dubai Municipality community differently
+("Palm Jumeirah" for Nakhlat Jumeira, "Al Warsan First" for Warsan First, "Al Goze Third" for Al Qouz Third,
+"Um Suqaim First" for Umm Suqeim First). `DLD_AREA_ALIASES` in `pipeline/src/dpi/names.py` lists these one-to-one
+renames. Checked on 7 Nov 2026 against the 2 Nov exports (counts are all rows, before cleaning rules):
+
+| | Rows | No community before | No community after |
+| --- | --- | --- | --- |
+| Sales | 1,385,240 | 295,083 (21.3%) | 19,411 (1.4%) |
+| Rent contracts (2 Nov export) | 1,940,578 | 570,671 (29.4%) | 46,155 (2.4%) |
+
+Dubai Marina, JVC and Business Bay were already fully matched and are unchanged.
+
+Left unmatched on purpose, because the name could be more than one community or there is no polygon for it:
+`AL QUSAIS` (about 28,900 rents; Al Qusais First, Second or Third), `Madinat Hind 1-4` (DAMAC Hills 2, about
+12,600 sales; no Dubai Municipality polygon in the bundled file), `Al Twar Fourth/Fifth`, `Al Mizhar Third/Fourth`,
+`Ghadeer Al tair`, and bare `Jabal Ali`, `Nad Al Shiba`, `Um Suqaim`, `Al Ruwayyah`, `Lehbab`. These need polygons
+or a building-level match (M2), not a name guess.
+
+After changing the aliases, run `dpi load-communities` (refreshes common names) and `dpi rematch-communities`
+(fills the community for stored rows that have none) instead of re-importing.
+
 ## Still open
 
 - Is there a downloadable service charge index, and an RTA GTFS feed?

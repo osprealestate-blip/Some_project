@@ -21,6 +21,8 @@ def main(argv: list[str] | None = None) -> int:
     imp.add_argument("--kind", choices=["sale", "rent"], required=True)
     imp.add_argument("--source-date", required=True, help="YYYY-MM-DD, the date of the downloaded file")
     imp.add_argument("path", type=Path)
+    sub.add_parser("rematch-communities",
+                   help="Fill the community for stored sales and rents that have none, using the latest name fixes")
     args = parser.parse_args(argv)
 
     if args.cmd == "profile":
@@ -38,17 +40,34 @@ def main(argv: list[str] | None = None) -> int:
 
         from dpi.db import connect
         from dpi.importers import dld
-        from dpi.names import CommunityRef, CommunityResolver
 
         with connect() as conn:
-            with conn.cursor() as cur:
-                cur.execute("select id, name_official, name_common from communities")
-                resolver = CommunityResolver([CommunityRef(*r) for r in cur.fetchall()])
-            if not resolver._by_key:
-                raise SystemExit("No communities loaded. Run `dpi load-communities` first.")
+            resolver = _resolver(conn)
             report = dld.import_file(conn, args.path, args.kind, date.fromisoformat(args.source_date), resolver)
         print(report.render())
+    elif args.cmd == "rematch-communities":
+        from dpi.db import connect
+        from dpi.importers import dld
+
+        with connect() as conn:
+            resolver = _resolver(conn)
+            updated = dld.rematch_communities(conn, resolver)
+        for table, n in updated.items():
+            print(f"{table}: {n} rows now have a community")
+        if resolver.unmatched:
+            print("still unmatched (distinct raw areas):", len(resolver.unmatched))
     return 0
+
+
+def _resolver(conn):
+    from dpi.names import CommunityRef, CommunityResolver
+
+    with conn.cursor() as cur:
+        cur.execute("select id, name_official, name_common from communities")
+        resolver = CommunityResolver([CommunityRef(*r) for r in cur.fetchall()])
+    if not resolver._by_key:
+        raise SystemExit("No communities loaded. Run `dpi load-communities` first.")
+    return resolver
 
 
 if __name__ == "__main__":
