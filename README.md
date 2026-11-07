@@ -111,6 +111,12 @@ As of 7 Nov 2026 the local database held about 1.39 million sales and 1.69 milli
 About 21% of sales and 29% of rents are not yet tied to a community (name mismatches such as Palm
 Jumeirah); those are fixed in the name resolver, not by hand.
 
+### 5. Buildings, map positions, figures and nearby places
+
+After the imports, run `dpi rematch-communities`, then the steps in [docs/runbook.md](docs/runbook.md):
+`dpi migrate`, `dpi match-buildings`, `dpi place-buildings`, `dpi compute-metrics` and `dpi load-pois`.
+The web app reads the same database: put `DATABASE_URL` in `web/.env.local` (see `web/.env.example`).
+
 ### Profile a new file
 
 Before writing matching or calculation code against a new dataset, profile it and record the columns in
