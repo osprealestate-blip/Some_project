@@ -38,10 +38,18 @@ Before writing matching or calculation code, inspect dataset columns with `dpi p
 them in `docs/datasets.md`.
 
 ## Commands
-- Web: `cd web && npm ci && npm run dev` (serves on port 3100) · checks: `npm run typecheck && npm test && npm run build`
+Ports: web app on **3100**, database on **5433** (osp-crm uses 3000 and 5432 on the same PC). Full steps in
+`README.md`.
+- Database: `docker compose up -d db` (applies `db/migrations/` on first start; data persists in the `dbdata`
+  volume, never run `docker compose down -v` without asking).
+- Web: `cd web && npm ci && npm run dev` (http://localhost:3100) · checks: `npm run typecheck && npm test && npm run build`
 - Pipeline: `cd pipeline && python -m venv .venv && .venv/bin/pip install -e '.[dev]' && .venv/bin/pytest`
-- Local database: `docker compose up -d db` (applies `db/migrations/` on first start). `DATABASE_URL` is in
-  `pipeline/.env.example`.
+- `dpi` needs `DATABASE_URL` in the environment (not read from `.env`):
+  `postgresql://dpi:dpi_local_only@localhost:5433/dpi` (see `pipeline/.env.example`).
+- Load data, from the repo root: `dpi load-communities` first (234 rows, 3 launch), then
+  `dpi import-dld --kind sale|rent --source-date YYYY-MM-DD <file.csv>` for each part file in `data/raw/`.
+  Imports upsert on the DLD reference, so re-running or resuming a file is safe.
+- Profile a dataset: `dpi profile <file.csv>`.
 
 ## Reference code
 osp-crm (osprealestate-blip/osp-crm) is read-only reference. Copy logic from it, never commit to it. Useful:

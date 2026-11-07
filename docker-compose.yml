@@ -7,7 +7,7 @@ services:
       POSTGRES_PASSWORD: dpi_local_only
       POSTGRES_DB: dpi
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - dbdata:/var/lib/postgresql/data
       - ./db/migrations:/docker-entrypoint-initdb.d:ro
