@@ -10,7 +10,7 @@ export const LANDMARKS: Landmark[] = [
   { id: "downtown", name: "Downtown Dubai (Burj Khalifa)", lng: 55.2744, lat: 25.1972 },
   { id: "difc", name: "DIFC", lng: 55.2823, lat: 25.2131 },
   { id: "kite-beach", name: "Kite Beach", lng: 55.199, lat: 25.1586 },
-  { id: "jumeirah", name: "Jumeirah (Jumeirah Mosque)", lng: 55.2659, lat: 25.2338 },
+  { id: "jumeirah-beach", name: "Jumeirah Beach (public beach)", lng: 55.2517, lat: 25.2196 },
   { id: "dxb", name: "Dubai International Airport (DXB)", lng: 55.3657, lat: 25.2532 },
 ];
 
