@@ -10,6 +10,7 @@ Order matters. Every step can be re-run safely. Commands run from the repo root 
 | 2 | `dpi load-communities` | Community polygons (already done on the dev PC). |
 | 3 | `dpi import-dld --kind sale --source-date 2026-11-02 <sales csv>` (each part) | DLD sales (already done). |
 | 4 | `dpi import-dld --kind rent --source-date <date> <rent csv>` (each part) | Ejari rents (already done). |
+| 4b | `dpi rematch-communities` | Fills communities for stored rows using the latest name fixes (from PR #6). Run before step 5. |
 | 5 | `dpi match-buildings [--crosswalk <building_crosswalk.csv>] [--dld-buildings <buildings csv>]` | M2: one building per sale name in each community, aliases, project links, rents per project. The crosswalk from `python -m dpi.spikes.greenlist_crosswalk` adds DLD land numbers; the DLD buildings file then adds floors. Both are optional. |
 | 6 | `dpi place-buildings --fetch --save-osm data/clean/osm_buildings.json` | Map positions from named OpenStreetMap buildings in the launch areas (default `--communities 392,681,346`; pass `--communities ""` for all of Dubai). Next time, `--osm-json data/clean/osm_buildings.json` re-uses the download. Hand positions in `db/seeds/manual_positions.csv` (slug, lat, lng) always win. |
 | 7 | `dpi compute-metrics` | 12-month medians, year-on-year change, yields per building and community, monthly community series. Re-run after every import. |

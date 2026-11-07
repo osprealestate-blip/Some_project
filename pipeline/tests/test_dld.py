@@ -64,3 +64,43 @@ def test_header_errors_and_helpers():
         assert "missing" in str(e)
     assert parse_rooms("Studio") == 0 and parse_rooms("3 B/R") == 3 and parse_rooms("Office") is None
     assert "on conflict (source, source_ref) do update" in upsert_sql("rent")
+
+
+class _FakeCursor:
+    def __init__(self, raw_areas):
+        self.raw_areas, self.updates, self.rowcount = raw_areas, [], 0
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def execute(self, sql, params=None):
+        if sql.startswith("select"):
+            self.table = sql.split(" from ")[1].split()[0]
+        else:
+            self.updates.append((self.table, params))
+            self.rowcount = 10
+
+    def fetchall(self):
+        return [(a,) for a in self.raw_areas]
+
+
+class _FakeConn:
+    def __init__(self, raw_areas):
+        self.cur = _FakeCursor(raw_areas)
+
+    def cursor(self):
+        return self.cur
+
+    def commit(self):
+        pass
+
+
+def test_rematch_updates_only_resolvable_areas():
+    from dpi.importers.dld import rematch_communities
+
+    conn = _FakeConn(["MARSA DUBAI", "Nowhere"])
+    assert rematch_communities(conn, resolver()) == {"transactions": 10, "rent_contracts": 10}
+    assert conn.cur.updates == [("transactions", (1, "MARSA DUBAI")), ("rent_contracts", (1, "MARSA DUBAI"))]
