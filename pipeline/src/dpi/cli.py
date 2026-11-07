@@ -21,6 +21,26 @@ def main(argv: list[str] | None = None) -> int:
     imp.add_argument("--kind", choices=["sale", "rent"], required=True)
     imp.add_argument("--source-date", required=True, help="YYYY-MM-DD, the date of the downloaded file")
     imp.add_argument("path", type=Path)
+    mg = sub.add_parser("migrate", help="Apply new db/migrations files to an existing database")
+    mg.add_argument("--dir", type=Path, default=None)
+    mb = sub.add_parser("match-buildings", help="M2: build buildings from sale names and link sales and rents")
+    mb.add_argument("--crosswalk", type=Path, help="building_crosswalk.csv from the Green List spike (optional)")
+    mb.add_argument("--dld-buildings", type=Path, help="DLD buildings CSV, for floors (optional)")
+    mb.add_argument("--min-sales", type=int, default=3)
+    pb = sub.add_parser("place-buildings", help="Map positions from OpenStreetMap, hand placing and shared plots")
+    pb.add_argument("--osm-json", type=Path, help="saved Overpass JSON (named buildings)")
+    pb.add_argument("--fetch", action="store_true", help="download named OSM buildings from Overpass")
+    pb.add_argument("--save-osm", type=Path, help="where to save the downloaded Overpass JSON")
+    pb.add_argument("--manual", type=Path, default=Path("db/seeds/manual_positions.csv"))
+    pb.add_argument("--communities", default="392,681,346", help="DM codes to place (comma separated, empty = all)")
+    sub.add_parser("compute-metrics", help="Trailing 12-month medians, yields and monthly series")
+    lp = sub.add_parser("load-pois", help="Nearby places: KHDA schools, DHA facilities, OpenStreetMap")
+    lp.add_argument("--khda", type=Path)
+    lp.add_argument("--sheryan", type=Path)
+    lp.add_argument("--osm-json", type=Path)
+    lp.add_argument("--fetch-osm", action="store_true")
+    lp.add_argument("--save-osm", type=Path)
+    lp.add_argument("--source-date", required=True, help="YYYY-MM-DD of the files (or of the OSM download)")
     args = parser.parse_args(argv)
 
     if args.cmd == "profile":
@@ -48,6 +68,63 @@ def main(argv: list[str] | None = None) -> int:
                 raise SystemExit("No communities loaded. Run `dpi load-communities` first.")
             report = dld.import_file(conn, args.path, args.kind, date.fromisoformat(args.source_date), resolver)
         print(report.render())
+    elif args.cmd == "migrate":
+        from dpi import migrate
+        from dpi.db import connect
+
+        with connect() as conn:
+            done = migrate.run(conn, args.dir) if args.dir else migrate.run(conn)
+        print("applied: " + (", ".join(done) if done else "nothing new"))
+    elif args.cmd == "match-buildings":
+        from dpi.db import connect
+        from dpi.matching import buildings
+
+        with connect() as conn:
+            print(buildings.run(conn, args.crosswalk, args.dld_buildings, args.min_sales).render())
+    elif args.cmd == "place-buildings":
+        import json
+
+        from dpi.db import connect
+        from dpi.matching import osm
+
+        codes = [c.strip() for c in args.communities.split(",") if c.strip()]
+        with connect() as conn:
+            data = None
+            if args.osm_json:
+                data = json.loads(args.osm_json.read_text(encoding="utf-8"))
+            elif args.fetch:
+                data = osm.fetch(osm.community_bbox(conn, codes))
+                if args.save_osm:
+                    args.save_osm.write_text(json.dumps(data), encoding="utf-8")
+            print(osm.place(conn, data, args.manual, codes).render())
+    elif args.cmd == "compute-metrics":
+        from dpi.db import connect
+        from dpi.metrics import compute
+
+        with connect() as conn:
+            print(compute.run(conn).render())
+    elif args.cmd == "load-pois":
+        import json
+        from datetime import date
+
+        from dpi.db import connect
+        from dpi.load import pois
+
+        sd = date.fromisoformat(args.source_date)
+        with connect() as conn:
+            if args.khda:
+                print("KHDA schools:", pois.replace_source(conn, "khda", sd, pois.read_khda(args.khda)))
+            if args.sheryan:
+                print("DHA facilities:", pois.replace_source(conn, "dha_sheryan", sd, pois.read_sheryan(args.sheryan)))
+            data = None
+            if args.osm_json:
+                data = json.loads(args.osm_json.read_text(encoding="utf-8"))
+            elif args.fetch_osm:
+                data = pois.fetch_osm()
+                if args.save_osm:
+                    args.save_osm.write_text(json.dumps(data), encoding="utf-8")
+            if data:
+                print("OpenStreetMap places:", pois.replace_source(conn, "osm", sd, pois.read_osm(data)))
     return 0
 
 

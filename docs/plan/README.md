@@ -26,3 +26,9 @@ read, steps, checks, and what not to touch.
 | T1.2 | [Load communities](M1-T1.2-load-communities.md) | Done |
 | T1.3 | [Import sales and rents](M1-T1.3-import-sales-rents.md) | Code done, real files pending |
 | T1.4 | [Matching test](M1-T1.4-matching-test.md) | Part A done (names to plots, `docs/matching-test.md`); part B footprints to do |
+| M2 | Building matching: `dpi match-buildings` (`pipeline/src/dpi/matching/buildings.py`) | Code done, run on real data pending |
+| M3 | Map positions `dpi place-buildings`; map opens on the launch areas, building dots coloured by AED/sq ft | Code done, OSM download on the dev PC pending |
+| M4 | Building and community pages, search, charts (`web/app/building`, `web/app/community`, `/search`) | Done on synthetic data |
+| M5 | Fair-price checker (`/tools/fair-price`, `web/lib/fairPrice.ts`) | Done |
+| M6 | Nearby + basic Life Score (`dpi load-pois`, `web/lib/lifeScore.ts`), rent increase calculator (`web/lib/rentIncrease.ts`) | Done |
+| M7 | QA and soft launch: real-data run, hand-check of the 3 launch areas, hosting choice | To do. Steps in `docs/runbook.md` |

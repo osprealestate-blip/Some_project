@@ -6,6 +6,11 @@
   --muted: #5d6670;
   --panel: #ffffff;
   --border: #e2e4e7;
+  --grid: #eceef0;
+  --accent: #2a69a6;
+  --series-1: #2a78d6;
+  --good: #1b7f4b;
+  --warn: #b45309;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -14,7 +19,15 @@
     --muted: #9aa3ad;
     --panel: #1a1d20;
     --border: #2b2f34;
+    --grid: #23272b;
+    --accent: #5b9bd5;
+    --series-1: #3987e5;
+    --good: #4cb782;
+    --warn: #e0a040;
   }
 }
 html, body { height: 100%; }
 body { background: var(--bg); color: var(--fg); }
+
+a.link { color: var(--accent); }
+a.link:hover { text-decoration: underline; }
