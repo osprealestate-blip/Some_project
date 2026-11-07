@@ -82,3 +82,23 @@ describe("stats and format", () => {
     expect(roomsLabel(5)).toBe("4+ beds");
   });
 });
+
+import { driveMinutes, haversineM, keyDistances, LANDMARKS } from "./landmarks";
+
+describe("key distances", () => {
+  it("measures straight-line distance and a rounded drive estimate", () => {
+    // Princess Tower (Marina) to Burj Khalifa is about 17.5 km in a straight line
+    const d = haversineM(55.1468, 25.0887, 55.2744, 25.1972);
+    expect(d).toBeGreaterThan(17_000);
+    expect(d).toBeLessThan(18_000);
+    expect(driveMinutes(d) % 5).toBe(0);
+    expect(driveMinutes(200)).toBe(5);
+  });
+  it("lists the nearest school first, then the fixed places, with OSM route links", () => {
+    const out = keyDistances(55.1468, 25.0887, [{ id: "school", name: "Nearest school: X", lng: 55.145, lat: 25.088 }]);
+    expect(out).toHaveLength(LANDMARKS.length + 1);
+    expect(out[0].id).toBe("school");
+    expect(out[0].routeUrl).toContain("openstreetmap.org/directions");
+    expect(out.map((o) => o.id)).toContain("dxb");
+  });
+});

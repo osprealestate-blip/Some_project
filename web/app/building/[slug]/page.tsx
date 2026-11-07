@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import BuildingMap from "@/components/BuildingMap";
 import LineChart from "@/components/LineChart";
+import KeyDistances from "@/components/KeyDistances";
 import NearbyPanel from "@/components/NearbyPanel";
 import NoData from "@/components/NoData";
 import RoomsTable from "@/components/RoomsTable";
@@ -136,6 +137,13 @@ export default async function Page({ params }: Params) {
           {placed ? <BuildingMap focus={{ lng: b.lng!, lat: b.lat! }} /> : <div className="flex h-full items-center justify-center p-4 text-sm text-[var(--muted)]">Map position not confirmed yet.</div>}
         </div>
       </section>
+
+      {placed && (
+        <section className="mt-8">
+          <h2 className="text-base font-semibold">How far to key places</h2>
+          <div className="mt-2"><KeyDistances lng={b.lng!} lat={b.lat!} places={places} /></div>
+        </section>
+      )}
 
       <section className="mt-8 grid gap-3 sm:grid-cols-2">
         <Link href={`/tools/fair-price?building=${b.slug}`} className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4 hover:border-[var(--accent)]">

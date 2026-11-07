@@ -196,14 +196,15 @@ export async function recentSales(id: number, limit = 15): Promise<RecentSale[]>
   );
 }
 
-export type Place = NearbyPlace & { source: string; source_date: string; attributes: Record<string, string> };
+export type Place = NearbyPlace & { source: string; source_date: string; attributes: Record<string, string>; lng: number; lat: number };
 
 /** Places within 2 km, the nearest few per subcategory. */
 export async function nearbyPlaces(b: Building, radius = 2000, perKind = 3): Promise<Place[]> {
   if (b.lng == null || b.lat == null) return [];
   return query<Place>(
-    `select category, subcategory, name, distance_m, source, source_date, attributes from (
+    `select category, subcategory, name, distance_m, source, source_date, attributes, lng, lat from (
        select p.category, p.subcategory, p.name, p.source, p.source_date::text, p.attributes,
+              ST_X(p.geom) as lng, ST_Y(p.geom) as lat,
               ST_Distance(p.geom::geography, ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography) as distance_m,
               row_number() over (partition by p.category, p.subcategory
                 order by p.geom::geography <-> ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography) as n

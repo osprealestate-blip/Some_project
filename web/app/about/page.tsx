@@ -49,6 +49,11 @@ export default function Page() {
       </section>
 
       <section>
+        <h2 className="text-base font-semibold">How far to key places</h2>
+        <p className="mt-2">Building pages show the distance to the nearest school, Business Bay, Downtown, DIFC, Kite Beach, Jumeirah and DXB airport. Distance is a straight line; drive time is an estimate (road distance about 1.35 times the straight line, at typical off-peak speeds, plus a few minutes to park). Each row links to the real road route on OpenStreetMap. Rush-hour commute times come later.</p>
+      </section>
+
+      <section>
         <h2 className="text-base font-semibold">Life Score (basic)</h2>
         <p className="mt-2">Out of 100. Each group earns its full points when the nearest place is within 400 m (about a five-minute walk), falling to none at 2 km. Distances are straight lines, not walking routes.</p>
         <ul className="mt-2 list-disc ps-5">{LIFE_GROUPS.map((g) => <li key={g.id}>{g.label}: {g.weight} points</li>)}</ul>
