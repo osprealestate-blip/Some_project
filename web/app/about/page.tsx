@@ -50,7 +50,7 @@ export default function Page() {
 
       <section>
         <h2 className="text-base font-semibold">How far to key places</h2>
-        <p className="mt-2">Building pages show the distance to the nearest school, Business Bay, Downtown, DIFC, Kite Beach, Jumeirah Beach and DXB airport. Distance is a straight line; drive time is an estimate (road distance about 1.35 times the straight line, at typical off-peak speeds, plus a few minutes to park). Each row links to the real road route on OpenStreetMap. Rush-hour commute times come later.</p>
+        <p className="mt-2">Building pages show the distance to the nearest school, the nearest point of Sheikh Zayed Road, Business Bay, Downtown, DIFC, Kite Beach, Jumeirah Beach and DXB airport. Distance is a straight line; drive time is an estimate (road distance about 1.35 times the straight line, at typical off-peak speeds, plus a few minutes to park). Each row links to the real road route on OpenStreetMap. Rush-hour commute times come later.</p>
       </section>
 
       <section>

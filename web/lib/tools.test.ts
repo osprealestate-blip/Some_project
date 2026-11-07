@@ -83,7 +83,7 @@ describe("stats and format", () => {
   });
 });
 
-import { driveMinutes, haversineM, keyDistances, LANDMARKS } from "./landmarks";
+import { driveMinutes, haversineM, keyDistances, LANDMARKS, nearestOnLine, SHEIKH_ZAYED_ROAD } from "./landmarks";
 
 describe("key distances", () => {
   it("measures straight-line distance and a rounded drive estimate", () => {
@@ -96,9 +96,22 @@ describe("key distances", () => {
   });
   it("lists the nearest school first, then the fixed places, with OSM route links", () => {
     const out = keyDistances(55.1468, 25.0887, [{ id: "school", name: "Nearest school: X", lng: 55.145, lat: 25.088 }]);
-    expect(out).toHaveLength(LANDMARKS.length + 1);
+    expect(out).toHaveLength(LANDMARKS.length + 2);
+    expect(out[1].id).toBe("szr");
     expect(out[0].id).toBe("school");
     expect(out[0].routeUrl).toContain("openstreetmap.org/directions");
     expect(out.map((o) => o.id)).toContain("dxb");
+  });
+});
+
+describe("Sheikh Zayed Road", () => {
+  it("finds the nearest point on the road line", () => {
+    const onRoad = nearestOnLine(55.2005, 25.118, SHEIKH_ZAYED_ROAD);
+    expect(haversineM(55.2005, 25.118, onRoad.lng, onRoad.lat)).toBeLessThan(1);
+    // JVC centre is a few km inland from the road
+    const jvc = nearestOnLine(55.209, 25.06, SHEIKH_ZAYED_ROAD);
+    const d = haversineM(55.209, 25.06, jvc.lng, jvc.lat);
+    expect(d).toBeGreaterThan(3000);
+    expect(d).toBeLessThan(7000);
   });
 });
