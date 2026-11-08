@@ -28,7 +28,7 @@ export default function Page() {
 
       <section>
         <h2 className="text-base font-semibold">Matching deals to buildings</h2>
-        <p className="mt-2">DLD sales carry a building name but no map position, and spellings vary. Names are tidied (case, punctuation, words like “Tower”) and grouped within each community. Where the DLD plot number is known, names on the same single-building plot are merged. DLD rent contracts name only the project, so a building with several towers in one project shows the project&apos;s rents and says so. Map positions come from OpenStreetMap building names, or are placed by hand.</p>
+        <p className="mt-2">DLD sales carry a building name but no map position, and spellings vary. Names are tidied (case, punctuation, words like “Tower”) and grouped within each community. Where the DLD plot number is known, names on the same single-building plot are merged. DLD rent contracts name only the project, never the tower. Where a contract&apos;s exact flat size and bedrooms match flats sold in only one tower nearby, it is placed in that tower and the rent is marked as estimated; otherwise a building with several towers in one project shows the project&apos;s rents and says so. Map positions come from OpenStreetMap building names, or are placed by hand.</p>
       </section>
 
       <section>

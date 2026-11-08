@@ -9,7 +9,9 @@ How a sale finds its building:
    DLD buildings CSV then adds floors for single-building plots. For plots with several towers the tower is
    picked from the number in the name ("Tower 2") when the plot has that many buildings; otherwise floors stay empty.
 4. Projects are linked by project name within the community. Rents have no building name, so a rent belongs
-   to a building only when its project has exactly one building; otherwise pages show project-level rents.
+   to a building when its project has exactly one building ('project', exact), or when its unit size and
+   bedrooms fit exactly one tower's sold sizes ('size', estimated; see matching/rents.py). Otherwise pages
+   show project-level rents.
 
 Only market columns are read. Nothing here touches owner, buyer, seller or tenant data.
 """
@@ -22,6 +24,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from dpi.matching import rents
 from dpi.names import is_blank, name_key
 
 MIN_SALES = 3  # a name needs this many counted sales before it becomes a building page
@@ -227,6 +230,7 @@ class MatchReport:
     rents_linked: int = 0
     rents_project: int = 0
     rents_total: int = 0
+    rents_estimated: int = 0
 
     def render(self) -> str:
         pct = lambda a, b: f"{100 * a / b:.1f}%" if b else "n/a"  # noqa: E731
@@ -234,7 +238,8 @@ class MatchReport:
             f"buildings: {self.buildings} ({self.with_land} with a DLD land number)",
             f"sales linked to a building: {self.sales_linked} of {self.sales_named} named sales ({pct(self.sales_linked, self.sales_named)})",
             f"rents linked to a project: {self.rents_project} of {self.rents_total} ({pct(self.rents_project, self.rents_total)})",
-            f"rents linked to a building: {self.rents_linked} ({pct(self.rents_linked, self.rents_total)})",
+            f"rents linked to a building: {self.rents_linked} ({pct(self.rents_linked, self.rents_total)}), "
+            f"of which {self.rents_estimated} estimated from unit size",
         ])
 
 
@@ -296,6 +301,7 @@ def run(conn, crosswalk_path: Path | None = None, dld_buildings_path: Path | Non
 
         _link_sales(cur, building_ids, project_ids)
         _link_rents(cur, project_ids)
+        report.rents_estimated = rents.estimate(cur)
 
         cur.execute("select count(*) filter (where building_id is not null), count(*) from transactions "
                     "where excluded is null and raw_building is not null")
@@ -391,10 +397,10 @@ def _link_projects(cur, table: str, project_ids: dict[tuple[int, str], int]) -> 
 
 def _link_rents(cur, project_ids: dict[tuple[int, str], int]) -> None:
     _link_projects(cur, "rent_contracts", project_ids)
-    cur.execute("update rent_contracts set building_id = null where building_id is not null")
+    cur.execute("update rent_contracts set building_id = null, building_match = null where building_id is not null")
     # A rent belongs to a building only when its project has exactly one building page.
     cur.execute("""
-        update rent_contracts r set building_id = solo.building_id
+        update rent_contracts r set building_id = solo.building_id, building_match = 'project'
         from (select project_id, min(id) as building_id from buildings where project_id is not null
               group by project_id having count(*) = 1) solo
         where r.project_id = solo.project_id

@@ -71,7 +71,7 @@ export default async function Page({ params }: Params) {
       <section className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat label="Median price per sq ft" value={psf(all?.sale_median_psf_12m)} note={`${count(all?.sale_count_12m ?? 0)} sales in 12 months`} />
         <Stat label="Change on a year earlier" value={pct(yoy, 1, true)} note="Median per sq ft" />
-        <Stat label="Median annual rent" value={aedShort(all?.rent_median_12m)} note={rentLevel === "project" ? "Whole project (rents are filed per project)" : `${count(all?.rent_count_12m ?? 0)} contracts`} />
+        <Stat label="Median annual rent" value={aedShort(all?.rent_median_12m)} note={rentLevel === "project" ? "Whole project (rents are filed per project)" : rentLevel === "estimated" ? `Estimated: ${count(all?.rent_count_12m ?? 0)} contracts, some placed by unit size` : `${count(all?.rent_count_12m ?? 0)} contracts`} />
         <Stat label="Gross yield (estimate)" value={pct(midYield)} note="Median across bedroom types" />
       </section>
       <SourceNote source={`${SOURCES.dldSales}; ${SOURCES.dldRents}`} date={periodEnd} estimate>
@@ -81,7 +81,7 @@ export default async function Page({ params }: Params) {
       <section className="mt-8">
         <h2 className="text-base font-semibold">By bedroom type, last 12 months</h2>
         <div className="mt-2"><RoomsTable rows={summaries} /></div>
-        <p className="mt-1 text-xs text-[var(--muted)]">* Estimate. Rows need 3 or more deals for a median.{rentLevel === "project" ? " Rents are for the whole project, because DLD rent contracts name the project, not the tower." : ""}</p>
+        <p className="mt-1 text-xs text-[var(--muted)]">* Estimate. Rows need 3 or more deals for a median.{rentLevel === "project" ? " Rents are for the whole project, because DLD rent contracts name the project, not the tower." : ""}{rentLevel === "estimated" ? " Rent contracts do not name the tower, so some were placed in this building because their exact size and bedrooms match flats sold here and in no other tower nearby. Estimated." : ""}</p>
       </section>
 
       <section className="mt-8 grid gap-6 lg:grid-cols-2">
@@ -90,7 +90,7 @@ export default async function Page({ params }: Params) {
           <SourceNote source={SOURCES.dldSales} date={periodEnd} />
         </div>
         <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
-          <LineChart title={`Median annual rent, by quarter${series.rentLevel === "project" ? " (whole project)" : ""}`} points={series.rents} unit="aed" countLabel="contracts" />
+          <LineChart title={`Median annual rent, by quarter${series.rentLevel === "project" ? " (whole project)" : series.rentLevel === "estimated" ? " (estimated)" : ""}`} points={series.rents} unit="aed" countLabel="contracts" />
           <SourceNote source={SOURCES.dldRents} date={periodEnd} />
         </div>
       </section>

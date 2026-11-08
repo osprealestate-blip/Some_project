@@ -26,6 +26,11 @@ ROOMS = [("Studio", 0, 40), ("1 B/R", 1, 70), ("2 B/R", 2, 115), ("3 B/R", 3, 16
 RENT_ROOMS = {0: "Studio", 1: "1bed room+Hall", 2: "2 bed rooms+hall", 3: "3 bed rooms+hall"}
 
 
+def layouts(i: int, sqm: float) -> list[float]:
+    """Each tower has three exact flat sizes per bedroom type, different from every other tower's (as in real towers)."""
+    return [round(sqm + 0.71 * i + 2.9 * j, 2) for j in range(3)]
+
+
 def write(out: Path, end: date = date(2026, 10, 30), seed: int = 7) -> None:
     rnd = random.Random(seed)
     out.mkdir(parents=True, exist_ok=True)
@@ -35,13 +40,13 @@ def write(out: Path, end: date = date(2026, 10, 30), seed: int = 7) -> None:
                     "property_usage_en", "area_name_en", "property_type_en", "property_sub_type_en", "procedure_area",
                     "actual_worth", "rooms_en", "master_project_en", "project_name_en", "building_name_en"])
         n = 0
-        for area, project, names, psf, *_ in BUILDINGS:
+        for b, (area, project, names, psf, *_) in enumerate(BUILDINGS):
             for i in range(140):
                 days = rnd.randint(0, 3 * 365)
                 when = end - timedelta(days=days)
                 growth = 1 + 0.12 * (1 - days / (3 * 365))  # newer sales a bit dearer
                 label, _, sqm = rnd.choice(ROOMS)
-                size = sqm * rnd.uniform(0.9, 1.15)
+                size = rnd.choice(layouts(b, sqm))
                 price = round(size * 10.7639 * psf * growth * rnd.uniform(0.88, 1.12), -3)
                 n += 1
                 w.writerow([f"S{n}", when.isoformat(), "Sales", "Sell", "Existing Properties", "Residential", area,
@@ -52,14 +57,18 @@ def write(out: Path, end: date = date(2026, 10, 30), seed: int = 7) -> None:
                     "property_usage_en", "area_name_en", "ejari_property_sub_type_en", "actual_area",
                     "annual_amount", "no_of_prop", "master_project_en", "project_name_en"])
         n = 0
-        for area, project, _, psf, *_ in BUILDINGS:
+        truth = {}
+        for b, (area, project, names, psf, *_) in enumerate(BUILDINGS):
             for _ in range(80):
                 start = end - timedelta(days=rnd.randint(0, 2 * 365))
                 _, rooms, sqm = rnd.choice(ROOMS)
+                sqm = rnd.choice(layouts(b, sqm))
                 rent = round(sqm * 10.7639 * psf * 0.065 * rnd.uniform(0.9, 1.1), -2)
+                truth[f"R{n + 1}"] = names[0]
                 n += 1
                 w.writerow([f"R{n}", 1, start.isoformat(), (start + timedelta(days=364)).isoformat(),
                             rnd.choice(["New", "Renew"]), "Residential", area, RENT_ROOMS[rooms], sqm, rent, 1, "", project])
+    (out / "rents_truth.json").write_text(json.dumps(truth), encoding="utf-8")
     elements = []
     for i, (_, _, names, _, lng, lat) in enumerate(BUILDINGS):
         d = 0.0004
