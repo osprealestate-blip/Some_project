@@ -30,6 +30,15 @@ importer never reads them). It empties those tables on the target first, so it c
 
 1. Create the schema on the hosted database once (apply `db/migrations/*.sql` in order).
 2. Put the hosted connection string in `pipeline/.env.hosted` (never committed, never pasted in chat).
+   On Supabase, `dpi hosted-login` does this without anyone handling a password:
+
+   ```bash
+   dpi hosted-login --role dpi_push --env-name HOSTED_DATABASE_URL   # uploads
+   dpi hosted-login --role dpi_web  --env-name WEB_DATABASE_URL      # the website, read-only
+   ```
+
+   Each prints a SCRAM verifier (safe to share; it cannot be turned back into the password). Create the role on
+   Supabase with it, see `db/hosted_roles.sql`, then run `dpi hosted-login --role ... --env-name ... --check`.
 3. Run, with `DATABASE_URL` pointing at the local database:
 
    ```bash
