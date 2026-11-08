@@ -51,7 +51,9 @@ export default function NearbyPanel({ places, placed }: { places: Place[]; place
                       {p.attributes?.rating ? <span className="text-[var(--muted)]"> · KHDA {p.attributes.rating}</span> : null}
                       {p.attributes?.curriculum ? <span className="text-[var(--muted)]"> · {p.attributes.curriculum}</span> : null}
                     </span>
-                    <span className="shrink-0 text-[var(--muted)] tabular-nums">{metres(p.distance_m)}</span>
+                    <span className="shrink-0 text-[var(--muted)] tabular-nums">
+                      {p.attributes?.approx_location ? "≈ " : ""}{metres(p.distance_m)}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -60,7 +62,7 @@ export default function NearbyPanel({ places, placed }: { places: Place[]; place
         })}
       </div>
       <p className="mt-3 text-xs text-[var(--muted)]">
-        Straight-line distances. Score: each group earns full points within 400 m, falling to none at 2 km. Places: {sources.join("; ")}.
+        Straight-line distances; ≈ marks a place whose official position is rounded to about 1 km. Score: each group earns full points within 400 m, falling to none at 2 km. Places: {sources.join("; ")}.
       </p>
     </div>
   );

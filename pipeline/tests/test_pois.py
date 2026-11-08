@@ -15,7 +15,7 @@ def test_coordinates_in_any_common_form():
 def test_read_khda(tmp_path):
     p = tmp_path / "schools.csv"
     p.write_text("School_Name,Curriculum,Overall_Rating,Latitude,Longitude,Principal Phone\n"
-                 "Marina School,British,Good,25.08,55.14,+971500000000\n"
+                 "Marina School,British,Good,25.0812,55.1403,+971500000000\n"
                  "No Coords,UK,,,\n", encoding="utf-8")
     rows = read_khda(p)
     assert len(rows) == 1
@@ -30,6 +30,25 @@ def test_read_sheryan(tmp_path):
                  "Marina Clinic,Clinic,55.14,25.08\nBay Pharmacy,Pharmacy,55.27,25.18\n", encoding="utf-8")
     rows = read_sheryan(p)
     assert [(r.category, r.subcategory) for r in rows] == [("health", "clinic"), ("daily_needs", "pharmacy")]
+
+
+def test_real_khda_and_sheryan_columns(tmp_path):
+    # Column names as in the Dubai Pulse downloads (school_search, sheryan_facility_detail).
+    p = tmp_path / "school_search.csv"
+    p.write_text("name_eng,curriculumen,overallperformanceen,latitude,longitude\n"
+                 "Marina School,UK,Very Good,25.08,55.14\nBad Point,UK,Good,90,90\nZero,UK,Good,0,0\n", encoding="utf-8")
+    rows = read_khda(p)
+    assert [r.name for r in rows] == ["Marina School"]
+    assert rows[0].attributes == {"curriculum": "UK", "rating": "Very Good", "approx_location": True}
+
+    p = tmp_path / "sheryan_facility_detail.csv"
+    p.write_text("facilitynameenglish,facilitycategorynameenglish,facilitystatuscode,xcoordinate,ycoordinate\n"
+                 "Marina Clinic,Clinic,FAC_ACT,55.1403,25.0812\n"
+                 "Old Clinic,Clinic,FAC_CAN,55.1403,25.0812\n"
+                 "Bay Hospital,Hospital,FAC_ACT,55.27,25.1834\n", encoding="utf-8")
+    rows = read_sheryan(p)
+    assert [(r.name, r.subcategory, r.attributes) for r in rows] == [
+        ("Marina Clinic", "clinic", {}), ("Bay Hospital", "hospital", {"approx_location": True})]
 
 
 def test_read_osm():

@@ -33,8 +33,8 @@ Sample values are left out of this document on purpose.
 | `buildings_2026-11-02_17-41-49_0001.csv` | 259,061 | Building facts | `floors` filled for 85%, `built_up_area` 92%, `car_parks` 90%; `elevators` and `flats` under 3%. |
 | `land_registry_2026-10-19_17-45-39_0001.csv` | about 265,000 | Plots | Has `land_number`, `parcel_id`, `is_free_hold`. No geometry. |
 | `projects_2026-07-06_16-25-21_0001.csv` | 3,039 | Developers, status, completion | Older than the others (6 Jul). `percent_completed` 99.8% filled, `completion_date` 61%. Statuses: 1,469 finished, 865 active, 459 not started, 232 pending. |
-| `school_search_2026-10-25_*.csv` | n/a | KHDA schools | Has lat/long, curriculum, rating, student count. |
-| `sheryan_facility_detail_2026-02-01_*.csv` | n/a | Health facilities | Has `xcoordinate` and `ycoordinate` (coordinate system to confirm). |
+| `school_search_2026-10-25_*.csv` | n/a | KHDA schools | Columns `name_eng`, `curriculumen`, `overallperformanceen`, `latitude`, `longitude`. Many positions rounded to 2 decimals (about 1 km) and some junk (90/90, 0); rounded ones are marked approximate. |
+| `sheryan_facility_detail_2026-02-01_*.csv` | n/a | Health facilities | Columns `facilitynameenglish`, `facilitycategorynameenglish`, `xcoordinate`, `ycoordinate`, plus a status (`FAC_CAN` = cancelled, skipped). Some positions rounded to 2 decimals. |
 | `residential_sale_index_*.csv` | n/a | Price index | Same data as the file in osp-crm. |
 | `bus_routes_*.csv` | n/a | Bus stops | Names and numbers only, no coordinates. |
 | `offices_*.csv/.xlsx` | n/a | Real estate offices | Agent verification (Phase 2). |
