@@ -55,8 +55,20 @@ def test_full_pipeline(conn):
     rep = buildings.run(conn, source_date=sd)
     assert rep.buildings == 8  # spellings merged: Princess/PRINCESS, The Torch/Torch Tower, Bay Square variants
     assert rep.sales_linked == rep.sales_named == 8 * 140
-    # Marina Gate has two buildings, so its rents stay at project level; every other project is one tower.
-    assert rep.rents_project == 8 * 80 and rep.rents_linked == 6 * 80
+    # Marina Gate has two towers, so its rents have no exact tower; every other project is one tower.
+    # Each tower has its own flat sizes, so Marina Gate rents are placed by size (estimated) in the right tower.
+    assert rep.rents_project == 8 * 80 and rep.rents_estimated == 2 * 80 and rep.rents_linked == 8 * 80
+    truth = json.loads((out / "rents_truth.json").read_text())
+    with conn.cursor() as cur:
+        cur.execute("select r.source_ref, b.name_en from rent_contracts r join buildings b on b.id = r.building_id "
+                    "where r.building_match = 'size'")
+        placed = cur.fetchall()
+    assert placed and all(truth[ref.split(":")[0]] == name for ref, name in placed)
+
+    from dpi.matching import rents as rent_match
+    bt = rent_match.backtest(conn, cutoff=date(2026, 1, 1))
+    assert bt.rents_predicted == bt.rents_correct > 0  # single-tower rents, project hidden: always the right tower
+    assert bt.sales_correct == bt.sales_predicted > 0
 
     # Re-running keeps slugs stable.
     with conn.cursor() as cur:
@@ -72,7 +84,9 @@ def test_full_pipeline(conn):
     assert place.osm == 8 and place.unplaced == 0
 
     m = compute.run(conn)
-    assert m.period_end == date(2026, 10, 30)
+    with conn.cursor() as cur:
+        cur.execute("select max(txn_date) from transactions where excluded is null")
+        assert m.period_end == cur.fetchone()[0]  # window ends on the newest sale, not today
     with conn.cursor() as cur:
         cur.execute("select s.sale_count_12m, s.sale_median_psf_12m, s.rent_level, s.sale_count_all "
                     "from building_summary s join buildings b on b.id = s.building_id "
@@ -81,7 +95,7 @@ def test_full_pipeline(conn):
         assert 0 < n12 < 140 and n_all == 140 and 1400 < psf < 2200 and level == "building"
         cur.execute("select rent_level from building_summary s join buildings b on b.id = s.building_id "
                     "where b.slug = 'marina-gate-1' and s.rooms = -1")
-        assert cur.fetchone()[0] == "project"
+        assert cur.fetchone()[0] == "estimated"
         cur.execute("select count(*) from building_summary where gross_yield is not null and gross_yield between 0.02 and 0.12")
         assert cur.fetchone()[0] > 0
         cur.execute("select count(*) from community_summary cs join communities c on c.id = cs.community_id "

@@ -4,6 +4,7 @@ Rules (also shown on the About page):
 - Sales: counted DLD sales (`excluded is null`) of apartments. Medians, never means.
 - Rents: counted Ejari contracts with a known bedroom count (this keeps offices and shops out).
   Where a rent has no building, the building shows its project's rents and says so (`rent_level = 'project'`).
+  Where some of a building's rents were placed by unit size (matching/rents.py), `rent_level = 'estimated'`.
 - Bedrooms: 0 = studio; 4 and above are grouped as 4. rooms = -1 means all bedroom types.
 - The 12-month window ends on the newest sale date in the data, not today, so a stale file never looks fresh.
 - Gross yield = median annual rent / median sale price over the same 12 months and bedroom type. An estimate.
@@ -33,7 +34,7 @@ sprev as (select * from s where txn_date <= %(end)s::date - interval '12 months'
 
 _BUILDING_SUMMARY = _SALES_CTE + """,
 r12 as (
-  select building_id, project_id, least(rooms, 4) as rooms, annual_rent
+  select building_id, project_id, least(rooms, 4) as rooms, annual_rent, building_match
   from rent_contracts
   where excluded is null and rooms is not null
     and start_date > %(end)s::date - interval '12 months' and start_date <= %(end)s
@@ -56,6 +57,7 @@ sale_prev as (
 ),
 rent_b as (
   select building_id, case when grouping(rooms) = 1 then -1 else rooms end as rooms, count(*) as n,
+         bool_or(building_match = 'size') as est,
          percentile_cont(0.5) within group (order by annual_rent) as rent
   from r12 where building_id is not null
   group by grouping sets ((building_id, rooms), (building_id))
@@ -89,7 +91,8 @@ select k.building_id, k.rooms,
   case when sp.n >= %(min)s then sp.psf end,
   coalesce(rb.n, rp.n, 0),
   case when rb.n >= %(min)s then rb.rent when rb.n is null and rp.n >= %(min)s then rp.rent end,
-  case when rb.n >= %(min)s then 'building' when rb.n is null and rp.n >= %(min)s then 'project' end,
+  case when rb.n >= %(min)s and rb.est then 'estimated' when rb.n >= %(min)s then 'building'
+       when rb.n is null and rp.n >= %(min)s then 'project' end,
   null,
   case when k.rooms = -1 then coalesce(a.n, 0) else 0 end,
   case when k.rooms = -1 then a.last_sale end,

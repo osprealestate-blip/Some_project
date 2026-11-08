@@ -34,6 +34,7 @@ def main(argv: list[str] | None = None) -> int:
     pb.add_argument("--manual", type=Path, default=Path("db/seeds/manual_positions.csv"))
     pb.add_argument("--communities", default="392,681,346", help="DM codes to place (comma separated, empty = all)")
     sub.add_parser("compute-metrics", help="Trailing 12-month medians, yields and monthly series")
+    sub.add_parser("rent-backtest", help="How often rents placed by unit size land in the right tower (read-only)")
     lp = sub.add_parser("load-pois", help="Nearby places: KHDA schools, DHA facilities, OpenStreetMap")
     lp.add_argument("--khda", type=Path)
     lp.add_argument("--sheryan", type=Path)
@@ -105,6 +106,12 @@ def main(argv: list[str] | None = None) -> int:
 
         with connect() as conn:
             print(compute.run(conn).render())
+    elif args.cmd == "rent-backtest":
+        from dpi.db import connect
+        from dpi.matching import rents
+
+        with connect() as conn:
+            print(rents.backtest(conn).render())
     elif args.cmd == "load-pois":
         import json
         from datetime import date

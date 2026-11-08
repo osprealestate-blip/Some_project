@@ -16,7 +16,7 @@ export type Summary = {
   sale_median_psf_prev_12m: number | null;
   rent_count_12m: number;
   rent_median_12m: number | null;
-  rent_level?: "building" | "project" | null;
+  rent_level?: RentLevel;
   gross_yield: number | null;
   period_end: string;
   source_date: string;
@@ -158,7 +158,9 @@ export async function buildingSummaries(id: number): Promise<Summary[]> {
 
 /** Quarterly median price per sq ft (sales) and annual rent (building rents, or the project's when the
  *  building has none), last eight years. Quarters with fewer than 3 deals are left empty. */
-export async function buildingSeries(b: Building): Promise<{ sales: SeriesPoint[]; rents: SeriesPoint[]; rentLevel: "building" | "project" | null }> {
+export type RentLevel = "building" | "estimated" | "project" | null;
+
+export async function buildingSeries(b: Building): Promise<{ sales: SeriesPoint[]; rents: SeriesPoint[]; rentLevel: RentLevel }> {
   const sales = await query<{ period: string; value: number; count: number }>(
     `select date_trunc('quarter', txn_date)::date::text as period,
             percentile_cont(0.5) within group (order by price_psf) as value, count(*)::int as count
@@ -170,19 +172,21 @@ export async function buildingSeries(b: Building): Promise<{ sales: SeriesPoint[
   );
   const rentSql = (col: string) => `
     select date_trunc('quarter', start_date)::date::text as period,
-           percentile_cont(0.5) within group (order by annual_rent) as value, count(*)::int as count
+           percentile_cont(0.5) within group (order by annual_rent) as value, count(*)::int as count,
+           bool_or(building_match = 'size') as est
       from rent_contracts
      where ${col} = $1 and excluded is null and rooms is not null
        and start_date > (select max(txn_date) from transactions) - interval '8 years'
        and start_date <= (select max(txn_date) from transactions)
      group by 1 order by 1`;
-  let rents = await query<{ period: string; value: number; count: number }>(rentSql("building_id"), [b.id]);
-  let rentLevel: "building" | "project" | null = rents.length ? "building" : null;
+  let rents = await query<{ period: string; value: number; count: number; est?: boolean }>(rentSql("building_id"), [b.id]);
+  let rentLevel: RentLevel = rents.length ? (rents.some((r) => r.est) ? "estimated" : "building") : null;
   if (!rents.length && b.project_id) {
     rents = await query(rentSql("project_id"), [b.project_id]);
     rentLevel = rents.length ? "project" : null;
   }
-  const thin = (p: { period: string; value: number; count: number }) => ({ ...p, value: p.count >= 3 ? p.value : null });
+  const thin = (p: { period: string; value: number; count: number }) =>
+    ({ period: p.period, count: p.count, value: p.count >= 3 ? p.value : null });
   return { sales: sales.map(thin), rents: rents.map(thin), rentLevel };
 }
 
