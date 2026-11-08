@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from datetime import date
 
 TOLERANCE_SQFT = 1  # sizes within +-1 sq ft count as the same layout
+MAX_SIZE_SQFT = 1_000_000  # the rent files hold typos above this, some too big for an integer; never a flat
 
 # Exact sizes per building and bedroom count, from counted apartment sales.
 _FINGERPRINTS = """
@@ -21,7 +22,8 @@ create temp table _fp on commit drop as
 with base as (
   select t.community_id, t.rooms, round(t.size_sqft)::int as k, t.building_id, b.project_id, count(*) as n
   from transactions t join buildings b on b.id = t.building_id
-  where t.excluded is null and t.property_type = 'apartment' and t.rooms is not null and t.size_sqft > 0
+  where t.excluded is null and t.property_type = 'apartment' and t.rooms is not null
+    and t.size_sqft > 0 and t.size_sqft < {max_size}
     {where}
   group by 1, 2, 3, 4, 5
 )
@@ -34,7 +36,7 @@ group by 1, 2, 3, 4, 5
 def _fingerprints(cur, before: date | None = None) -> None:
     cur.execute("drop table if exists _fp")
     where = "and t.txn_date < %(before)s" if before else ""
-    cur.execute(_FINGERPRINTS.format(where=where), {"tol": TOLERANCE_SQFT, "before": before})
+    cur.execute(_FINGERPRINTS.format(where=where, max_size=MAX_SIZE_SQFT), {"tol": TOLERANCE_SQFT, "before": before})
     cur.execute("create index on _fp (community_id, rooms, k)")
 
 
@@ -42,7 +44,7 @@ def _fingerprints(cur, before: date | None = None) -> None:
 _UNIQUE_FIT = """
 select r.id, min(f.building_id) as building_id
 from rent_contracts r
-join _fp f on f.community_id = r.community_id and f.rooms = r.rooms and f.k = round(r.size_sqft)::int
+join _fp f on f.community_id = r.community_id and f.rooms = r.rooms and f.k = case when r.size_sqft < {max_size} then round(r.size_sqft)::int end
 where {where} and r.size_sqft > 0 and r.rooms is not null
   and (r.project_id is null or f.project_id = r.project_id {ignore_project})
 group by r.id
@@ -54,7 +56,7 @@ def estimate(cur) -> int:
     """Link rents that have no building to the one tower whose sold sizes fit. Returns rows linked."""
     cur.execute("update rent_contracts set building_id = null, building_match = null where building_match = 'size'")
     _fingerprints(cur)
-    sql = _UNIQUE_FIT.format(where="r.building_id is null and r.excluded is null", ignore_project="")
+    sql = _UNIQUE_FIT.format(where="r.building_id is null and r.excluded is null", ignore_project="", max_size=MAX_SIZE_SQFT)
     cur.execute(f"update rent_contracts r set building_id = u.building_id, building_match = 'size' "
                 f"from ({sql}) u where r.id = u.id")
     return cur.rowcount
@@ -105,7 +107,7 @@ def backtest(conn, cutoff: date = date(2025, 1, 1)) -> Backtest:
             with s as (
               select id, community_id, rooms, round(size_sqft)::int as k, building_id from transactions
               where excluded is null and property_type = 'apartment' and building_id is not null
-                and rooms is not null and size_sqft > 0 and txn_date >= %(c)s
+                and rooms is not null and size_sqft > 0 and size_sqft < %(max)s and txn_date >= %(c)s
             ), fit as (
               select s.id, min(f.building_id) as pick, count(distinct f.building_id) as n
               from s join _fp f on f.community_id = s.community_id and f.rooms = s.rooms and f.k = s.k
@@ -113,12 +115,13 @@ def backtest(conn, cutoff: date = date(2025, 1, 1)) -> Backtest:
             )
             select count(*), count(*) filter (where fit.n = 1), count(*) filter (where fit.n = 1 and fit.pick = s.building_id)
             from s left join fit on fit.id = s.id
-        """, {"c": cutoff})
+        """, {"c": cutoff, "max": MAX_SIZE_SQFT})
         bt.sales_tested, bt.sales_predicted, bt.sales_correct = cur.fetchone()
 
         # 2. Rents whose tower is known exactly, predicted as if their project were unknown.
         _fingerprints(cur)
-        sql = _UNIQUE_FIT.format(where="r.building_match = 'project' and r.excluded is null", ignore_project="or true")
+        sql = _UNIQUE_FIT.format(where="r.building_match = 'project' and r.excluded is null", ignore_project="or true",
+                                 max_size=MAX_SIZE_SQFT)
         cur.execute(f"create temp table _pred on commit drop as {sql}")
         cur.execute("""
             select (select count(*) from rent_contracts where building_match = 'project' and excluded is null

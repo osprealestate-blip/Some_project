@@ -108,3 +108,17 @@ def test_full_pipeline(conn):
         cur.execute("select count(*) from pois p join buildings b on b.slug = 'princess-tower' "
                     "where ST_DWithin(p.geom::geography, ST_Centroid(b.geom)::geography, 1000)")
         assert cur.fetchone()[0] == 7
+
+
+def test_rent_size_typos_do_not_break_the_estimate(conn):
+    from dpi.matching import rents
+
+    with conn.transaction(force_rollback=True), conn.cursor() as cur:
+        cur.execute("select id from communities limit 1")
+        community = cur.fetchone()[0]
+        cur.execute("""insert into rent_contracts (source, source_ref, source_date, community_id, start_date,
+                         annual_rent, size_sqft, rooms)
+                       values ('test', 'huge', '2026-01-01', %s, '2026-01-01', 90000, 1.0e10, 1)""", (community,))
+        rents.estimate(cur)
+        cur.execute("select building_id from rent_contracts where source_ref = 'huge'")
+        assert cur.fetchone()[0] is None
