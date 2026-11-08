@@ -91,6 +91,11 @@ def to_lnglat(x: float | None, y: float | None) -> tuple[float, float] | None:
     return None
 
 
+def _coarse(pt: tuple[float, float]) -> bool:
+    """True when either coordinate has 2 decimals or fewer (about 1 km), as in parts of the KHDA and DHA files."""
+    return any(abs(v * 100 - round(v * 100)) < 1e-6 for v in pt)
+
+
 # --- rows ------------------------------------------------------------------------------------------------
 
 @dataclass
@@ -109,16 +114,19 @@ def read_khda(path: Path) -> list[Poi]:
         reader = csv.DictReader(fh)
         keys = {_key(h): h for h in reader.fieldnames or []}
         for r in reader:
-            name = _pick(r, keys, "school_name", "name_en", "english_name", "school_name_en", "name")
+            name = _pick(r, keys, "name_eng", "school_name", "name_en", "english_name", "school_name_en", "name")
             pt = to_lnglat(_float(_pick(r, keys, "longitude", "long", "lng", "lon", "x")),
                            _float(_pick(r, keys, "latitude", "lat", "y")))
             if not name or not pt:
                 continue
             attrs = {k: v for k, v in {
-                "curriculum": _pick(r, keys, "curriculum", "curriculum_en", "curriculum_name"),
-                "rating": _pick(r, keys, "overall_rating", "khda_rating", "rating", "latest_rating", "inspection_rating"),
+                "curriculum": _pick(r, keys, "curriculumen", "curriculum", "curriculum_en", "curriculum_name"),
+                "rating": _pick(r, keys, "overallperformanceen", "overall_rating", "khda_rating", "rating",
+                                "latest_rating", "inspection_rating"),
                 "grades": _pick(r, keys, "grades", "grade_range", "phases"),
             }.items() if v}
+            if _coarse(pt):
+                attrs["approx_location"] = True
             out.append(Poi("school", "school", name, pt[0], pt[1], attrs))
     return out
 
@@ -133,18 +141,22 @@ def read_sheryan(path: Path) -> list[Poi]:
         reader = csv.DictReader(fh)
         keys = {_key(h): h for h in reader.fieldnames or []}
         for r in reader:
-            name = _pick(r, keys, "facility_name_en", "facility_name", "name_en", "name")
-            kind = (_pick(r, keys, "facility_category_en", "facility_category", "facility_type_en", "facility_type",
-                          "category") or "").lower()
+            status = " ".join(str(r.get(h) or "") for k, h in keys.items() if "status" in k).upper()
+            if "FAC_CAN" in status or "CANCEL" in status or "CLOSED" in status:
+                continue
+            name = _pick(r, keys, "facilitynameenglish", "facility_name_en", "facility_name", "name_en", "name")
+            kind = (_pick(r, keys, "facilitycategorynameenglish", "facility_category_en", "facility_category",
+                          "facilitysubcategorynameenglish", "facility_type_en", "facility_type", "category") or "").lower()
             pt = to_lnglat(_float(_pick(r, keys, "xcoordinate", "x_coordinate", "longitude", "x")),
                            _float(_pick(r, keys, "ycoordinate", "y_coordinate", "latitude", "y")))
             if not name or not pt:
                 continue
             sub = next((s for word, s in _HEALTH_SUB if word in kind or word in name.lower()), "clinic")
+            attrs = {"approx_location": True} if _coarse(pt) else {}
             if sub == "pharmacy":
-                out.append(Poi("daily_needs", "pharmacy", name, pt[0], pt[1], {}))
+                out.append(Poi("daily_needs", "pharmacy", name, pt[0], pt[1], attrs))
             else:
-                out.append(Poi("health", sub, name, pt[0], pt[1], {}))
+                out.append(Poi("health", sub, name, pt[0], pt[1], attrs))
     return out
 
 
