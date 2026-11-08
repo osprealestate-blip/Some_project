@@ -20,6 +20,22 @@ Order matters. Every step can be re-run safely. Commands run from the repo root 
 Each command prints counts. Check after step 5 that the launch areas have most sales linked, and after step 6
 how many buildings are still unplaced: those are the ones to hand-place (step 6's CSV).
 
+## Copying to a hosted database (temporary online site)
+
+The hosted site reads its own database. `dpi push-public` copies only the public tables the web app reads:
+all communities, community figures and nearby places, plus buildings, building figures and the last 10 years of
+sales and rents for the launch areas. Sales and rent rows carry no buyer, seller, owner or tenant fields (the
+importer never reads them). It empties those tables on the target first, so it can be re-run after each refresh.
+
+1. Create the schema on the hosted database once (apply `db/migrations/*.sql` in order).
+2. Put the hosted connection string in `pipeline/.env.hosted` (never committed, never pasted in chat).
+3. Run, with `DATABASE_URL` pointing at the local database:
+
+   ```bash
+   export HOSTED_DATABASE_URL="$(grep -oP '(?<=HOSTED_DATABASE_URL=).*' pipeline/.env.hosted)"
+   pipeline/.venv/bin/dpi push-public            # --communities 392,681,346 --years 10 by default
+   ```
+
 ## Hand-checking a launch area (M7)
 
 1. Open `/community/392` (then 681, 346) and go down the building list.

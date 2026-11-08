@@ -43,6 +43,11 @@ def main(argv: list[str] | None = None) -> int:
     lp.add_argument("--source-date", required=True, help="YYYY-MM-DD of the files (or of the OSM download)")
     sub.add_parser("rematch-communities",
                    help="Fill the community for stored sales and rents that have none, using the latest name fixes")
+    pp = sub.add_parser("push-public", help="Copy the public tables the web app reads to a hosted database")
+    pp.add_argument("--target-env", default="HOSTED_DATABASE_URL",
+                    help="environment variable holding the target connection string (never pass it on the command line)")
+    pp.add_argument("--communities", default="392,681,346", help="DM codes whose sales and rents are copied")
+    pp.add_argument("--years", type=int, default=10)
     args = parser.parse_args(argv)
 
     if args.cmd == "profile":
@@ -133,6 +138,20 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{table}: {n} rows now have a community")
         if resolver.unmatched:
             print("still unmatched (distinct raw areas):", len(resolver.unmatched))
+    elif args.cmd == "push-public":
+        import os
+
+        import psycopg
+
+        from dpi import push_public
+        from dpi.db import connect
+
+        target_url = os.environ.get(args.target_env)
+        if not target_url:
+            raise SystemExit(f"{args.target_env} is not set.")
+        codes = [c.strip() for c in args.communities.split(",") if c.strip()]
+        with connect() as src, psycopg.connect(target_url) as dst:
+            print(push_public.run(src, dst, codes, args.years).render())
     return 0
 
 
