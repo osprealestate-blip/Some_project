@@ -49,6 +49,15 @@ def main(argv: list[str] | None = None) -> int:
                     help="environment variable holding the target connection string (never pass it on the command line)")
     pp.add_argument("--communities", default="392,681,346", help="DM codes whose sales and rents are copied")
     pp.add_argument("--years", type=int, default=10)
+    hl = sub.add_parser("hosted-login",
+                        help="Make a hosted-database login whose password stays in pipeline/.env.hosted")
+    hl.add_argument("--role", required=True, help="e.g. dpi_push (uploads) or dpi_web (the website, read-only)")
+    hl.add_argument("--env-name", required=True, help="e.g. HOSTED_DATABASE_URL or WEB_DATABASE_URL")
+    hl.add_argument("--project-ref", default="bpofhxraugwdhhskxsew")
+    hl.add_argument("--region", default="ap-southeast-1")
+    hl.add_argument("--file", type=Path, default=Path("pipeline/.env.hosted"))
+    hl.add_argument("--check", action="store_true",
+                    help="after the role exists: try the saved string, fixing the pooler host if needed")
     args = parser.parse_args(argv)
 
     if args.cmd == "profile":
@@ -159,7 +168,41 @@ def main(argv: list[str] | None = None) -> int:
         codes = [c.strip() for c in args.communities.split(",") if c.strip()]
         with connect() as src, psycopg.connect(target_url) as dst:
             print(push_public.run(src, dst, codes, args.years).render())
+    elif args.cmd == "hosted-login":
+        _hosted_login(args)
     return 0
+
+
+def _hosted_login(args) -> None:
+    import secrets
+
+    from dpi import hosted
+
+    hosts = [f"aws-1-{args.region}.pooler.supabase.com", f"aws-0-{args.region}.pooler.supabase.com"]
+    if not args.check:
+        password = secrets.token_urlsafe(32)
+        hosted.set_env_line(args.file, args.env_name, hosted.pooler_url(args.role, args.project_ref, password, hosts[0]))
+        print(f"Saved {args.env_name} in {args.file} (the password is only in that file).")
+        print(f"Verifier for {args.role}, safe to share:")
+        print(hosted.scram_verifier(password))
+        return
+    import psycopg
+
+    url = hosted.read_env_line(args.file, args.env_name)
+    if not url:
+        raise SystemExit(f"{args.env_name} is not in {args.file}.")
+    for host in hosts:
+        candidate = url.replace(hosts[0], host).replace(hosts[1], host)
+        try:
+            with psycopg.connect(candidate, connect_timeout=15) as conn:
+                conn.execute("select 1")
+        except psycopg.OperationalError as e:
+            print(f"{host}: {str(e).splitlines()[0][:160]}")
+            continue
+        hosted.set_env_line(args.file, args.env_name, candidate)
+        print(f"OK: {args.role} connects through {host}.")
+        return
+    raise SystemExit("Could not connect with either pooler host.")
 
 
 def _resolver(conn):
