@@ -6,6 +6,7 @@ recreates the public schema, so never point it at a database with real data.
 import json
 import os
 from datetime import date
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -166,3 +167,44 @@ def test_odd_records_are_set_aside_and_cleared_on_rerun(conn):
                     "where c.dm_code = '392' and cs.rooms = -1")
         split, total, towers = cur.fetchone()
         assert split == total and towers >= 3
+
+
+def test_more_towers_placed_and_approximate_positions_rebuilt(conn):
+    from dpi.matching import osm
+
+    full = json.loads((conn.info_dir / "osm_buildings.json").read_text())
+    # OSM without Marina Gate 2 and Princess Tower: Gate 2 takes Gate 1's spot (same project, approximate),
+    # Princess Tower is found by OpenStreetMap's name search instead, with a developer suffix in the answer.
+    partial = {"elements": [e for e in full["elements"] if e["tags"]["name"] not in ("Marina Gate 2", "Princess Tower")]}
+    asked = []
+    with conn.cursor() as cur:
+        cur.execute("update buildings set geom = null, geom_source = null, osm_id = null")
+
+    def lookup(q, bbox):
+        asked.append(q)
+        s, w, n, e = bbox
+        assert s < 25.0887 < n and w < 55.1468 < e
+        if q == "Princess Tower":
+            return [{"lat": "25.0887", "lon": "55.1468", "name": "Princess Tower by Tameer"},
+                    {"lat": "25.0800", "lon": "55.1400", "name": "Princess Plaza"}]
+        return []
+
+    rep = osm.place(conn, partial, None, ["392"], lookup)
+    assert rep.osm == 2 and rep.nominatim == 1 and rep.project == 1 and rep.unplaced == 0
+    assert "Princess Tower" in asked and "Marina Gate 1" not in asked  # only unplaced towers are looked up
+    with conn.cursor() as cur:
+        cur.execute("select slug, geom_source, round(ST_X(ST_PointOnSurface(geom))::numeric, 4) from buildings "
+                    "where slug in ('princess-tower', 'marina-gate-2') order by slug")
+        assert cur.fetchall() == [("marina-gate-2", "project", _gate1_x(cur)), ("princess-tower", "osm", Decimal("55.1468"))]
+
+    # With full OSM data the approximate spot is replaced by the exact one.
+    rep = osm.place(conn, full, None, None)
+    assert rep.osm == 8 and rep.project == 0 and rep.unplaced == 0
+    with conn.cursor() as cur:
+        cur.execute("select geom_source from buildings where slug = 'marina-gate-2'")
+        assert cur.fetchone()[0] == "osm"
+
+
+def _gate1_x(cur):
+    cur.execute("select round(ST_X(ST_PointOnSurface(geom))::numeric, 4) from buildings where slug = 'marina-gate-1'")
+    return cur.fetchone()[0]
