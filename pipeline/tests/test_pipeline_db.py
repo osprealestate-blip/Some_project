@@ -56,8 +56,10 @@ def test_full_pipeline(conn):
     assert rep.buildings == 8  # spellings merged: Princess/PRINCESS, The Torch/Torch Tower, Bay Square variants
     assert rep.sales_linked == rep.sales_named == 8 * 140
     # Marina Gate has two towers, so its rents have no exact tower; every other project is one tower.
-    # Each tower has its own flat sizes, so Marina Gate rents are placed by size (estimated) in the right tower.
-    assert rep.rents_project == 8 * 80 and rep.rents_estimated == 2 * 80 and rep.rents_linked == 8 * 80
+    # Each tower has its own flat sizes, so Marina Gate rents are placed by size (estimated) in the right tower,
+    # except layouts the tower has sold fewer than MIN_SUPPORT times, which stay at project level.
+    assert rep.rents_project == 8 * 80 and 0.7 * 2 * 80 < rep.rents_estimated < 2 * 80
+    assert rep.rents_linked == 6 * 80 + rep.rents_estimated
     truth = json.loads((out / "rents_truth.json").read_text())
     with conn.cursor() as cur:
         cur.execute("select r.source_ref, b.name_en from rent_contracts r join buildings b on b.id = r.building_id "
@@ -122,3 +124,45 @@ def test_rent_size_typos_do_not_break_the_estimate(conn):
         rents.estimate(cur)
         cur.execute("select building_id from rent_contracts where source_ref = 'huge'")
         assert cur.fetchone()[0] is None
+
+
+def test_odd_records_are_set_aside_and_cleared_on_rerun(conn):
+    from dpi.metrics import compute, outliers
+
+    with conn.transaction(force_rollback=True), conn.cursor() as cur:
+        cur.execute("select b.id, b.community_id, b.project_id, max(t.txn_date) from buildings b "
+                    "join transactions t on t.building_id = b.id where b.slug = 'princess-tower' group by 1, 2, 3")
+        building, community, project, day = cur.fetchone()
+        # An AED 46 per sq ft "sale" and a studio "rented" for a million, next to normal records.
+        cur.execute("""insert into transactions (source, source_ref, source_date, community_id, building_id, project_id,
+                         txn_date, price, size_sqft, price_psf, rooms, property_type, off_plan)
+                       values ('test', 'odd-sale', %s, %s, %s, %s, %s, 60000, 1300, 46, 1, 'apartment', false)""",
+                    (day, community, building, project, day))
+        cur.execute("""insert into rent_contracts (source, source_ref, source_date, community_id, project_id, start_date,
+                         annual_rent, size_sqft, rooms)
+                       values ('test', 'odd-rent', %s, %s, %s, %s, 1000000, 400, 0)""", (day, community, project, day))
+        rep = outliers.flag(cur)
+        assert rep.sales >= 1 and rep.rents >= 1
+        cur.execute("select excluded from transactions where source_ref = 'odd-sale'")
+        assert cur.fetchone()[0] == outliers.SALE_RULE
+        cur.execute("select excluded from rent_contracts where source_ref = 'odd-rent'")
+        assert cur.fetchone()[0] == outliers.RENT_RULE
+        # Normal records stay counted: almost nothing else in the synthetic data is flagged.
+        cur.execute("select count(*) from transactions where excluded is not null")
+        assert cur.fetchone()[0] <= 1 + 0.01 * 8 * 140
+        # A re-run clears old flags before setting new ones.
+        cur.execute("delete from transactions where source_ref = 'odd-sale'")
+        cur.execute("delete from rent_contracts where source_ref = 'odd-rent'")
+        cur.execute("update transactions set excluded = %s where source_ref = (select min(source_ref) from transactions)",
+                    (outliers.SALE_RULE,))
+        outliers.flag(cur)
+        cur.execute("select count(*) from transactions where excluded = %s", (outliers.SALE_RULE,))
+        assert cur.fetchone()[0] <= 0.01 * 8 * 140
+
+    compute.run(conn)  # leaves the summaries as the full test computed them
+    with conn.cursor() as cur:
+        cur.execute("select cs.sale_count_ready_12m + cs.sale_count_offplan_12m, cs.sale_count_12m, cs.like_for_like_towers "
+                    "from community_summary cs join communities c on c.id = cs.community_id "
+                    "where c.dm_code = '392' and cs.rooms = -1")
+        split, total, towers = cur.fetchone()
+        assert split == total and towers >= 3

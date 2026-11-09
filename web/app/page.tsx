@@ -42,15 +42,16 @@ export default async function Home() {
           {LAUNCH_COMMUNITIES.map((c) => {
             const d = byCode.get(c.code);
             const s = d?.summary;
-            const yoy = change(s?.sale_median_psf_12m, s?.sale_median_psf_prev_12m);
+            const lfl = s?.like_for_like_change ?? null;
+            const yoy = lfl ?? change(s?.sale_median_psf_12m, s?.sale_median_psf_prev_12m);
             return (
               <Link key={c.code} href={`/community/${c.code}`} className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4 hover:border-[var(--accent)]">
                 <div className="font-medium">{c.label}</div>
-                <div className="text-xs text-[var(--muted)]">{c.officialName}</div>
+                <div className="text-xs text-[var(--muted)]">{c.officialName}{c.scope ? " (incl. JBR, Bluewaters, Dubai Harbour)" : ""}</div>
                 {s ? (
                   <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
                     <div><dt className="text-xs text-[var(--muted)]">Median price</dt><dd className="tabular-nums">{psf(s.sale_median_psf_12m)}</dd></div>
-                    <div><dt className="text-xs text-[var(--muted)]">Year on year</dt><dd className="tabular-nums">{pct(yoy, 1, true)}</dd></div>
+                    <div><dt className="text-xs text-[var(--muted)]">{lfl != null ? "Year on year, same towers" : "Year on year"}</dt><dd className="tabular-nums">{pct(yoy, 1, true)}</dd></div>
                     <div><dt className="text-xs text-[var(--muted)]">Median rent</dt><dd className="tabular-nums">{aedShort(s.rent_median_12m)}/yr</dd></div>
                     <div><dt className="text-xs text-[var(--muted)]">Buildings</dt><dd className="tabular-nums">{d?.buildings ?? "–"}</dd></div>
                   </dl>
