@@ -6,6 +6,8 @@ create role dpi_push login bypassrls password '<verifier for dpi_push>';
 grant usage on schema public to dpi_push;
 grant select, insert, update, delete, truncate, maintain on all tables in schema public to dpi_push;  -- maintain: analyze (PG17)
 grant usage, select, update on all sequences in schema public to dpi_push;
+grant usage on schema extensions to dpi_push;            -- Supabase keeps PostGIS here
+alter role dpi_push set search_path = public, extensions;
 
 -- The website (Vercel DATABASE_URL): read-only.
 create role dpi_web login bypassrls password '<verifier for dpi_web>';
