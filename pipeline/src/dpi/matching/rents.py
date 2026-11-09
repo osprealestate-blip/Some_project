@@ -3,8 +3,9 @@
 Ejari rent contracts name a project at most, never the tower. But flats in a tower come in a handful of
 exact sizes, and DLD sales tell us which sizes each tower has. So a rent of a 2-bed of 1,234.5 sq ft in a
 community where only one tower has sold 2-beds of that size (within 1 sq ft) almost certainly sits in that
-tower. Only a unique fit is used; when two towers share a layout, the rent stays at project or community
-level. Rents linked this way are marked `building_match = 'size'` and shown as estimated.
+tower. Only a unique fit backed by at least MIN_SUPPORT sales of that layout is used; when two towers share a
+layout, or the tower has sold it only once or twice (a typo or a one-off), the rent stays at project or
+community level. Rents linked this way are marked `building_match = 'size'` and shown as estimated.
 
 `backtest()` measures how often this is right where the true building is known.
 """
@@ -15,6 +16,7 @@ from datetime import date
 
 TOLERANCE_SQFT = 1  # sizes within +-1 sq ft count as the same layout
 MAX_SIZE_SQFT = 1_000_000  # the rent files hold typos above this, some too big for an integer; never a flat
+MIN_SUPPORT = 6  # sales of that exact layout in that tower before a rent is placed there (backtest: 87% right)
 
 # Exact sizes per building and bedroom count, from counted apartment sales.
 _FINGERPRINTS = """
@@ -48,7 +50,7 @@ join _fp f on f.community_id = r.community_id and f.rooms = r.rooms and f.k = ca
 where {where} and r.size_sqft > 0 and r.rooms is not null
   and (r.project_id is null or f.project_id = r.project_id {ignore_project})
 group by r.id
-having count(distinct f.building_id) = 1
+having count(distinct f.building_id) = 1 and sum(f.n) >= {min_support}
 """
 
 
@@ -56,7 +58,8 @@ def estimate(cur) -> int:
     """Link rents that have no building to the one tower whose sold sizes fit. Returns rows linked."""
     cur.execute("update rent_contracts set building_id = null, building_match = null where building_match = 'size'")
     _fingerprints(cur)
-    sql = _UNIQUE_FIT.format(where="r.building_id is null and r.excluded is null", ignore_project="", max_size=MAX_SIZE_SQFT)
+    sql = _UNIQUE_FIT.format(where="r.building_id is null and r.excluded is null", ignore_project="", max_size=MAX_SIZE_SQFT,
+                            min_support=MIN_SUPPORT)
     cur.execute(f"update rent_contracts r set building_id = u.building_id, building_match = 'size' "
                 f"from ({sql}) u where r.id = u.id")
     return cur.rowcount
@@ -109,19 +112,20 @@ def backtest(conn, cutoff: date = date(2025, 1, 1)) -> Backtest:
               where excluded is null and property_type = 'apartment' and building_id is not null
                 and rooms is not null and size_sqft > 0 and size_sqft < %(max)s and txn_date >= %(c)s
             ), fit as (
-              select s.id, min(f.building_id) as pick, count(distinct f.building_id) as n
+              select s.id, min(f.building_id) as pick, count(distinct f.building_id) as n, sum(f.n) as support
               from s join _fp f on f.community_id = s.community_id and f.rooms = s.rooms and f.k = s.k
               group by s.id
             )
-            select count(*), count(*) filter (where fit.n = 1), count(*) filter (where fit.n = 1 and fit.pick = s.building_id)
+            select count(*), count(*) filter (where fit.n = 1 and fit.support >= %(min)s),
+                   count(*) filter (where fit.n = 1 and fit.support >= %(min)s and fit.pick = s.building_id)
             from s left join fit on fit.id = s.id
-        """, {"c": cutoff, "max": MAX_SIZE_SQFT})
+        """, {"c": cutoff, "max": MAX_SIZE_SQFT, "min": MIN_SUPPORT})
         bt.sales_tested, bt.sales_predicted, bt.sales_correct = cur.fetchone()
 
         # 2. Rents whose tower is known exactly, predicted as if their project were unknown.
         _fingerprints(cur)
         sql = _UNIQUE_FIT.format(where="r.building_match = 'project' and r.excluded is null", ignore_project="or true",
-                                 max_size=MAX_SIZE_SQFT)
+                                 max_size=MAX_SIZE_SQFT, min_support=MIN_SUPPORT)
         cur.execute(f"create temp table _pred on commit drop as {sql}")
         cur.execute("""
             select (select count(*) from rent_contracts where building_match = 'project' and excluded is null

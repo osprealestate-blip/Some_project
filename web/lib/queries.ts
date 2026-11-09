@@ -22,6 +22,18 @@ export type Summary = {
   source_date: string;
 };
 
+/** Extra figures on a community's all-bedrooms row (rooms = -1). */
+export type CommunitySummary = Summary & {
+  sale_count_ready_12m?: number;
+  sale_median_psf_ready_12m?: number | null;
+  sale_median_psf_ready_prev_12m?: number | null;
+  sale_count_offplan_12m?: number;
+  sale_median_psf_offplan_12m?: number | null;
+  sale_median_psf_offplan_prev_12m?: number | null;
+  like_for_like_change?: number | null;
+  like_for_like_towers?: number;
+};
+
 export type Community = {
   id: number;
   dm_code: string;
@@ -38,6 +50,7 @@ export type BuildingListItem = {
   sale_count_12m: number | null;
   sale_median_psf_12m: number | null;
   rent_median_12m: number | null;
+  rent_level: RentLevel;
   gross_yield: number | null;
 };
 
@@ -70,6 +83,9 @@ export type RecentSale = { txn_date: string; rooms: number | null; size_sqft: nu
 
 const SUMMARY_COLS = `rooms, sale_count_12m, sale_median_psf_12m, sale_median_price_12m, sale_median_psf_prev_12m,
   rent_count_12m, rent_median_12m, gross_yield, period_end::text, source_date::text`;
+const COMMUNITY_COLS = `${SUMMARY_COLS}, sale_count_ready_12m, sale_median_psf_ready_12m, sale_median_psf_ready_prev_12m,
+  sale_count_offplan_12m, sale_median_psf_offplan_12m, sale_median_psf_offplan_prev_12m, like_for_like_change,
+  like_for_like_towers`;
 
 export async function dataFreshness(): Promise<{ period_end: string | null; source_date: string | null }> {
   return (
@@ -81,10 +97,10 @@ export async function dataFreshness(): Promise<{ period_end: string | null; sour
 
 // ---------- communities ----------
 
-export async function launchCommunities(): Promise<(Community & { summary: Summary | null; buildings: number })[]> {
-  const rows = await query<Community & { summary: Summary | null; buildings: number }>(
+export async function launchCommunities(): Promise<(Community & { summary: CommunitySummary | null; buildings: number })[]> {
+  const rows = await query<Community & { summary: CommunitySummary | null; buildings: number }>(
     `select c.id, c.dm_code, c.name_official, c.name_common, c.is_launch,
-            (select row_to_json(s) from (select ${SUMMARY_COLS} from community_summary
+            (select row_to_json(s) from (select ${COMMUNITY_COLS} from community_summary
                where community_id = c.id and rooms = -1) s) as summary,
             (select count(*)::int from buildings b where b.community_id = c.id and b.match_confidence >= $1) as buildings
        from communities c where c.is_launch order by c.name_common nulls last, c.name_official`,
@@ -100,8 +116,8 @@ export async function communityByCode(code: string): Promise<Community | null> {
   );
 }
 
-export async function communitySummaries(id: number): Promise<Summary[]> {
-  return query<Summary>(`select ${SUMMARY_COLS} from community_summary where community_id = $1 order by rooms`, [id]);
+export async function communitySummaries(id: number): Promise<CommunitySummary[]> {
+  return query<CommunitySummary>(`select ${COMMUNITY_COLS} from community_summary where community_id = $1 order by rooms`, [id]);
 }
 
 /** Quarterly medians over ten years from the monthly table (median of monthly medians, weighted by nothing). */
@@ -122,9 +138,11 @@ export async function communitySeries(id: number): Promise<{ sales: SeriesPoint[
 export async function communityBuildings(id: number, limit = 200): Promise<BuildingListItem[]> {
   return query<BuildingListItem>(
     `select b.slug, b.name_en, coalesce(c.name_common, c.name_official) as community, c.dm_code,
-            s.sale_count_12m, s.sale_median_psf_12m, s.rent_median_12m,
-            (select percentile_cont(0.5) within group (order by gross_yield) from building_summary y
-              where y.building_id = b.id and y.rooms >= 0) as gross_yield
+            s.sale_count_12m, s.sale_median_psf_12m, s.rent_median_12m, s.rent_level,
+            -- A yield only next to the rent it comes from: none when the building shows no rent.
+            case when s.rent_median_12m is not null then
+              (select percentile_cont(0.5) within group (order by gross_yield) from building_summary y
+                where y.building_id = b.id and y.rooms >= 0) end as gross_yield
        from buildings b join communities c on c.id = b.community_id
        left join building_summary s on s.building_id = b.id and s.rooms = -1
       where b.community_id = $1 and b.match_confidence >= $2
@@ -263,8 +281,9 @@ export async function mapBuildings(): Promise<MapFeature[]> {
   return query<MapFeature>(
     `select b.slug, b.name_en as name, ST_X(ST_PointOnSurface(b.geom)) as lng, ST_Y(ST_PointOnSurface(b.geom)) as lat,
             s.sale_median_psf_12m as psf, coalesce(s.sale_count_12m, 0) as sales,
-            (select percentile_cont(0.5) within group (order by gross_yield) from building_summary y
-              where y.building_id = b.id and y.rooms >= 0) as yield
+            case when s.rent_median_12m is not null then
+              (select percentile_cont(0.5) within group (order by gross_yield) from building_summary y
+                where y.building_id = b.id and y.rooms >= 0) end as yield
        from buildings b left join building_summary s on s.building_id = b.id and s.rooms = -1
       where b.geom is not null and b.match_confidence >= $1`,
     [MIN_CONFIDENCE],

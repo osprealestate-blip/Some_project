@@ -8,10 +8,18 @@ Rules (also shown on the About page):
 - Bedrooms: 0 = studio; 4 and above are grouped as 4. rooms = -1 means all bedroom types.
 - The 12-month window ends on the newest sale date in the data, not today, so a stale file never looks fresh.
 - Gross yield = median annual rent / median sale price over the same 12 months and bedroom type. An estimate.
+  A building with fewer than 3 rents of its own uses its project's rents for that bedroom type, and says so.
+- Records far out of line with their tower or area are set aside first (metrics/outliers.py).
+- Communities also get ready and off-plan medians separately, and a like-for-like change: the change in each
+  tower's own median per sq ft (towers with 3+ sales in both years), averaged weighted by this year's sales.
+  The plain change of the community median moves with the mix of towers and off-plan sales, not just prices.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
+
+from dpi.metrics import outliers
+from dpi.metrics.outliers import OutlierReport
 
 SALE_TYPES = ("apartment",)
 MIN_COUNT = 3  # fewer counted deals than this and the median is left empty
@@ -23,7 +31,7 @@ from transactions where excluded is null
 
 _SALES_CTE = """
 with s as (
-  select building_id, community_id, least(rooms, 4) as rooms, txn_date, price, price_psf, size_sqft
+  select building_id, community_id, least(rooms, 4) as rooms, txn_date, price, price_psf, size_sqft, off_plan
   from transactions
   where excluded is null and property_type = any(%(types)s)
     and txn_date > %(end)s::date - interval '24 months' and txn_date <= %(end)s
@@ -89,10 +97,10 @@ select k.building_id, k.rooms,
   case when sn.n >= %(min)s then sn.price end,
   case when sn.n >= %(min)s then sn.size end,
   case when sp.n >= %(min)s then sp.psf end,
-  coalesce(rb.n, rp.n, 0),
-  case when rb.n >= %(min)s then rb.rent when rb.n is null and rp.n >= %(min)s then rp.rent end,
+  case when rb.n >= %(min)s then rb.n when rp.n >= %(min)s then rp.n else coalesce(rb.n, rp.n, 0) end,
+  case when rb.n >= %(min)s then rb.rent when rp.n >= %(min)s then rp.rent end,
   case when rb.n >= %(min)s and rb.est then 'estimated' when rb.n >= %(min)s then 'building'
-       when rb.n is null and rp.n >= %(min)s then 'project' end,
+       when rp.n >= %(min)s then 'project' end,
   null,
   case when k.rooms = -1 then coalesce(a.n, 0) else 0 end,
   case when k.rooms = -1 then a.last_sale end,
@@ -152,6 +160,45 @@ left join rent r on r.community_id = k.community_id and r.rooms = k.rooms
 left join bc on bc.community_id = k.community_id
 """
 
+# Ready and off-plan separately, all bedroom types (rooms = -1), each against its own previous 12 months.
+_COMMUNITY_SEGMENTS = _SALES_CTE + """,
+seg as (
+  select community_id,
+    count(*) filter (where not off_plan and txn_date > %(end)s::date - interval '12 months') as rn,
+    percentile_cont(0.5) within group (order by price_psf) filter (where not off_plan and txn_date > %(end)s::date - interval '12 months') as rpsf,
+    count(*) filter (where not off_plan and txn_date <= %(end)s::date - interval '12 months') as rnp,
+    percentile_cont(0.5) within group (order by price_psf) filter (where not off_plan and txn_date <= %(end)s::date - interval '12 months') as rpsfp,
+    count(*) filter (where off_plan and txn_date > %(end)s::date - interval '12 months') as on_,
+    percentile_cont(0.5) within group (order by price_psf) filter (where off_plan and txn_date > %(end)s::date - interval '12 months') as opsf,
+    count(*) filter (where off_plan and txn_date <= %(end)s::date - interval '12 months') as onp,
+    percentile_cont(0.5) within group (order by price_psf) filter (where off_plan and txn_date <= %(end)s::date - interval '12 months') as opsfp
+  from s where community_id is not null and off_plan is not null group by 1
+),
+tower as (
+  select community_id, building_id,
+    count(*) filter (where txn_date > %(end)s::date - interval '12 months') as n,
+    percentile_cont(0.5) within group (order by price_psf) filter (where txn_date > %(end)s::date - interval '12 months') as psf,
+    count(*) filter (where txn_date <= %(end)s::date - interval '12 months') as np,
+    percentile_cont(0.5) within group (order by price_psf) filter (where txn_date <= %(end)s::date - interval '12 months') as psfp
+  from s where community_id is not null and building_id is not null group by 1, 2
+),
+lfl as (
+  select community_id, count(*) as towers, exp(sum(n * ln(psf / psfp)) / sum(n)) - 1 as chg
+  from tower where n >= %(min)s and np >= %(min)s and psf > 0 and psfp > 0 group by 1
+)
+update community_summary cs set
+  sale_count_ready_12m = coalesce(seg.rn, 0),
+  sale_median_psf_ready_12m = case when seg.rn >= %(min)s then seg.rpsf end,
+  sale_median_psf_ready_prev_12m = case when seg.rnp >= %(min)s then seg.rpsfp end,
+  sale_count_offplan_12m = coalesce(seg.on_, 0),
+  sale_median_psf_offplan_12m = case when seg.on_ >= %(min)s then seg.opsf end,
+  sale_median_psf_offplan_prev_12m = case when seg.onp >= %(min)s then seg.opsfp end,
+  like_for_like_change = case when lfl.towers >= %(min)s then lfl.chg end,
+  like_for_like_towers = coalesce(lfl.towers, 0)
+from seg full join lfl on lfl.community_id = seg.community_id
+where cs.rooms = -1 and cs.community_id = coalesce(seg.community_id, lfl.community_id)
+"""
+
 # Yield only where rent and price describe the same bedroom type (not the mixed "all" row).
 _YIELD = """
 update {table} set gross_yield = round((rent_median_12m / sale_median_price_12m)::numeric, 4)
@@ -188,9 +235,10 @@ class MetricsReport:
     building_rows: int = 0
     community_rows: int = 0
     series_rows: int = 0
+    outliers: OutlierReport | None = None
 
     def render(self) -> str:
-        return (f"window ends: {self.period_end} (newest DLD file {self.source_date})\n"
+        return ((self.outliers.render() + "\n" if self.outliers else "") + f"window ends: {self.period_end} (newest DLD file {self.source_date})\n"
                 f"building summary rows: {self.building_rows}\ncommunity summary rows: {self.community_rows}\n"
                 f"community monthly rows: {self.series_rows}")
 
@@ -198,6 +246,7 @@ class MetricsReport:
 def run(conn) -> MetricsReport:
     rep = MetricsReport()
     with conn.cursor() as cur:
+        rep.outliers = outliers.flag(cur)
         cur.execute(_PERIOD)
         rep.period_end, rep.source_date = cur.fetchone()
         if rep.period_end is None:
@@ -210,6 +259,7 @@ def run(conn) -> MetricsReport:
         cur.execute("delete from community_summary")
         cur.execute(_COMMUNITY_SUMMARY, p)
         rep.community_rows = cur.rowcount
+        cur.execute(_COMMUNITY_SEGMENTS, p)
         cur.execute(_YIELD.format(table="community_summary"))
         cur.execute("delete from community_metrics")
         cur.execute(_COMMUNITY_SERIES, p)

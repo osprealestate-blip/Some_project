@@ -24,16 +24,22 @@ export default function Page() {
       <section>
         <h2 className="text-base font-semibold">Cleaning</h2>
         <p className="mt-2">Deals under 10 m², sales under AED 50,000, rents under AED 5,000 a year, and dates in the future or before 1990 are kept on file but not counted. Prices use medians, not averages, so one unusual deal can&apos;t move them much. A median needs at least 3 deals.</p>
+        <p className="mt-2">Records far out of line with their neighbours are also set aside, because they are usually a typo, a part-share or an internal transfer rather than a market deal. A sale counts as out of line below 40% or above 250% of the median price per sq ft in the same tower that year (5 or more sales), or below 25% or above 400% of the area median when the tower has fewer. A rent counts as out of line below a third or above three times the median for the same bedroom type in the same project that year (or the area). They stay on file and are rechecked every time the figures are recalculated.</p>
       </section>
 
       <section>
         <h2 className="text-base font-semibold">Matching deals to buildings</h2>
-        <p className="mt-2">DLD sales carry a building name but no map position, and spellings vary. Names are tidied (case, punctuation, words like “Tower”) and grouped within each community. Where the DLD plot number is known, names on the same single-building plot are merged. DLD rent contracts name only the project, never the tower. Where a contract&apos;s exact flat size and bedrooms match flats sold in only one tower nearby, it is placed in that tower and the rent is marked as estimated; otherwise a building with several towers in one project shows the project&apos;s rents and says so. Map positions come from OpenStreetMap building names, or are placed by hand.</p>
+        <p className="mt-2">DLD sales carry a building name but no map position, and spellings vary. Names are tidied (case, punctuation, words like “Tower”) and grouped within each community. Where the DLD plot number is known, names on the same single-building plot are merged. DLD rent contracts name only the project, never the tower. Where a contract&apos;s exact flat size and bedrooms match flats sold in only one tower nearby, and that tower has sold that layout at least 6 times, it is placed in that tower and the rent is marked as estimated; otherwise a building with several towers in one project shows the project&apos;s rents and says so. Map positions come from OpenStreetMap building names, or are placed by hand.</p>
       </section>
 
       <section>
         <h2 className="text-base font-semibold">Gross yield</h2>
-        <p className="mt-2">Median annual rent divided by median sale price, for the same bedroom type and the same 12 months. It ignores service charges, vacancy and fees, so the real return is lower. It is an estimate.</p>
+        <p className="mt-2">Median annual rent divided by median sale price, for the same bedroom type and the same 12 months. It ignores service charges, vacancy and fees, so the real return is lower. It is an estimate, and it is only shown next to the rent it comes from. Where a tower has fewer than 3 rents of its own for a bedroom type, the project&apos;s rents are used and marked “project”.</p>
+      </section>
+
+      <section>
+        <h2 className="text-base font-semibold">Year-on-year change</h2>
+        <p className="mt-2">For an area, the headline change compares each tower with itself: the change in the tower&apos;s median price per sq ft over the last 12 months against the 12 months before, for towers with at least 3 sales in both, averaged by this year&apos;s number of sales. The plain change of the area median also moves when the mix changes, for example when fewer expensive off-plan units are sold, even if every tower&apos;s price went up. Area pages also show ready and off-plan sales separately.</p>
       </section>
 
       <section>

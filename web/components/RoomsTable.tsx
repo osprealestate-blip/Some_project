@@ -26,7 +26,11 @@ export default function RoomsTable({ rows, showSize = true }: { rows: Summary[];
               <td className="py-1.5 text-end">{aedShort(r.sale_median_price_12m)}</td>
               {showSize && <td className="py-1.5 text-end">{sqft(r.sale_median_size_12m)}</td>}
               <td className="py-1.5 text-end">{psf(r.sale_median_psf_12m)}</td>
-              <td className="py-1.5 text-end">{aedShort(r.rent_median_12m)}</td>
+              <td className="py-1.5 text-end">
+                {aedShort(r.rent_median_12m)}
+                {r.rent_median_12m != null && r.rent_level === "project" && <span className="text-xs text-[var(--muted)]"> project</span>}
+                {r.rent_median_12m != null && r.rent_level === "estimated" && <span className="text-xs text-[var(--muted)]"> est.</span>}
+              </td>
               <td className="py-1.5 text-end">{pct(r.gross_yield)}</td>
             </tr>
           ))}
