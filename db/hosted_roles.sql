@@ -12,3 +12,7 @@ create role dpi_web login bypassrls password '<verifier for dpi_web>';
 grant usage on schema public to dpi_web;
 grant select on all tables in schema public to dpi_web;
 alter role dpi_web set default_transaction_read_only = on;
+
+-- Supabase keeps PostGIS and pg_trgm in the extensions schema, so the website login needs it on its search path.
+grant usage on schema extensions to dpi_web;
+alter role dpi_web set search_path = public, extensions;
