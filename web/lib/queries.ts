@@ -3,6 +3,7 @@
 import { one, query } from "./db";
 import type { Comparables } from "./fairPrice";
 import type { NearbyPlace } from "./lifeScore";
+import { isOffPlanTower, MIN_RENTS, SIZE_BAND, type ExpectedRent } from "./offPlan";
 
 export const SALE_TYPES = ["apartment"];
 export const MIN_CONFIDENCE = 0.5; // buildings matched less surely than this stay hidden
@@ -206,6 +207,34 @@ export async function buildingSeries(b: Building): Promise<{ sales: SeriesPoint[
   const thin = (p: { period: string; value: number; count: number }) =>
     ({ period: p.period, count: p.count, value: p.count >= 3 ? p.value : null });
   return { sales: sales.map(thin), rents: rents.map(thin), rentLevel };
+}
+
+/** For an off-plan tower with no rents of its own: what flats of the same bedrooms and similar size (+-15% of
+ *  this tower's median) rent for in the same community, over the same 12 months. Empty when the tower is not
+ *  off-plan, or when fewer than MIN_RENTS contracts compare. See lib/offPlan.ts. */
+export async function offPlanExpectedRents(b: Building, summaries: Summary[]): Promise<ExpectedRent[]> {
+  const all = summaries.find((s) => s.rooms === -1);
+  if (!all || all.rent_count_12m > 0) return [];
+  const mix = await one<{ sales: number; off_plan: number }>(
+    `select count(*)::int as sales, count(*) filter (where off_plan)::int as off_plan
+       from transactions
+      where building_id = $1 and excluded is null and property_type = any($2)
+        and txn_date > (select max(txn_date) from transactions) - interval '12 months'`,
+    [b.id, SALE_TYPES],
+  );
+  if (!mix || !isOffPlanTower(mix.sales, mix.off_plan, all.rent_count_12m)) return [];
+  const rows = summaries.filter((s) => s.rooms >= 0 && s.sale_median_size_12m != null);
+  if (!rows.length) return [];
+  return query<ExpectedRent>(
+    `select k.rooms, percentile_cont(0.5) within group (order by r.annual_rent)::float8 as median, count(*)::int as count
+       from unnest($2::int[], $3::float8[]) as k(rooms, size)
+       join rent_contracts r on r.community_id = $1 and r.excluded is null and least(r.rooms, 4) = k.rooms
+        and r.size_sqft between k.size * (1 - $4::float8) and k.size * (1 + $4::float8)
+        and r.start_date > (select max(txn_date) from transactions) - interval '12 months'
+        and r.start_date <= (select max(txn_date) from transactions)
+      group by k.rooms having count(*) >= $5 order by k.rooms`,
+    [b.community_id, rows.map((s) => s.rooms), rows.map((s) => s.sale_median_size_12m), SIZE_BAND, MIN_RENTS],
+  );
 }
 
 /** Latest counted sales: market fields only (no unit numbers, no parties). */

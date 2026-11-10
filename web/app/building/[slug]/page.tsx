@@ -12,10 +12,11 @@ import Stat from "@/components/Stat";
 import { hasDatabase } from "@/lib/db";
 import { aed, aedShort, count, day, pct, psf, roomsLabel, sqft } from "@/lib/format";
 import {
-  buildingBySlug, buildingSeries, buildingSummaries, nearbyPlaces, recentSales, siblingBuildings,
+  buildingBySlug, buildingSeries, buildingSummaries, nearbyPlaces, offPlanExpectedRents, recentSales, siblingBuildings,
 } from "@/lib/queries";
 import { SOURCES } from "@/lib/sources";
-import { change } from "@/lib/stats";
+import { expectedYield } from "@/lib/offPlan";
+import { change, median } from "@/lib/stats";
 
 export const dynamic = "force-dynamic";
 
@@ -60,6 +61,14 @@ export default async function Page({ params }: Params) {
   const yields = summaries.filter((s) => s.rooms >= 0 && s.gross_yield != null).map((s) => s.gross_yield!).sort((a, c) => a - c);
   const midYield = yields.length ? yields[Math.floor((yields.length - 1) / 2)] : null;
   const rentLevel = all?.rent_level ?? series.rentLevel;
+  const expected = await offPlanExpectedRents(b, summaries);
+  const expectedByRooms = new Map(expected.map((e) => [e.rooms, e]));
+  const expectedYields = expected
+    .map((e) => expectedYield(e.median, summaries.find((s) => s.rooms === e.rooms)?.sale_median_price_12m))
+    .filter((y): y is number => y != null);
+  const expectedRent = median(expected.map((e) => e.median));
+  const expectedCount = expected.reduce((n, e) => n + e.count, 0);
+  const showExpected = expected.length > 0;
   const periodEnd = all?.period_end ?? null;
   const placed = b.lng != null && b.lat != null;
 
@@ -80,8 +89,16 @@ export default async function Page({ params }: Params) {
       <section className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat label="Median price per sq ft" value={psf(all?.sale_median_psf_12m)} note={`${count(all?.sale_count_12m ?? 0)} sales in 12 months`} />
         <Stat label="Change on a year earlier" value={pct(yoy, 1, true)} note="Median per sq ft" />
-        <Stat label="Median annual rent" value={aedShort(all?.rent_median_12m)} note={rentLevel === "project" ? "Whole project (rents are filed per project)" : rentLevel === "estimated" ? `Estimated: ${count(all?.rent_count_12m ?? 0)} contracts, some placed by unit size` : `${count(all?.rent_count_12m ?? 0)} contracts`} />
-        <Stat label="Gross yield (estimate)" value={pct(midYield)} note="Median across bedroom types" />
+        {showExpected ? (
+          <Stat label="Expected annual rent" value={`~${aedShort(expectedRent)}`} note={`Off-plan, no leases yet. Similar flats in ${b.community}: ${count(expectedCount)} contracts`} />
+        ) : (
+          <Stat label="Median annual rent" value={aedShort(all?.rent_median_12m)} note={rentLevel === "project" ? "Whole project (rents are filed per project)" : rentLevel === "estimated" ? `Estimated: ${count(all?.rent_count_12m ?? 0)} contracts, some placed by unit size` : `${count(all?.rent_count_12m ?? 0)} contracts`} />
+        )}
+        {showExpected ? (
+          <Stat label="Expected gross yield" value={pct(median(expectedYields))} note="From expected rents, median across bedroom types" />
+        ) : (
+          <Stat label="Gross yield (estimate)" value={pct(midYield)} note="Median across bedroom types" />
+        )}
       </section>
       <SourceNote source={`${SOURCES.dldSales}; ${SOURCES.dldRents}`} date={periodEnd} estimate>
         Apartments only; 12 months to the newest sale. Gross yield = median rent ÷ median price, same bedroom type.
@@ -89,8 +106,8 @@ export default async function Page({ params }: Params) {
 
       <section className="mt-8">
         <h2 className="text-base font-semibold">By bedroom type, last 12 months</h2>
-        <div className="mt-2"><RoomsTable rows={summaries} /></div>
-        <p className="mt-1 text-xs text-[var(--muted)]">* Estimate. Rows need 3 or more deals for a median.{rentLevel === "project" ? " Rents are for the whole project, because DLD rent contracts name the project, not the tower." : ""}{rentLevel === "estimated" ? " Rent contracts do not name the tower, so some were placed in this building because their exact size and bedrooms match flats sold here and in no other tower nearby. Estimated." : ""}</p>
+        <div className="mt-2"><RoomsTable rows={summaries} expected={showExpected ? expectedByRooms : undefined} /></div>
+        <p className="mt-1 text-xs text-[var(--muted)]">* Estimate. Rows need 3 or more deals for a median.{rentLevel === "project" ? " Rents are for the whole project, because DLD rent contracts name the project, not the tower." : ""}{rentLevel === "estimated" ? " Rent contracts do not name the tower, so some were placed in this building because their exact size and bedrooms match flats sold here and in no other tower nearby. Estimated." : ""}{showExpected ? ` This tower is still off-plan, so it has no rent contracts yet. "exp." rents are the median for flats with the same bedrooms and a similar size (within 15%) elsewhere in ${b.community} over the same 12 months; the expected yield divides that by this tower's median price. A guide, not a forecast.` : ""}</p>
       </section>
 
       <section className="mt-8 grid gap-6 lg:grid-cols-2">
