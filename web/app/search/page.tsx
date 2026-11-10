@@ -1,7 +1,8 @@
 import Link from "next/link";
 import NoData from "@/components/NoData";
+import { getServerCurrency } from "@/lib/currency";
 import { hasDatabase } from "@/lib/db";
-import { psf } from "@/lib/format";
+import { formatPsf } from "@/lib/format";
 import { search } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
@@ -9,6 +10,7 @@ export const metadata = { title: "Search" };
 
 export default async function Page({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const { q = "" } = await searchParams;
+  const currency = await getServerCurrency();
   const results = hasDatabase() && q.trim().length >= 2 ? await search(q.slice(0, 80), 40) : [];
   return (
     <main className="mx-auto max-w-3xl p-4 sm:p-6">
@@ -20,7 +22,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ q
           {results.map((r) => (
             <li key={`${r.kind}-${r.slug}`} className="flex items-baseline justify-between gap-2 py-2">
               <Link className="link" href={r.kind === "building" ? `/building/${r.slug}` : `/community/${r.slug}`}>{r.name}</Link>
-              <span className="text-xs text-[var(--muted)]">{r.kind === "community" ? "Area" : `${r.community ?? ""}${r.psf ? ` · ${psf(r.psf)}` : ""}`}</span>
+              <span className="text-xs text-[var(--muted)]">{r.kind === "community" ? "Area" : `${r.community ?? ""}${r.psf ? ` · ${formatPsf(r.psf, currency)}` : ""}`}</span>
             </li>
           ))}
         </ul>

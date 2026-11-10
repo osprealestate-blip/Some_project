@@ -1,7 +1,16 @@
-import { aedShort, count, pct, psf, roomsLabel, sqft } from "@/lib/format";
+import { Currency, DEFAULT_CURRENCY } from "@/config/currency";
+import { count, formatMoneyShort, formatPsf, pct, roomsLabel, sqft } from "@/lib/format";
 import type { Summary } from "@/lib/queries";
 
-export default function RoomsTable({ rows, showSize = true }: { rows: Summary[]; showSize?: boolean }) {
+export default function RoomsTable({
+  rows,
+  showSize = true,
+  currency = DEFAULT_CURRENCY,
+}: {
+  rows: Summary[];
+  showSize?: boolean;
+  currency?: Currency;
+}) {
   const list = rows.filter((r) => r.rooms >= 0 && (r.sale_count_12m > 0 || r.rent_count_12m > 0));
   if (!list.length) return <p className="text-sm text-[var(--muted)]">No sales or rents in the last 12 months.</p>;
   return (
@@ -23,11 +32,11 @@ export default function RoomsTable({ rows, showSize = true }: { rows: Summary[];
             <tr key={r.rooms} className="border-b border-[var(--border)]">
               <td className="py-1.5">{roomsLabel(r.rooms)}</td>
               <td className="py-1.5 text-end">{count(r.sale_count_12m)}</td>
-              <td className="py-1.5 text-end">{aedShort(r.sale_median_price_12m)}</td>
+              <td className="py-1.5 text-end">{formatMoneyShort(r.sale_median_price_12m, currency)}</td>
               {showSize && <td className="py-1.5 text-end">{sqft(r.sale_median_size_12m)}</td>}
-              <td className="py-1.5 text-end">{psf(r.sale_median_psf_12m)}</td>
+              <td className="py-1.5 text-end">{formatPsf(r.sale_median_psf_12m, currency)}</td>
               <td className="py-1.5 text-end">
-                {aedShort(r.rent_median_12m)}
+                {formatMoneyShort(r.rent_median_12m, currency)}
                 {r.rent_median_12m != null && r.rent_level === "project" && <span className="text-xs text-[var(--muted)]"> project</span>}
                 {r.rent_median_12m != null && r.rent_level === "estimated" && <span className="text-xs text-[var(--muted)]"> est.</span>}
               </td>

@@ -1,9 +1,11 @@
 import Link from "next/link";
 import BuildingMap from "@/components/BuildingMap";
 import SearchBox from "@/components/SearchBox";
+import { getConversionNote } from "@/config/currency";
 import { LAUNCH_COMMUNITIES } from "@/lib/communities";
+import { getServerCurrency } from "@/lib/currency";
 import { hasDatabase } from "@/lib/db";
-import { aedShort, day, pct, psf } from "@/lib/format";
+import { day, formatPsf, formatShortPrice, pct } from "@/lib/format";
 import { launchCommunities } from "@/lib/queries";
 import { change } from "@/lib/stats";
 import { SOURCES } from "@/lib/sources";
@@ -20,6 +22,8 @@ async function loadCards() {
 }
 
 export default async function Home() {
+  const currency = await getServerCurrency();
+  const conversionNote = getConversionNote(currency);
   const cards = await loadCards();
   const byCode = new Map(cards?.map((c) => [c.dm_code, c]));
   const asOf = cards?.find((c) => c.summary)?.summary?.period_end ?? null;
@@ -50,9 +54,9 @@ export default async function Home() {
                 <div className="text-xs text-[var(--muted)]">{c.officialName}{c.scope ? " (incl. JBR, Bluewaters, Dubai Harbour)" : ""}</div>
                 {s ? (
                   <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
-                    <div><dt className="text-xs text-[var(--muted)]">Median price</dt><dd className="tabular-nums">{psf(s.sale_median_psf_12m)}</dd></div>
+                    <div><dt className="text-xs text-[var(--muted)]">Median price</dt><dd className="tabular-nums">{formatPsf(s.sale_median_psf_12m, currency)}</dd></div>
                     <div><dt className="text-xs text-[var(--muted)]">{lfl != null ? "Year on year, same towers" : "Year on year"}</dt><dd className="tabular-nums">{pct(yoy, 1, true)}</dd></div>
-                    <div><dt className="text-xs text-[var(--muted)]">Median rent</dt><dd className="tabular-nums">{aedShort(s.rent_median_12m)}/yr</dd></div>
+                    <div><dt className="text-xs text-[var(--muted)]">Median rent</dt><dd className="tabular-nums">{formatShortPrice(s.rent_median_12m, currency)}/yr</dd></div>
                     <div><dt className="text-xs text-[var(--muted)]">Buildings</dt><dd className="tabular-nums">{d?.buildings ?? "–"}</dd></div>
                   </dl>
                 ) : (
@@ -63,6 +67,7 @@ export default async function Home() {
           })}
         </div>
         {asOf && <p className="mt-2 text-xs text-[var(--muted)]">Apartments, 12 months to {day(asOf)}. Source: {SOURCES.dldSales}; {SOURCES.dldRents}.</p>}
+        {conversionNote && <p className="mt-1 text-xs text-[var(--muted)]">{conversionNote}</p>}
 
         <h2 className="mt-10 text-base font-semibold">Tools</h2>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">

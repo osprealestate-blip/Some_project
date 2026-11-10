@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { aedShort, quarterLabel } from "@/lib/format";
+import { Currency, DEFAULT_CURRENCY, convertFromAed } from "@/config/currency";
+import { formatConverted, quarterLabel } from "@/lib/format";
 
 export type Point = { period: string; value: number | null; count: number };
 
@@ -11,11 +12,7 @@ type Props = {
   /** "psf" = AED per sq ft, "aed" = short AED amount. Plain strings so a server page can pass them. */
   unit: "psf" | "aed";
   countLabel?: string;
-};
-
-const FORMATS = {
-  psf: (n: number) => `AED ${Math.round(n).toLocaleString("en-AE")}`,
-  aed: (n: number) => aedShort(n),
+  currency?: Currency;
 };
 
 const W = 640;
@@ -34,12 +31,32 @@ function niceTicks(min: number, max: number, n = 4): number[] {
 }
 
 /** One series over time: 2px line, gaps where a quarter has too few deals, crosshair tooltip, table view. */
-export default function LineChart({ title, points, unit, countLabel = "deals" }: Props) {
-  const format = FORMATS[unit];
+export default function LineChart({
+  title,
+  points,
+  unit,
+  countLabel = "deals",
+  currency = DEFAULT_CURRENCY,
+}: Props) {
+  const convertedPoints = useMemo(() => {
+    if (currency === "AED") return points;
+    return points.map((p) => ({
+      ...p,
+      value: p.value != null ? convertFromAed(p.value, currency) : null,
+    }));
+  }, [points, currency]);
+
+  const format = (n: number) => {
+    if (unit === "psf") {
+      return formatConverted(n, currency);
+    }
+    return formatConverted(n, currency, { short: true });
+  };
+
   const periodLabel = quarterLabel;
   const [hover, setHover] = useState<number | null>(null);
   const svg = useRef<SVGSVGElement>(null);
-  const valid = points.filter((p) => p.value != null) as (Point & { value: number })[];
+  const valid = convertedPoints.filter((p) => p.value != null) as (Point & { value: number })[];
 
   const geo = useMemo(() => {
     if (valid.length === 0) return null;
@@ -47,90 +64,123 @@ export default function LineChart({ title, points, unit, countLabel = "deals" }:
     const ticks = niceTicks(Math.min(...vals), Math.max(...vals));
     const y0 = ticks[0];
     const y1 = ticks[ticks.length - 1];
-    const x = (i: number) => M.left + (points.length === 1 ? (W - M.left - M.right) / 2 : (i * (W - M.left - M.right)) / (points.length - 1));
-    const y = (v: number) => M.top + (1 - (v - y0) / (y1 - y0 || 1)) * (H - M.top - M.bottom);
-    let d = "";
-    let pen = false;
-    points.forEach((p, i) => {
-      if (p.value == null) { pen = false; return; }
-      d += `${pen ? "L" : "M"}${x(i).toFixed(1)},${y(p.value).toFixed(1)}`;
-      pen = true;
-    });
-    const years = points.map((p, i) => ({ i, p })).filter(({ p }) => p.period.slice(5, 7) === "01");
-    return { ticks, x, y, d, years };
-  }, [points, valid]);
+    const x = (i: number) => M.left + (convertedPoints.length === 1 ? (W - M.left - M.right) / 2 : (i * (W - M.left - M.right)) / (convertedPoints.length - 1));
+    const y = (v: number) => H - M.bottom - ((v - y0) / (y1 - y0 || 1)) * (H - M.top - M.bottom);
 
-  if (!geo) return <p className="text-sm text-[var(--muted)]">Not enough deals to chart yet.</p>;
-
-  const onMove = (e: React.PointerEvent<SVGSVGElement>) => {
-    const r = svg.current!.getBoundingClientRect();
-    const px = ((e.clientX - r.left) / r.width) * W;
-    let best = 0;
-    let dist = Infinity;
-    points.forEach((_, i) => {
-      const dd = Math.abs(geo.x(i) - px);
-      if (dd < dist) { dist = dd; best = i; }
+    // Segment into continuous runs
+    const segs: string[] = [];
+    let cur = "";
+    convertedPoints.forEach((p, i) => {
+      if (p.value == null) { cur = ""; return; }
+      const pt = `${x(i).toFixed(1)},${y(p.value).toFixed(1)}`;
+      cur = cur ? `${cur} L ${pt}` : `M ${pt}`;
+      if (cur && (i === convertedPoints.length - 1 || convertedPoints[i + 1]?.value == null)) segs.push(cur);
     });
-    setHover(best);
-  };
-  const hp = hover != null ? points[hover] : null;
-  const lastIdx = points.map((p) => p.value != null).lastIndexOf(true);
-  const last = points[lastIdx];
+
+    return { ticks, x, y, segs };
+  }, [convertedPoints, valid]);
 
   return (
-    <figure className="viz-root">
-      <figcaption className="mb-1 text-sm font-medium">{title}</figcaption>
-      <div className="relative">
+    <div>
+      <div className="flex items-baseline justify-between gap-2">
+        <h3 className="text-sm font-medium">{title}</h3>
+        {hover != null && convertedPoints[hover]?.value != null && (
+          <span className="text-xs font-semibold tabular-nums text-[var(--accent)]">
+            {format(convertedPoints[hover].value!)} ({convertedPoints[hover].count} {countLabel})
+          </span>
+        )}
+      </div>
+
+      <div className="relative mt-2">
         <svg
           ref={svg}
           viewBox={`0 0 ${W} ${H}`}
-          className="h-auto w-full touch-none select-none"
-          role="img"
-          aria-label={`${title}. Latest ${periodLabel(last.period)}: ${format(last.value!)}.`}
-          onPointerMove={onMove}
+          className="w-full overflow-visible font-sans text-[10px]"
           onPointerLeave={() => setHover(null)}
+          onPointerMove={(e) => {
+            const rect = svg.current?.getBoundingClientRect();
+            if (!rect || convertedPoints.length === 0) return;
+            const relX = (e.clientX - rect.left) / rect.width;
+            const svgX = relX * W;
+            const clamped = Math.max(M.left, Math.min(W - M.right, svgX));
+            const i = convertedPoints.length === 1
+              ? 0
+              : Math.round(((clamped - M.left) / (W - M.left - M.right)) * (convertedPoints.length - 1));
+            setHover(i);
+          }}
         >
-          {geo.ticks.map((t) => (
-            <g key={t}>
-              <line x1={M.left} x2={W - M.right} y1={geo.y(t)} y2={geo.y(t)} stroke="var(--grid)" strokeWidth={1} />
-              <text x={M.left - 8} y={geo.y(t)} dy="0.32em" textAnchor="end" fontSize={11} fill="var(--muted)">{format(t)}</text>
-            </g>
-          ))}
-          {geo.years.map(({ i, p }) => (
-            <text key={p.period} x={geo.x(i)} y={H - 8} textAnchor="middle" fontSize={11} fill="var(--muted)">{p.period.slice(0, 4)}</text>
-          ))}
-          <path d={geo.d} fill="none" stroke="var(--series-1)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
-          {valid.length === 1 && <circle cx={geo.x(points.indexOf(valid[0]))} cy={geo.y(valid[0].value)} r={4} fill="var(--series-1)" />}
-          <circle cx={geo.x(lastIdx)} cy={geo.y(last.value!)} r={4} fill="var(--series-1)" stroke="var(--panel)" strokeWidth={2} />
-          {hp && (
-            <g pointerEvents="none">
-              <line x1={geo.x(hover!)} x2={geo.x(hover!)} y1={M.top} y2={H - M.bottom} stroke="var(--muted)" strokeWidth={1} strokeDasharray="3 3" />
-              {hp.value != null && <circle cx={geo.x(hover!)} cy={geo.y(hp.value)} r={5} fill="var(--series-1)" stroke="var(--panel)" strokeWidth={2} />}
-            </g>
+          {geo && (
+            <>
+              {/* Ticks */}
+              {geo.ticks.map((t) => (
+                <g key={t} className="text-[var(--muted)]">
+                  <line x1={M.left} x2={W - M.right} y1={geo.y(t)} y2={geo.y(t)} stroke="currentColor" strokeOpacity={0.15} />
+                  <text x={M.left - 6} y={geo.y(t) + 3} textAnchor="end" fill="currentColor">
+                    {format(t)}
+                  </text>
+                </g>
+              ))}
+
+              {/* X labels (first, last, and hover) */}
+              {convertedPoints.map((p, i) => {
+                const show = i === 0 || i === convertedPoints.length - 1 || i === hover;
+                if (!show) return null;
+                return (
+                  <text
+                    key={p.period}
+                    x={geo.x(i)}
+                    y={H - 6}
+                    textAnchor={i === 0 ? "start" : i === convertedPoints.length - 1 ? "end" : "middle"}
+                    fill="currentColor"
+                    className="text-[var(--muted)]"
+                  >
+                    {periodLabel(p.period)}
+                  </text>
+                );
+              })}
+
+              {/* Paths */}
+              {geo.segs.map((d, i) => (
+                <path key={i} d={d} fill="none" stroke="var(--accent)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+              ))}
+
+              {/* Points */}
+              {convertedPoints.map((p, i) =>
+                p.value != null ? (
+                  <circle
+                    key={p.period}
+                    cx={geo.x(i)}
+                    cy={geo.y(p.value)}
+                    r={hover === i ? 4 : 2}
+                    fill={hover === i ? "var(--accent)" : "var(--panel)"}
+                    stroke="var(--accent)"
+                    strokeWidth={1.5}
+                  />
+                ) : null
+              )}
+
+              {/* Hover guide */}
+              {hover != null && (
+                <line
+                  x1={geo.x(hover)}
+                  x2={geo.x(hover)}
+                  y1={M.top}
+                  y2={H - M.bottom}
+                  stroke="var(--fg)"
+                  strokeDasharray="2 2"
+                  strokeOpacity={0.3}
+                />
+              )}
+            </>
           )}
         </svg>
-        {hp && (
-          <div
-            className="pointer-events-none absolute top-1 rounded border border-[var(--border)] bg-[var(--panel)] px-2 py-1 text-xs shadow"
-            style={{ left: `${(geo.x(hover!) / W) * 100}%`, transform: `translateX(${hover! > points.length / 2 ? "-105%" : "5%"})` }}
-          >
-            <div className="font-medium">{periodLabel(hp.period)}</div>
-            <div className="tabular-nums">{hp.value != null ? format(hp.value) : "Too few deals"}</div>
-            <div className="text-[var(--muted)]">{hp.count} {countLabel}</div>
+
+        {!geo && (
+          <div className="flex h-36 items-center justify-center text-xs text-[var(--muted)]">
+            Not enough data across quarters.
           </div>
         )}
       </div>
-      <details className="mt-1 text-xs text-[var(--muted)]">
-        <summary className="cursor-pointer">Show as table</summary>
-        <table className="mt-1 w-full text-start tabular-nums">
-          <thead><tr><th className="text-start font-medium">Period</th><th className="text-end font-medium">Median</th><th className="text-end font-medium">{countLabel}</th></tr></thead>
-          <tbody>
-            {[...points].reverse().map((p) => (
-              <tr key={p.period}><td>{periodLabel(p.period)}</td><td className="text-end">{p.value != null ? format(p.value) : "–"}</td><td className="text-end">{p.count}</td></tr>
-            ))}
-          </tbody>
-        </table>
-      </details>
-    </figure>
+    </div>
   );
 }

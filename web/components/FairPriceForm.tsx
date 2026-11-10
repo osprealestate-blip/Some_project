@@ -3,12 +3,14 @@
 import { useState } from "react";
 import BuildingPicker, { type Picked } from "./BuildingPicker";
 import { assessPrice, VERDICT_TEXT, type Comparables, type FairPriceResult } from "@/lib/fairPrice";
-import { aed, day, pct, psf, roomsLabel } from "@/lib/format";
+import { day, formatMoney, formatPsf, pct, roomsLabel } from "@/lib/format";
 import { DISCLAIMER, SOURCES } from "@/lib/sources";
+import { useCurrency } from "@/lib/useCurrency";
 
 const ROOM_OPTIONS = [0, 1, 2, 3, 4];
 
 export default function FairPriceForm({ initial }: { initial: Picked | null }) {
+  const currency = useCurrency();
   const [building, setBuilding] = useState<Picked | null>(initial);
   const [rooms, setRooms] = useState(1);
   const [size, setSize] = useState("");
@@ -79,10 +81,10 @@ export default function FairPriceForm({ initial }: { initial: Picked | null }) {
               </p>
             )}
             <dl className="mt-3 space-y-2 text-sm">
-              <div className="flex justify-between gap-2"><dt className="text-[var(--muted)]">Estimate</dt><dd className="font-semibold tabular-nums">{aed(result.estimate)}</dd></div>
-              <div className="flex justify-between gap-2"><dt className="text-[var(--muted)]">Typical range</dt><dd className="tabular-nums">{aed(result.low)} to {aed(result.high)}</dd></div>
-              <div className="flex justify-between gap-2"><dt className="text-[var(--muted)]">Median per sq ft</dt><dd className="tabular-nums">{psf(result.comps.medianPsf)}</dd></div>
-              {result.askingPsf && <div className="flex justify-between gap-2"><dt className="text-[var(--muted)]">Asking per sq ft</dt><dd className="tabular-nums">{psf(result.askingPsf)}</dd></div>}
+              <div className="flex justify-between gap-2"><dt className="text-[var(--muted)]">Estimate</dt><dd className="font-semibold tabular-nums">{formatMoney(result.estimate, currency)}</dd></div>
+              <div className="flex justify-between gap-2"><dt className="text-[var(--muted)]">Typical range</dt><dd className="tabular-nums">{formatMoney(result.low, currency)} to {formatMoney(result.high, currency)}</dd></div>
+              <div className="flex justify-between gap-2"><dt className="text-[var(--muted)]">Median per sq ft</dt><dd className="tabular-nums">{formatPsf(result.comps.medianPsf, currency)}</dd></div>
+              {result.askingPsf && <div className="flex justify-between gap-2"><dt className="text-[var(--muted)]">Asking per sq ft</dt><dd className="tabular-nums">{formatPsf(result.askingPsf, currency)}</dd></div>}
               <div className="flex justify-between gap-2"><dt className="text-[var(--muted)]">Based on</dt><dd className="text-end">{result.comps.count} sales ({roomsLabel(rooms)}) {result.comps.scope === "building" ? "in this building" : "in this community (too few in the building)"}</dd></div>
             </dl>
             {result.confidence === "limited" && <p className="mt-3 text-xs text-[var(--warn)]">Limited comparison: few sales, or the whole community rather than this building.</p>}

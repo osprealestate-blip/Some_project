@@ -9,8 +9,10 @@ import NoData from "@/components/NoData";
 import RoomsTable from "@/components/RoomsTable";
 import SourceNote from "@/components/SourceNote";
 import Stat from "@/components/Stat";
+import { getConversionNote } from "@/config/currency";
+import { getServerCurrency } from "@/lib/currency";
 import { hasDatabase } from "@/lib/db";
-import { aed, aedShort, count, day, pct, psf, roomsLabel, sqft } from "@/lib/format";
+import { count, day, formatMoney, formatPsf, formatShortPrice, pct, roomsLabel, sqft } from "@/lib/format";
 import {
   buildingBySlug, buildingSeries, buildingSummaries, nearbyPlaces, recentSales, siblingBuildings,
 } from "@/lib/queries";
@@ -52,6 +54,8 @@ export default async function Page({ params }: Params) {
   }
   const b = await buildingBySlug(slug);
   if (!b) notFound();
+  const currency = await getServerCurrency();
+  const conversionNote = getConversionNote(currency);
   const [summaries, series, sales, places, siblings] = await Promise.all([
     buildingSummaries(b.id), buildingSeries(b), recentSales(b.id), nearbyPlaces(b), siblingBuildings(b),
   ]);
@@ -78,28 +82,29 @@ export default async function Page({ params }: Params) {
       </p>
 
       <section className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Stat label="Median price per sq ft" value={psf(all?.sale_median_psf_12m)} note={`${count(all?.sale_count_12m ?? 0)} sales in 12 months`} />
+        <Stat label="Median price per sq ft" value={formatPsf(all?.sale_median_psf_12m, currency)} note={`${count(all?.sale_count_12m ?? 0)} sales in 12 months`} />
         <Stat label="Change on a year earlier" value={pct(yoy, 1, true)} note="Median per sq ft" />
-        <Stat label="Median annual rent" value={aedShort(all?.rent_median_12m)} note={rentLevel === "project" ? "Whole project (rents are filed per project)" : rentLevel === "estimated" ? `Estimated: ${count(all?.rent_count_12m ?? 0)} contracts, some placed by unit size` : `${count(all?.rent_count_12m ?? 0)} contracts`} />
+        <Stat label="Median annual rent" value={formatShortPrice(all?.rent_median_12m, currency)} note={rentLevel === "project" ? "Whole project (rents are filed per project)" : rentLevel === "estimated" ? `Estimated: ${count(all?.rent_count_12m ?? 0)} contracts, some placed by unit size` : `${count(all?.rent_count_12m ?? 0)} contracts`} />
         <Stat label="Gross yield (estimate)" value={pct(midYield)} note="Median across bedroom types" />
       </section>
+      {conversionNote && <p className="mt-2 text-xs text-[var(--muted)]">{conversionNote}</p>}
       <SourceNote source={`${SOURCES.dldSales}; ${SOURCES.dldRents}`} date={periodEnd} estimate>
         Apartments only; 12 months to the newest sale. Gross yield = median rent ÷ median price, same bedroom type.
       </SourceNote>
 
       <section className="mt-8">
         <h2 className="text-base font-semibold">By bedroom type, last 12 months</h2>
-        <div className="mt-2"><RoomsTable rows={summaries} /></div>
+        <div className="mt-2"><RoomsTable rows={summaries} currency={currency} /></div>
         <p className="mt-1 text-xs text-[var(--muted)]">* Estimate. Rows need 3 or more deals for a median.{rentLevel === "project" ? " Rents are for the whole project, because DLD rent contracts name the project, not the tower." : ""}{rentLevel === "estimated" ? " Rent contracts do not name the tower, so some were placed in this building because their exact size and bedrooms match flats sold here and in no other tower nearby. Estimated." : ""}</p>
       </section>
 
       <section className="mt-8 grid gap-6 lg:grid-cols-2">
         <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
-          <LineChart title="Median sale price per sq ft, by quarter" points={series.sales} unit="psf" countLabel="sales" />
+          <LineChart title="Median sale price per sq ft, by quarter" points={series.sales} unit="psf" countLabel="sales" currency={currency} />
           <SourceNote source={SOURCES.dldSales} date={periodEnd} />
         </div>
         <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
-          <LineChart title={`Median annual rent, by quarter${series.rentLevel === "project" ? " (whole project)" : series.rentLevel === "estimated" ? " (estimated)" : ""}`} points={series.rents} unit="aed" countLabel="contracts" />
+          <LineChart title={`Median annual rent, by quarter${series.rentLevel === "project" ? " (whole project)" : series.rentLevel === "estimated" ? " (estimated)" : ""}`} points={series.rents} unit="aed" countLabel="contracts" currency={currency} />
           <SourceNote source={SOURCES.dldRents} date={periodEnd} />
         </div>
       </section>
@@ -125,8 +130,8 @@ export default async function Page({ params }: Params) {
                     <td className="py-1.5">{day(s.txn_date)}</td>
                     <td className="py-1.5">{s.rooms == null ? "–" : roomsLabel(s.rooms)}</td>
                     <td className="py-1.5 text-end">{sqft(s.size_sqft)}</td>
-                    <td className="py-1.5 text-end">{aed(s.price)}</td>
-                    <td className="py-1.5 text-end">{Math.round(s.price_psf).toLocaleString("en-AE")}</td>
+                    <td className="py-1.5 text-end">{formatMoney(s.price, currency)}</td>
+                    <td className="py-1.5 text-end">{formatPsf(s.price_psf, currency)}</td>
                     <td className="py-1.5 text-end">{s.off_plan == null ? "–" : s.off_plan ? "Off-plan" : "Ready"}</td>
                   </tr>
                 ))}
