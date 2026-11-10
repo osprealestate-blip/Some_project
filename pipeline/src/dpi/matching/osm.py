@@ -23,7 +23,7 @@ import re
 import time
 import urllib.parse
 import urllib.request
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Callable
@@ -142,15 +142,16 @@ def parse(overpass_json: dict) -> list[OsmBuilding]:
 
 
 def name_score(a: str, b: str) -> float:
-    """1.0 exact key; 0.9 when one key is the other plus words (same leading words and same tower number);
+    """1.0 exact key; 0.9 when one key is the other plus words (same leading words, same tower number or letter);
     otherwise the SequenceMatcher ratio, which must reach 0.92 to count."""
     if not a or not b:
         return 0.0
     if a == b:
         return 1.0
-    nums_a = [w for w in a.split() if w.isdigit()]
-    nums_b = [w for w in b.split() if w.isdigit()]
-    if nums_a != nums_b:  # "Marina Gate 1" never matches "Marina Gate 2"
+    def tower_ids(k: str) -> list[str]:  # numbers and single letters name a tower: "1", "b"
+        return [w for w in k.split() if w.isdigit() or (len(w) == 1 and w.isalpha())]
+
+    if tower_ids(a) != tower_ids(b):  # "Marina Gate 1" never matches "Marina Gate 2", nor "Serenz A" "Serenz"
         return 0.0
     short, long_ = sorted((a, b), key=len)
     if len(short.split()) >= 2 and (long_.startswith(short + " ") or long_.endswith(" " + short)):
@@ -232,15 +233,19 @@ class PlaceReport:
     project: int = 0
     site: int = 0
     unplaced: int = 0
+    spread: list[str] = field(default_factory=list)  # projects whose exactly placed towers are far apart
 
     def render(self) -> str:
         return (f"named OSM features read: {self.osm_buildings}\nplaced from OSM: {self.osm}\n"
                 f"placed from OSM name search: {self.nominatim}\nplaced by hand: {self.manual}\n"
                 f"approximate, shared plot: {self.plot}\napproximate, same project: {self.project}\n"
-                f"approximate, development site: {self.site}\nstill unplaced: {self.unplaced}")
+                f"approximate, development site: {self.site}\nstill unplaced: {self.unplaced}"
+                + (f"\nprojects with towers over {SPREAD_M} m apart (check by hand): " + "; ".join(self.spread)
+                   if self.spread else ""))
 
 
 MIN_SCORE = 0.9
+SPREAD_M = 1000
 DERIVED = ("plot", "project", "site")
 
 
@@ -303,7 +308,7 @@ def place(conn, osm_json: dict | None, manual_csv: Path | None, community_codes:
             report.manual += cur.rowcount
 
         if lookup is not None:
-            report.nominatim = _search(cur, lookup, where, params)
+            report.nominatim, report.site = _search(cur, lookup, where, params)
 
         # Buildings on a plot that already has a placed building share its position (centre point).
         cur.execute("""
@@ -324,10 +329,19 @@ def place(conn, osm_json: dict | None, manual_csv: Path | None, community_codes:
         """)
         report.project = cur.rowcount
         if by_community:
-            report.site = _sites(cur, by_community, where, params)
+            report.site += _sites(cur, by_community, where, params)
         cur.execute("select count(*) from buildings b join communities c on c.id = b.community_id "
                     "where b.geom is null" + where, params)
         report.unplaced = cur.fetchone()[0]
+        cur.execute("""
+            select b.project_id, string_agg(b.name_en, ', ' order by b.name_en)
+            from buildings b join communities c on c.id = b.community_id
+            where b.project_id is not null and b.geom_source in ('osm', 'manual')""" + where + """
+            group by b.project_id
+            having count(*) > 1 and ST_MaxDistance(ST_Collect(ST_PointOnSurface(b.geom)),
+                                                    ST_Collect(ST_PointOnSurface(b.geom))) * 111000 > %s
+            order by 2""", [*params, SPREAD_M])
+        report.spread = [names for _, names in cur.fetchall()]
     conn.commit()
     return report
 
@@ -349,13 +363,13 @@ def _sites(cur, by_community: dict[int, list[OsmBuilding]], where: str, params: 
     return n
 
 
-def _search(cur, lookup: Lookup, where: str, params: list) -> int:
+def _search(cur, lookup: Lookup, where: str, params: list) -> tuple[int, int]:
     """Unplaced towers looked up by name in OpenStreetMap's search, inside their community's box."""
     cur.execute("select b.id, b.name_en, b.aliases, c.id, ST_YMin(e), ST_XMin(e), ST_YMax(e), ST_XMax(e) "
                 "from buildings b join communities c on c.id = b.community_id "
                 "cross join lateral (select ST_Envelope(ST_Buffer(c.geom::geography, %s)::geometry) e) x "
                 "where b.geom is null and c.geom is not null" + where, [NEAR_M, *params])
-    n = 0
+    found: list[tuple[int, float, float, float]] = []
     for bid, name_en, aliases, cid, s, w, nn, e in cur.fetchall():
         tower, _ = _keys(name_en, aliases)
         if not tower or not name_en:
@@ -379,11 +393,19 @@ def _search(cur, lookup: Lookup, where: str, params: list) -> int:
                     (cid, lng, lat, NEAR_M))
         if cur.fetchone() is None:
             continue
-        cur.execute("update buildings set geom = ST_SetSRID(ST_MakePoint(%s, %s), 4326), geom_source = 'osm', "
+        found.append((bid, lng, lat, score))
+    # One answer for several towers is the development, not each tower: an approximate ('site') position.
+    hits_at: dict[tuple[float, float], int] = {}
+    for _, lng, lat, _ in found:
+        hits_at[(round(lng, 5), round(lat, 5))] = hits_at.get((round(lng, 5), round(lat, 5)), 0) + 1
+    n = 0
+    for bid, lng, lat, score in found:
+        shared = hits_at[(round(lng, 5), round(lat, 5))] > 1
+        cur.execute("update buildings set geom = ST_SetSRID(ST_MakePoint(%s, %s), 4326), geom_source = %s, "
                     "match_confidence = greatest(match_confidence, %s) where id = %s",
-                    (lng, lat, round(0.55 + 0.3 * score, 2), bid))
-        n += 1
-    return n
+                    (lng, lat, "site" if shared else "osm", round(0.55 + 0.3 * score, 2), bid))
+        n += 0 if shared else 1
+    return n, len(found) - n
 
 
 def community_bbox(conn, codes: list[str]) -> tuple[float, float, float, float]:

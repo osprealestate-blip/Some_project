@@ -208,3 +208,29 @@ def test_more_towers_placed_and_approximate_positions_rebuilt(conn):
 def _gate1_x(cur):
     cur.execute("select round(ST_X(ST_PointOnSurface(geom))::numeric, 4) from buildings where slug = 'marina-gate-1'")
     return cur.fetchone()[0]
+
+
+def test_shared_search_hits_are_approximate_and_far_apart_towers_flagged(conn, tmp_path):
+    from dpi.matching import osm
+
+    full = json.loads((conn.info_dir / "osm_buildings.json").read_text())
+    partial = {"elements": [e for e in full["elements"] if not e["tags"]["name"].startswith("Marina Gate")]}
+    with conn.cursor() as cur:
+        cur.execute("update buildings set geom = null, geom_source = null, osm_id = null")
+
+    def lookup(q, bbox):  # the search answers both towers with the same spot: the development, not each tower
+        return [{"lat": "25.0869", "lon": "55.1414", "name": q}] if q.startswith("Marina Gate") else []
+
+    rep = osm.place(conn, partial, None, ["392"], lookup)
+    assert rep.nominatim == 0 and rep.site == 2 and rep.unplaced == 0
+    with conn.cursor() as cur:
+        cur.execute("select distinct geom_source from buildings where slug like 'marina-gate-%'")
+        assert cur.fetchall() == [("site",)]
+
+    manual = tmp_path / "manual.csv"
+    manual.write_text("slug,lat,lng\nmarina-gate-1,25.0866,55.1411\nmarina-gate-2,25.1050,55.1600\n")
+    rep = osm.place(conn, full, manual, None)
+    assert rep.spread == ["Marina Gate 1, Marina Gate 2"] and "check by hand" in rep.render()
+    with conn.cursor() as cur:  # put the synthetic towers back where the other tests expect them
+        cur.execute("update buildings set geom = null, geom_source = null where geom_source = 'manual'")
+    osm.place(conn, full, None, None)

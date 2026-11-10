@@ -123,3 +123,14 @@ def test_osm_nodes_and_construction_sites():
     assert node.osm_id != way.osm_id and node.centroid() == (55.2, 25.05) and "stax" in node.keys
     assert best_match({"stax"}, blds) == (node, 1.0)
     assert best_match(name_variants("Binghatti Aquarise - TOWER B")[1], blds)[0] is way
+
+
+def test_tower_letters_never_cross_and_old_names_merge():
+    from dpi.matching.buildings import canonical_key, display_name
+    from collections import Counter
+    assert name_score("serenz by danube a", "serenz by danube") == 0.0
+    assert name_score("serenz by danube a", "serenz by danube b") == 0.0
+    assert name_score("bloom a", "bloom a") == 1.0
+    assert canonical_key("Old-Serenity Lakes 2") == canonical_key("Serenity Lakes 2") == "serenity lakes 2"
+    assert canonical_key("Old Town Island") == "old town island"
+    assert display_name(Counter({"Old-serenity Lakes 2": 9, "Serenity Lakes 2": 3})) == "Serenity Lakes 2"

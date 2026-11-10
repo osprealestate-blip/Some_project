@@ -29,6 +29,7 @@ from dpi.names import is_blank, name_key
 
 MIN_SALES = 3  # a name needs this many counted sales before it becomes a building page
 
+_OLD = re.compile(r"^\s*old\s*-\s*(?=\S)", re.I)
 _FILLER = {"the", "tower", "towers", "building", "bldg", "residential", "residence"}
 _NUM_WORDS = {"one": "1", "two": "2", "three": "3", "four": "4", "five": "5", "six": "6", "seven": "7",
               "eight": "8", "nine": "9", "ten": "10"}
@@ -39,9 +40,11 @@ def canonical_key(raw: str | None) -> str:
     """name_key with filler words dropped and numbers written as digits.
 
     "The Torch Tower" and "Torch" share a key; "Marina Gate 1" and "Marina Gate 2" never do.
+    DLD's "Old-Serenity Lakes 2" (a renamed tower) shares a key with "Serenity Lakes 2".
     """
     if raw is None or is_blank(raw):
         return ""
+    raw = _OLD.sub("", raw)  # DLD keeps renamed towers as "Old-<name>": same tower ("Old Town" stays)
     words = name_key(raw).split()
     out = []
     for w in words:
@@ -56,7 +59,9 @@ def canonical_key(raw: str | None) -> str:
 
 def display_name(spellings: Counter) -> str:
     """Most used spelling, tidied: single spaces, title case only if the source was all upper or all lower."""
-    raw = spellings.most_common(1)[0][0]
+    ranked = [n for n, _ in spellings.most_common()]
+    current = [n for n in ranked if not _OLD.match(n)]  # prefer the tower's current name
+    raw = (current or ranked)[0]
     raw = " ".join(raw.split())
     if raw.isupper() or raw.islower():
         raw = " ".join(w if w.isdigit() else w[:1].upper() + w[1:].lower() for w in raw.split())
