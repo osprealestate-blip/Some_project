@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { aedShort, quarterLabel } from "@/lib/format";
+import { type Currency, DEFAULT_CURRENCY, convertFromAed } from "@/config/currency";
+import { formatConverted, quarterLabel } from "@/lib/format";
 
 export type Point = { period: string; value: number | null; count: number };
 
@@ -11,11 +12,8 @@ type Props = {
   /** "psf" = AED per sq ft, "aed" = short AED amount. Plain strings so a server page can pass them. */
   unit: "psf" | "aed";
   countLabel?: string;
-};
-
-const FORMATS = {
-  psf: (n: number) => `AED ${Math.round(n).toLocaleString("en-AE")}`,
-  aed: (n: number) => aedShort(n),
+  /** Display currency. Points are always AED; they are converted before drawing. */
+  currency?: Currency;
 };
 
 const W = 640;
@@ -34,8 +32,12 @@ function niceTicks(min: number, max: number, n = 4): number[] {
 }
 
 /** One series over time: 2px line, gaps where a quarter has too few deals, crosshair tooltip, table view. */
-export default function LineChart({ title, points, unit, countLabel = "deals" }: Props) {
-  const format = FORMATS[unit];
+export default function LineChart({ title, points: aedPoints, unit, countLabel = "deals", currency = DEFAULT_CURRENCY }: Props) {
+  const points = useMemo(
+    () => (currency === "AED" ? aedPoints : aedPoints.map((p) => ({ ...p, value: p.value == null ? null : convertFromAed(p.value, currency) }))),
+    [aedPoints, currency],
+  );
+  const format = (n: number) => (unit === "psf" ? formatConverted(n, currency) : formatConverted(n, currency, { short: true }));
   const periodLabel = quarterLabel;
   const [hover, setHover] = useState<number | null>(null);
   const svg = useRef<SVGSVGElement>(null);

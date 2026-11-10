@@ -3,13 +3,15 @@
 import { useEffect, useState } from "react";
 import BuildingPicker, { type Picked } from "./BuildingPicker";
 import { BANDS, maxRentIncrease, noticeDeadline } from "@/lib/rentIncrease";
-import { aed, day, pct, roomsLabel } from "@/lib/format";
+import { day, formatAedWithConverted, pct, roomsLabel } from "@/lib/format";
 import { DISCLAIMER, SOURCES } from "@/lib/sources";
+import { type Currency, DEFAULT_CURRENCY, getConversionNote } from "@/config/currency";
 
 type MarketRent = { scope: "building" | "project" | "community"; median: number; count: number; from: string; to: string };
 const SCOPE_TEXT = { building: "this building", project: "this project", community: "this community" };
 
-export default function RentIncreaseForm({ initial }: { initial: Picked | null }) {
+export default function RentIncreaseForm({ initial, currency = DEFAULT_CURRENCY }: { initial: Picked | null; currency?: Currency }) {
+  const conversionNote = getConversionNote(currency);
   const [building, setBuilding] = useState<Picked | null>(initial);
   const [rooms, setRooms] = useState(1);
   const [current, setCurrent] = useState("");
@@ -56,7 +58,7 @@ export default function RentIncreaseForm({ initial }: { initial: Picked | null }
           </div>
           {building && (
             <p className="mt-2 text-xs text-[var(--muted)]">
-              {market ? <>Median {roomsLabel(rooms).toLowerCase()} rent in {SCOPE_TEXT[market.scope]}: <strong>{aed(market.median)}</strong> ({market.count} contracts, {day(market.from)} to {day(market.to)}).</> : "Not enough recent contracts for this bedroom type."}
+              {market ? <>Median {roomsLabel(rooms).toLowerCase()} rent in {SCOPE_TEXT[market.scope]}: <strong>{formatAedWithConverted(market.median, currency)}</strong> ({market.count} contracts, {day(market.from)} to {day(market.to)}).</> : "Not enough recent contracts for this bedroom type."}
             </p>
           )}
         </div>
@@ -70,13 +72,13 @@ export default function RentIncreaseForm({ initial }: { initial: Picked | null }
           <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
             <p className="text-sm text-[var(--muted)]">Most the rent can go up</p>
             <p className="text-3xl font-semibold tabular-nums">{pct(res.maxIncrease, 0)}</p>
-            <p className="mt-1 text-sm">New rent at most <strong className="tabular-nums">{aed(res.maxNewRent)}</strong> a year.</p>
+            <p className="mt-1 text-sm">New rent at most <strong className="tabular-nums">{formatAedWithConverted(res.maxNewRent, currency)}</strong> a year.</p>
             <p className="mt-2 text-sm text-[var(--muted)]">
-              Your rent is {res.below >= 0 ? `${pct(res.below)} below` : `${pct(-res.below)} above`} the {usingEstimate ? "estimated" : "RERA"} average of {aed(avg)}. {res.band.text}.
+              Your rent is {res.below >= 0 ? `${pct(res.below)} below` : `${pct(-res.below)} above`} the {usingEstimate ? "estimated" : "RERA"} average of {formatAedWithConverted(avg, currency)}. {res.band.text}.
             </p>
             {endDate && <p className="mt-2 text-sm">The landlord must give written notice of any increase by <strong>{day(noticeDeadline(endDate))}</strong> (90 days before the contract ends).</p>}
             <p className="mt-3 text-xs text-[var(--muted)]">
-              Rule: Dubai Decree No. 43 of 2013. {usingEstimate ? <>Average estimated from {SOURCES.dldRents}. The official figure is the RERA index on the DLD Rental Index calculator, and it decides disputes. <strong className="font-medium">{DISCLAIMER}</strong></> : "Using the RERA average you entered."}
+              Rule: Dubai Decree No. 43 of 2013. {usingEstimate ? <>Average estimated from {SOURCES.dldRents}. The official figure is the RERA index on the DLD Rental Index calculator, and it decides disputes. <strong className="font-medium">{DISCLAIMER}</strong></> : "Using the RERA average you entered."}{conversionNote ? ` ${conversionNote}` : ""}
             </p>
           </div>
         ) : (
