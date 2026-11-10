@@ -127,7 +127,7 @@ export default async function Page({ params }: Params) {
 
       {poly && (
         <section className="mt-8 h-80 overflow-hidden rounded-lg border border-[var(--border)]">
-          <BuildingMap bounds={poly.bounds} />
+          <BuildingMap bounds={poly.bounds} currency={currency} />
         </section>
       )}
 

@@ -31,3 +31,30 @@ body { background: var(--bg); color: var(--fg); }
 
 a.link { color: var(--accent); }
 a.link:hover { text-decoration: underline; }
+
+/* Building hover / tap card on the map (components/BuildingMap.tsx). */
+.dpi-popup .maplibregl-popup-content {
+  background: var(--panel);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.18);
+  font-size: 12px;
+}
+.dpi-popup .maplibregl-popup-tip { display: none; }
+.dpi-popup .maplibregl-popup-close-button { color: var(--muted); font-size: 18px; padding: 0 6px; }
+.dpi-card-title { font-weight: 600; font-size: 14px; line-height: 1.2; padding-inline-end: 14px; }
+.dpi-card-sub { color: var(--muted); margin-top: 1px; }
+.dpi-card dl { margin-top: 8px; display: grid; gap: 2px; }
+.dpi-card dl > div { display: flex; justify-content: space-between; gap: 12px; padding: 1px 4px; border-radius: 4px; }
+.dpi-card dt { color: var(--muted); }
+.dpi-card dd { font-variant-numeric: tabular-nums; font-weight: 500; }
+.dpi-card dl > div.is-metric { background: var(--grid); }
+.dpi-card dl > div.is-metric dt { color: var(--fg); }
+.dpi-card-foot { margin-top: 6px; color: var(--muted); font-size: 11px; }
+.dpi-card-hint { margin-top: 6px; color: var(--accent); font-size: 11px; }
+.dpi-card-open {
+  margin-top: 8px; width: 100%; border-radius: 8px; padding: 8px 10px;
+  background: var(--accent); color: #fff; font-weight: 600; font-size: 13px;
+}

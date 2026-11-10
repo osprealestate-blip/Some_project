@@ -275,16 +275,31 @@ export async function search(q: string, limit = 12): Promise<SearchHit[]> {
   return [...communities, ...buildings.map(({ score: _score, ...h }) => h)];
 }
 
-export type MapFeature = { slug: string; name: string; lng: number; lat: number; psf: number | null; yield: number | null; sales: number };
+export type MapFeature = {
+  slug: string; name: string; community: string | null; lng: number; lat: number; footprint: string; height: number; approx: boolean;
+  psf: number | null; prev_psf: number | null; price: number | null; rent: number | null; rent_level: string | null;
+  yield: number | null; sales: number;
+};
 
+/** Placed buildings for the map. `footprint` is GeoJSON: the OpenStreetMap outline grown by 1.5 m (so our coloured
+ *  tower wraps the grey basemap one instead of flickering against it), or a small octagon round an approximate
+ *  position. Positions themselves are untouched here: they come from `dpi place-buildings`. */
 export async function mapBuildings(): Promise<MapFeature[]> {
   return query<MapFeature>(
-    `select b.slug, b.name_en as name, ST_X(ST_PointOnSurface(b.geom)) as lng, ST_Y(ST_PointOnSurface(b.geom)) as lat,
-            s.sale_median_psf_12m as psf, coalesce(s.sale_count_12m, 0) as sales,
+    `select b.slug, b.name_en as name, coalesce(c.name_common, c.name_official) as community,
+            ST_X(ST_PointOnSurface(b.geom)) as lng, ST_Y(ST_PointOnSurface(b.geom)) as lat,
+            ST_AsGeoJSON(case when ST_Dimension(b.geom) = 2
+                              then ST_Buffer(ST_SimplifyPreserveTopology(b.geom, 0.000005)::geography, 1.5)::geometry
+                              else ST_Buffer(ST_PointOnSurface(b.geom)::geography, 13, 'quad_segs=2')::geometry end, 6) as footprint,
+            coalesce(b.height_m, b.floors * 3.4, 30)::float8 as height,
+            ST_Dimension(b.geom) <> 2 as approx,
+            s.sale_median_psf_12m as psf, s.sale_median_psf_prev_12m as prev_psf, s.sale_median_price_12m as price,
+            s.rent_median_12m as rent, s.rent_level, coalesce(s.sale_count_12m, 0) as sales,
             case when s.rent_median_12m is not null then
               (select percentile_cont(0.5) within group (order by gross_yield) from building_summary y
                 where y.building_id = b.id and y.rooms >= 0) end as yield
        from buildings b left join building_summary s on s.building_id = b.id and s.rooms = -1
+       left join communities c on c.id = b.community_id
       where b.geom is not null and b.match_confidence >= $1`,
     [MIN_CONFIDENCE],
   );
