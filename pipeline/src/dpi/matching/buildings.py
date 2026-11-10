@@ -29,7 +29,7 @@ from dpi.names import is_blank, name_key
 
 MIN_SALES = 3  # a name needs this many counted sales before it becomes a building page
 
-_OLD = re.compile(r"^\s*old\s*-\s*(?=\S)", re.I)
+_OLD = re.compile(r"^\s*old\s*-\s*(?=\S)|(?<=\S)\s*-\s*old\s*$", re.I)  # "Old-X" and "X-old"
 _FILLER = {"the", "tower", "towers", "building", "bldg", "residential", "residence"}
 _NUM_WORDS = {"one": "1", "two": "2", "three": "3", "four": "4", "five": "5", "six": "6", "seven": "7",
               "eight": "8", "nine": "9", "ten": "10"}
@@ -40,7 +40,7 @@ def canonical_key(raw: str | None) -> str:
     """name_key with filler words dropped and numbers written as digits.
 
     "The Torch Tower" and "Torch" share a key; "Marina Gate 1" and "Marina Gate 2" never do.
-    DLD's "Old-Serenity Lakes 2" (a renamed tower) shares a key with "Serenity Lakes 2".
+    DLD's "Old-Serenity Lakes 2" and "Serenity Lakes 5-old" (renamed towers) share a key with the current name.
     """
     if raw is None or is_blank(raw):
         return ""
@@ -60,7 +60,7 @@ def canonical_key(raw: str | None) -> str:
 def display_name(spellings: Counter) -> str:
     """Most used spelling, tidied: single spaces, title case only if the source was all upper or all lower."""
     ranked = [n for n, _ in spellings.most_common()]
-    current = [n for n in ranked if not _OLD.match(n)]  # prefer the tower's current name
+    current = [n for n in ranked if not _OLD.search(n)]  # prefer the tower's current name
     raw = (current or ranked)[0]
     raw = " ".join(raw.split())
     if raw.isupper() or raw.islower():
@@ -236,6 +236,7 @@ class MatchReport:
     rents_project: int = 0
     rents_total: int = 0
     rents_estimated: int = 0
+    removed: int = 0  # building pages left with no sales after names were merged
 
     def render(self) -> str:
         pct = lambda a, b: f"{100 * a / b:.1f}%" if b else "n/a"  # noqa: E731
@@ -245,6 +246,7 @@ class MatchReport:
             f"rents linked to a project: {self.rents_project} of {self.rents_total} ({pct(self.rents_project, self.rents_total)})",
             f"rents linked to a building: {self.rents_linked} ({pct(self.rents_linked, self.rents_total)}), "
             f"of which {self.rents_estimated} estimated from unit size",
+            f"empty building pages removed: {self.removed}",
         ])
 
 
@@ -304,6 +306,7 @@ def run(conn, crosswalk_path: Path | None = None, dld_buildings_path: Path | Non
             for a in c.aliases:
                 cur.execute(_UPSERT_ALIAS, {"a": a, "c": c.community_id, "b": bid})
 
+        report.removed = _remove_stale(cur, set(building_ids.values()))
         _link_sales(cur, building_ids, project_ids)
         _link_rents(cur, project_ids)
         report.rents_estimated = rents.estimate(cur)
@@ -378,6 +381,26 @@ def _bulk_update(cur, table: str, column: str, key_column: str, rows: list[tuple
     cur.execute(f"update {table} t set {column} = null where {column} is not null")
     cur.execute(f"update {table} t set {column} = l.v from _link l "
                 f"where t.community_id = l.community_id and t.{key_column} = l.raw")
+
+
+def _remove_stale(cur, kept: set[int]) -> int:
+    """Delete building pages this run no longer produces (e.g. "Old-X" now merged into "X").
+
+    Hand-checked (verified) and hand-placed (manual) pages and pages with units stay. Their sales and rents are
+    unlinked first and relinked to the right page by the next steps; derived rows (metrics, aliases) go with them.
+    """
+    cur.execute("select id from buildings where verified_at is null and coalesce(match_method, '') <> 'manual' "
+                "and coalesce(geom_source, '') <> 'manual' and not (id = any(%s)) "
+                "and not exists (select 1 from units u where u.building_id = buildings.id)", (list(kept),))
+    stale = [r[0] for r in cur.fetchall()]
+    if not stale:
+        return 0
+    cur.execute("update transactions set building_id = null where building_id = any(%s)", (stale,))
+    cur.execute("update rent_contracts set building_id = null where building_id = any(%s)", (stale,))
+    cur.execute("update match_reviews set candidate_building_id = null where candidate_building_id = any(%s)", (stale,))
+    cur.execute("delete from building_metrics where building_id = any(%s)", (stale,))
+    cur.execute("delete from buildings where id = any(%s)", (stale,))
+    return cur.rowcount
 
 
 def _link_sales(cur, building_ids: dict[tuple[int, str], int], project_ids: dict[tuple[int, str], int]) -> None:

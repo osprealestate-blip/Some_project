@@ -38,6 +38,7 @@ const METHOD_TEXT: Record<string, string> = {
 
 const POSITION_TEXT: Record<string, string> = {
   osm: "Map position from OpenStreetMap.",
+  search: "Map position from OpenStreetMap's place search.",
   manual: "Map position placed by hand.",
   plot: "Approximate map position: another tower on the same plot.",
   project: "Approximate map position: another tower of the same project.",

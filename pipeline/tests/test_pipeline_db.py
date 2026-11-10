@@ -195,7 +195,7 @@ def test_more_towers_placed_and_approximate_positions_rebuilt(conn):
     with conn.cursor() as cur:
         cur.execute("select slug, geom_source, round(ST_X(ST_PointOnSurface(geom))::numeric, 4) from buildings "
                     "where slug in ('princess-tower', 'marina-gate-2') order by slug")
-        assert cur.fetchall() == [("marina-gate-2", "project", _gate1_x(cur)), ("princess-tower", "osm", Decimal("55.1468"))]
+        assert cur.fetchall() == [("marina-gate-2", "project", _gate1_x(cur)), ("princess-tower", "search", Decimal("55.1468"))]
 
     # With full OSM data the approximate spot is replaced by the exact one.
     rep = osm.place(conn, full, None, None)
@@ -234,3 +234,48 @@ def test_shared_search_hits_are_approximate_and_far_apart_towers_flagged(conn, t
     with conn.cursor() as cur:  # put the synthetic towers back where the other tests expect them
         cur.execute("update buildings set geom = null, geom_source = null where geom_source = 'manual'")
     osm.place(conn, full, None, None)
+
+
+def test_stale_positions_cleared_on_rerun(conn):
+    from dpi.matching import osm
+
+    full = json.loads((conn.info_dir / "osm_buildings.json").read_text())
+    with conn.cursor() as cur:
+        # A search position saved by older code as 'osm' with no OSM id, and an OSM match whose feature is gone.
+        cur.execute("update buildings set geom_source = 'osm', osm_id = null where slug = 'princess-tower'")
+    no_gate2 = {"elements": [e for e in full["elements"] if e["tags"]["name"] != "Marina Gate 2"]}
+    rep = osm.place(conn, no_gate2, None, None, lambda q, bbox: [])
+    assert rep.project == 1  # Gate 2 lost its old exact spot and now shares Gate 1's
+    with conn.cursor() as cur:
+        cur.execute("select slug, geom_source from buildings where slug in ('princess-tower', 'marina-gate-2') "
+                    "order by slug")
+        assert cur.fetchall() == [("marina-gate-2", "project"), ("princess-tower", "osm")]  # Princess: OSM again
+        cur.execute("select osm_id is not null from buildings where slug = 'princess-tower'")
+        assert cur.fetchone()[0]
+    osm.place(conn, full, None, None)
+
+
+def test_empty_building_pages_removed_on_rerun(conn):
+    from dpi.matching import buildings
+
+    with conn.cursor() as cur:
+        cur.execute("select community_id from buildings where slug = 'princess-tower'")
+        cid = cur.fetchone()[0]
+        cur.execute("insert into buildings (slug, name_en, name_key, community_id, geom_source) values "
+                    "('old-princess-tower', 'Old-Princess Tower', 'old princess', %s, 'search'), "
+                    "('checked-tower', 'Checked Tower', 'checked', %s, null) returning id", (cid, cid))
+        stale_id = cur.fetchone()[0]
+        cur.execute("update buildings set verified_at = now() where slug = 'checked-tower'")
+        cur.execute("insert into building_metrics (building_id, period, source_date) values (%s, '2026-10-01', '2026-11-02')",
+                    (stale_id,))
+        cur.execute("update transactions set building_id = %s where id = (select min(id) from transactions "
+                    "where building_id = (select id from buildings where slug = 'princess-tower'))", (stale_id,))
+    conn.commit()
+    rep = buildings.run(conn, source_date=date(2026, 11, 2))
+    assert rep.removed == 1 and "empty building pages removed: 1" in rep.render()
+    assert rep.sales_linked == rep.sales_named  # the moved sale went back to Princess Tower
+    with conn.cursor() as cur:
+        cur.execute("select slug from buildings where slug in ('old-princess-tower', 'checked-tower')")
+        assert cur.fetchall() == [("checked-tower",)]  # hand-checked pages stay
+        cur.execute("delete from buildings where slug = 'checked-tower'")
+    conn.commit()
