@@ -47,6 +47,9 @@ def _columns(conn, table: str) -> list[str]:
 def run(source, target, codes: list[str], years: int = 10) -> PushReport:
     rep = PushReport()
     with target.cursor() as tcur:
+        # Hosted databases cap one statement at about two minutes; the big copies need longer. A connection
+        # option is ignored by Supabase's pooler, so it is set once connected.
+        tcur.execute("set statement_timeout = 0")
         tcur.execute("truncate " + ", ".join(t for t, _ in reversed(PLAN)) + " cascade")
     for table, where in PLAN:
         cols = [c for c in _columns(target, table) if c in set(_columns(source, table))]

@@ -340,3 +340,43 @@ export async function marketRent(slug: string | null, communityCode: string | nu
   }
   return null;
 }
+
+
+export type OffPlanRent = { rooms: number; median: number; count: number; sizeLow: number; sizeHigh: number; from: string; to: string };
+
+/** True when every counted sale of the building in the last 24 months was off-plan: not finished, so no one rents it yet. */
+export async function isOffPlanOnly(buildingId: number): Promise<boolean> {
+  const r = await one<{ total: number; off: number }>(
+    `select count(*)::int as total, count(*) filter (where off_plan is true)::int as off
+       from transactions
+      where building_id = $1 and excluded is null and property_type = any($2)
+        and txn_date > (select max(txn_date) from transactions) - interval '24 months'`,
+    [buildingId, SALE_TYPES],
+  );
+  return !!r && r.total > 0 && r.off === r.total;
+}
+
+/** For a tower not yet finished: for each bedroom type it has sold, the median rent of flats of that type and a
+ *  similar size (within 20% of the sizes sold) in the same community over the last 12 months. Needs 5+ contracts. */
+export async function offPlanRentEstimate(b: Building): Promise<OffPlanRent[]> {
+  return query<OffPlanRent>(
+    `with sold as (
+       select least(rooms, 4) as rooms, percentile_cont(0.5) within group (order by size_sqft) as size
+         from transactions
+        where building_id = $1 and excluded is null and property_type = any($2) and rooms is not null
+          and txn_date > (select max(txn_date) from transactions) - interval '24 months'
+        group by 1)
+     select s.rooms, percentile_cont(0.5) within group (order by r.annual_rent)::float8 as median, count(*)::int as count,
+            (s.size * 0.8)::float8 as "sizeLow", (s.size * 1.2)::float8 as "sizeHigh",
+            min(r.start_date)::text as "from", max(r.start_date)::text as "to"
+       from sold s
+       join rent_contracts r on r.community_id = $3 and r.excluded is null and least(r.rooms, 4) = s.rooms
+        and r.size_sqft between s.size * 0.8 and s.size * 1.2
+        and r.start_date > (select max(txn_date) from transactions) - interval '12 months'
+        and r.start_date <= (select max(txn_date) from transactions)
+      group by s.rooms, s.size
+     having count(*) >= 5
+      order by s.rooms`,
+    [b.id, SALE_TYPES, b.community_id],
+  );
+}
