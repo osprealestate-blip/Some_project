@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import BuildingMap from "@/components/BuildingMap";
 import LineChart from "@/components/LineChart";
+import GoldenVisaChecker from "@/components/GoldenVisaChecker";
 import KeyDistances from "@/components/KeyDistances";
 import NearbyPanel from "@/components/NearbyPanel";
 import NoData from "@/components/NoData";
@@ -102,6 +103,13 @@ export default async function Page({ params }: Params) {
           <LineChart title={`Median annual rent, by quarter${series.rentLevel === "project" ? " (whole project)" : series.rentLevel === "estimated" ? " (estimated)" : ""}`} points={series.rents} unit="aed" countLabel="contracts" />
           <SourceNote source={SOURCES.dldRents} date={periodEnd} />
         </div>
+      </section>
+
+      <section className="mt-8">
+        <GoldenVisaChecker
+          price={all?.sale_median_price_12m ?? (all?.sale_median_psf_12m && all?.sale_median_size_12m ? all.sale_median_psf_12m * all.sale_median_size_12m : null)}
+          buildingName={b.name_en}
+        />
       </section>
 
       <section className="mt-8">
