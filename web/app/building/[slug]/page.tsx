@@ -12,7 +12,7 @@ import Stat from "@/components/Stat";
 import { hasDatabase } from "@/lib/db";
 import { aed, aedShort, count, day, pct, psf, roomsLabel, sqft } from "@/lib/format";
 import {
-  buildingBySlug, buildingSeries, buildingSummaries, nearbyPlaces, recentSales, siblingBuildings,
+  buildingBySlug, buildingSeries, buildingSummaries, isOffPlanOnly, nearbyPlaces, offPlanRentEstimate, recentSales, siblingBuildings,
 } from "@/lib/queries";
 import { SOURCES } from "@/lib/sources";
 import { change } from "@/lib/stats";
@@ -56,6 +56,9 @@ export default async function Page({ params }: Params) {
     buildingSummaries(b.id), buildingSeries(b), recentSales(b.id), nearbyPlaces(b), siblingBuildings(b),
   ]);
   const all = summaries.find((s) => s.rooms === -1);
+  const noRent = all?.rent_median_12m == null && series.rentLevel == null;
+  const offPlan = noRent && (await isOffPlanOnly(b.id));
+  const offPlanRents = offPlan ? await offPlanRentEstimate(b) : [];
   const yoy = change(all?.sale_median_psf_12m, all?.sale_median_psf_prev_12m);
   const yields = summaries.filter((s) => s.rooms >= 0 && s.gross_yield != null).map((s) => s.gross_yield!).sort((a, c) => a - c);
   const midYield = yields.length ? yields[Math.floor((yields.length - 1) / 2)] : null;
@@ -80,7 +83,7 @@ export default async function Page({ params }: Params) {
       <section className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat label="Median price per sq ft" value={psf(all?.sale_median_psf_12m)} note={`${count(all?.sale_count_12m ?? 0)} sales in 12 months`} />
         <Stat label="Change on a year earlier" value={pct(yoy, 1, true)} note="Median per sq ft" />
-        <Stat label="Median annual rent" value={aedShort(all?.rent_median_12m)} note={rentLevel === "project" ? "Whole project (rents are filed per project)" : rentLevel === "estimated" ? `Estimated: ${count(all?.rent_count_12m ?? 0)} contracts, some placed by unit size` : `${count(all?.rent_count_12m ?? 0)} contracts`} />
+        <Stat label="Median annual rent" value={aedShort(all?.rent_median_12m)} note={offPlan ? "Not completed yet: no rent contracts" : rentLevel === "project" ? "Whole project (rents are filed per project)" : rentLevel === "estimated" ? `Estimated: ${count(all?.rent_count_12m ?? 0)} contracts, some placed by unit size` : `${count(all?.rent_count_12m ?? 0)} contracts`} />
         <Stat label="Gross yield (estimate)" value={pct(midYield)} note="Median across bedroom types" />
       </section>
       <SourceNote source={`${SOURCES.dldSales}; ${SOURCES.dldRents}`} date={periodEnd} estimate>
@@ -92,6 +95,41 @@ export default async function Page({ params }: Params) {
         <div className="mt-2"><RoomsTable rows={summaries} /></div>
         <p className="mt-1 text-xs text-[var(--muted)]">* Estimate. Rows need 3 or more deals for a median.{rentLevel === "project" ? " Rents are for the whole project, because DLD rent contracts name the project, not the tower." : ""}{rentLevel === "estimated" ? " Rent contracts do not name the tower, so some were placed in this building because their exact size and bedrooms match flats sold here and in no other tower nearby. Estimated." : ""}</p>
       </section>
+
+      {offPlan && (
+        <section className="mt-8 rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
+          <h2 className="text-base font-semibold">Rent: not completed yet</h2>
+          <p className="mt-1 text-sm text-[var(--muted)]">
+            Every sale here in the last 24 months was off-plan, so the building has no rent contracts yet.
+            {offPlanRents.length ? " For comparison, this is what flats of a similar size rent for in the same community:" : ""}
+          </p>
+          {offPlanRents.length > 0 && (
+            <table className="mt-2 w-full text-sm tabular-nums [&_td]:pe-3 [&_th]:pe-3">
+              <thead className="text-xs text-[var(--muted)]">
+                <tr className="border-b border-[var(--border)]">
+                  <th className="py-1 text-start font-medium">Type</th>
+                  <th className="py-1 text-end font-medium">Size compared</th>
+                  <th className="py-1 text-end font-medium">Median annual rent*</th>
+                  <th className="py-1 text-end font-medium">Contracts</th>
+                </tr>
+              </thead>
+              <tbody>
+                {offPlanRents.map((r) => (
+                  <tr key={r.rooms} className="border-b border-[var(--border)]">
+                    <td className="py-1.5">{roomsLabel(r.rooms)}</td>
+                    <td className="py-1.5 text-end">{sqft(r.sizeLow)} to {sqft(r.sizeHigh)}</td>
+                    <td className="py-1.5 text-end">{aed(r.median)}</td>
+                    <td className="py-1.5 text-end">{count(r.count)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          <SourceNote source={SOURCES.dldRents} date={offPlanRents[0]?.to ?? periodEnd} estimate>
+            * Estimate from other buildings in {b.community}, not rents of this building.
+          </SourceNote>
+        </section>
+      )}
 
       <section className="mt-8 grid gap-6 lg:grid-cols-2">
         <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
