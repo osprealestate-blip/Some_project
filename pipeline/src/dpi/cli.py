@@ -33,6 +33,9 @@ def main(argv: list[str] | None = None) -> int:
     pb.add_argument("--save-osm", type=Path, help="where to save the downloaded Overpass JSON")
     pb.add_argument("--manual", type=Path, default=Path("db/seeds/manual_positions.csv"))
     pb.add_argument("--communities", default="392,681,346", help="DM codes to place (comma separated, empty = all)")
+    pb.add_argument("--nominatim", action="store_true",
+                    help="look up still-unplaced towers by name in OpenStreetMap's search (1 request a second, cached)")
+    pb.add_argument("--nominatim-cache", type=Path, default=Path("data/clean/nominatim_cache.json"))
     sub.add_parser("compute-metrics", help="Trailing 12-month medians, yields and monthly series")
     sub.add_parser("rent-backtest", help="How often rents placed by unit size land in the right tower (read-only)")
     lp = sub.add_parser("load-pois", help="Nearby places: KHDA schools, DHA facilities, OpenStreetMap")
@@ -108,7 +111,8 @@ def main(argv: list[str] | None = None) -> int:
                 data = osm.fetch(osm.community_bbox(conn, codes))
                 if args.save_osm:
                     args.save_osm.write_text(json.dumps(data), encoding="utf-8")
-            print(osm.place(conn, data, args.manual, codes).render())
+            lookup = osm.Nominatim(args.nominatim_cache) if args.nominatim else None
+            print(osm.place(conn, data, args.manual, codes, lookup).render())
     elif args.cmd == "compute-metrics":
         from dpi.db import connect
         from dpi.metrics import compute

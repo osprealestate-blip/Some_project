@@ -4,7 +4,7 @@ from dpi.matching.buildings import (
     Candidate, CrosswalkRow, apply_crosswalk, assign_slugs, canonical_key, collect, confidence, display_name,
     pick_dld_building, slugify, tower_number,
 )
-from dpi.matching.osm import OsmBuilding, best_match, name_score, parse
+from dpi.matching.osm import OsmBuilding, best_match, name_score, name_variants, overpass_query, parse
 
 
 def test_canonical_key_drops_filler_and_keeps_numbers():
@@ -97,3 +97,29 @@ def test_osm_parse_and_match():
     assert '"Polygon"' in blds[0].geojson()
     point = OsmBuilding(1, ["X"], [(55.0, 25.0)], None)
     assert '"Point"' in point.geojson()
+
+
+def test_name_variants_drop_developer_and_tower_part():
+    tower, site = name_variants("Serenz by Danube - TOWER A")
+    assert tower == {"serenz by danube a", "serenz a"} and site == {"serenz", "serenz by danube"}
+    tower, site = name_variants("Bayz 102 By Danube")
+    assert tower == {"bayz 102 by danube", "bayz 102"} and site == set()
+    tower, site = name_variants("Peninsula Four - Tower 6")
+    assert "peninsula 4 6" in tower and site == {"peninsula 4"}
+    assert name_variants("Princess Tower") == ({"princess"}, set())
+    assert name_variants("") == (set(), set())
+    # Tower numbers still never cross: tower 2 is not tower 6.
+    assert name_score("peninsula 4 2", "peninsula 4 6") == 0.0
+
+
+def test_osm_nodes_and_construction_sites():
+    assert "nwr[landuse=construction][name]" in overpass_query((25.0, 55.0, 25.1, 55.1))
+    blds = parse({"elements": [
+        {"type": "node", "id": 7, "lat": 25.05, "lon": 55.2, "tags": {"building": "yes", "name": "Stax by Ellington"}},
+        {"type": "way", "id": 7, "tags": {"landuse": "construction", "name": "Binghatti Aquarise"},
+         "geometry": [{"lon": 55.1, "lat": 25.1}, {"lon": 55.2, "lat": 25.1}, {"lon": 55.2, "lat": 25.2}, {"lon": 55.1, "lat": 25.1}]},
+    ]})
+    node, way = blds
+    assert node.osm_id != way.osm_id and node.centroid() == (55.2, 25.05) and "stax" in node.keys
+    assert best_match({"stax"}, blds) == (node, 1.0)
+    assert best_match(name_variants("Binghatti Aquarise - TOWER B")[1], blds)[0] is way

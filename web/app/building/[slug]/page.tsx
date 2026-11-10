@@ -36,6 +36,14 @@ const METHOD_TEXT: Record<string, string> = {
   manual: "Checked by hand",
 };
 
+const POSITION_TEXT: Record<string, string> = {
+  osm: "Map position from OpenStreetMap.",
+  manual: "Map position placed by hand.",
+  plot: "Approximate map position: another tower on the same plot.",
+  project: "Approximate map position: another tower of the same project.",
+  site: "Approximate map position: the development's site in OpenStreetMap.",
+};
+
 export default async function Page({ params }: Params) {
   const { slug } = await params;
   if (!hasDatabase()) {
@@ -169,7 +177,7 @@ export default async function Page({ params }: Params) {
         <h2 className="text-sm font-semibold text-[var(--fg)]">About this page</h2>
         <p className="mt-1">
           {METHOD_TEXT[b.match_method ?? "name"] ?? METHOD_TEXT.name}. Names seen in DLD files: {b.aliases.slice(0, 6).join(", ")}.
-          {b.geom_source === "osm" ? " Map position from OpenStreetMap." : b.geom_source === "manual" ? " Map position placed by hand." : b.geom_source === "plot" ? " Map position from another tower on the same plot." : ""}
+          {b.geom_source ? ` ${POSITION_TEXT[b.geom_source] ?? ""}` : " Not on the map yet."}
           {" "}Something wrong? Building pages are hand-checked first in Dubai Marina, JVC and Business Bay.
         </p>
       </section>
