@@ -9,9 +9,11 @@ import NoData from "@/components/NoData";
 import RoomsTable from "@/components/RoomsTable";
 import SourceNote from "@/components/SourceNote";
 import Stat from "@/components/Stat";
+import { getConversionNote } from "@/config/currency";
 import { launchCommunity } from "@/lib/communities";
+import { getServerCurrency } from "@/lib/currency";
 import { hasDatabase } from "@/lib/db";
-import { aedShort, count, pct, psf } from "@/lib/format";
+import { count, formatMoneyShort, formatPsf, pct } from "@/lib/format";
 import { communityBuildings, communityByCode, communitySeries, communitySummaries } from "@/lib/queries";
 import { SOURCES } from "@/lib/sources";
 import { change } from "@/lib/stats";
@@ -61,6 +63,8 @@ export default async function Page({ params }: Params) {
       </main>
     );
   }
+  const currency = await getServerCurrency();
+  const conversionNote = getConversionNote(currency);
   const [summaries, series, buildings] = await Promise.all([communitySummaries(c.id), communitySeries(c.id), communityBuildings(c.id)]);
   const all = summaries.find((s) => s.rooms === -1);
   const plainYoy = change(all?.sale_median_psf_12m, all?.sale_median_psf_prev_12m);
@@ -79,15 +83,16 @@ export default async function Page({ params }: Params) {
       {scope && <p className="mt-2 max-w-2xl text-sm">{scope}</p>}
 
       <section className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Stat label="Median price per sq ft" value={psf(all?.sale_median_psf_12m)} note={`${count(all?.sale_count_12m ?? 0)} apartment sales in 12 months`} />
+        <Stat label="Median price per sq ft" value={formatPsf(all?.sale_median_psf_12m, currency)} note={`${count(all?.sale_count_12m ?? 0)} apartment sales in 12 months`} />
         {lfl != null ? (
           <Stat label="Change on a year earlier" value={pct(lfl, 1, true)} note={`Same towers (${count(all?.like_for_like_towers ?? 0)}), per sq ft`} />
         ) : (
           <Stat label="Change on a year earlier" value={pct(plainYoy, 1, true)} note="Median per sq ft" />
         )}
-        <Stat label="Median annual rent" value={aedShort(all?.rent_median_12m)} note={`${count(all?.rent_count_12m ?? 0)} contracts, all bedroom types`} />
+        <Stat label="Median annual rent" value={formatMoneyShort(all?.rent_median_12m, currency)} note={`${count(all?.rent_count_12m ?? 0)} contracts, all bedroom types`} />
         <Stat label="Gross yield (estimate)" value={pct(midYield)} note="Median across bedroom types" />
       </section>
+      {conversionNote && <p className="mt-2 text-xs text-[var(--muted)]">{conversionNote}</p>}
       <SourceNote source={`${SOURCES.dldSales}; ${SOURCES.dldRents}`} date={all?.period_end} estimate>
         Apartments only; 12 months to the newest sale.
         {lfl != null && plainYoy != null && ` The area median itself moved ${pct(plainYoy, 1, true)}, partly because the mix of towers and off-plan sales changed; the same-tower figure compares each tower with itself.`}
@@ -97,8 +102,8 @@ export default async function Page({ params }: Params) {
         <section className="mt-6">
           <h2 className="text-base font-semibold">Ready and off-plan, last 12 months</h2>
           <div className="mt-2 grid grid-cols-2 gap-3 md:grid-cols-4">
-            <Stat label="Ready, median per sq ft" value={psf(all?.sale_median_psf_ready_12m)} note={`${count(all?.sale_count_ready_12m ?? 0)} sales; ${pct(readyYoy, 1, true)} on a year earlier`} />
-            <Stat label="Off-plan, median per sq ft" value={psf(all?.sale_median_psf_offplan_12m)} note={`${count(all?.sale_count_offplan_12m ?? 0)} sales; ${pct(offplanYoy, 1, true)} on a year earlier`} />
+            <Stat label="Ready, median per sq ft" value={formatPsf(all?.sale_median_psf_ready_12m, currency)} note={`${count(all?.sale_count_ready_12m ?? 0)} sales; ${pct(readyYoy, 1, true)} on a year earlier`} />
+            <Stat label="Off-plan, median per sq ft" value={formatPsf(all?.sale_median_psf_offplan_12m, currency)} note={`${count(all?.sale_count_offplan_12m ?? 0)} sales; ${pct(offplanYoy, 1, true)} on a year earlier`} />
           </div>
           <SourceNote source={SOURCES.dldSales} date={all?.period_end}>Off-plan = sold by the developer before completion (DLD registration type).</SourceNote>
         </section>
@@ -106,16 +111,16 @@ export default async function Page({ params }: Params) {
 
       <section className="mt-8">
         <h2 className="text-base font-semibold">By bedroom type, last 12 months</h2>
-        <div className="mt-2"><RoomsTable rows={summaries} showSize={false} /></div>
+        <div className="mt-2"><RoomsTable rows={summaries} showSize={false} currency={currency} /></div>
       </section>
 
       <section className="mt-8 grid gap-6 lg:grid-cols-2">
         <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
-          <LineChart title="Median sale price per sq ft, by quarter" points={series.sales} unit="psf" countLabel="sales" />
+          <LineChart title="Median sale price per sq ft, by quarter" points={series.sales} unit="psf" countLabel="sales" currency={currency} />
           <SourceNote source={SOURCES.dldSales} date={all?.period_end} />
         </div>
         <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
-          <LineChart title="Median annual rent, by quarter" points={series.rents} unit="aed" countLabel="contracts" />
+          <LineChart title="Median annual rent, by quarter" points={series.rents} unit="aed" countLabel="contracts" currency={currency} />
           <SourceNote source={SOURCES.dldRents} date={all?.period_end} />
         </div>
       </section>
@@ -145,9 +150,9 @@ export default async function Page({ params }: Params) {
                   <tr key={b.slug} className="border-b border-[var(--border)]">
                     <td className="py-1.5"><Link className="link" href={`/building/${b.slug}`}>{b.name_en}</Link></td>
                     <td className="py-1.5 text-end">{count(b.sale_count_12m ?? 0)}</td>
-                    <td className="py-1.5 text-end">{psf(b.sale_median_psf_12m)}</td>
+                    <td className="py-1.5 text-end">{formatPsf(b.sale_median_psf_12m, currency)}</td>
                     <td className="py-1.5 text-end">
-                      {aedShort(b.rent_median_12m)}
+                      {formatMoneyShort(b.rent_median_12m, currency)}
                       {b.rent_median_12m != null && b.rent_level === "project" && <span className="text-xs text-[var(--muted)]"> project</span>}
                       {b.rent_median_12m != null && b.rent_level === "estimated" && <span className="text-xs text-[var(--muted)]"> est.</span>}
                     </td>

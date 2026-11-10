@@ -1,5 +1,7 @@
 import Link from "next/link";
 import SearchBox from "./SearchBox";
+import CurrencySwitcher from "./CurrencySwitcher";
+import { getServerCurrency } from "@/lib/currency";
 
 const NAV = [
   { href: "/community/392", label: "Dubai Marina" },
@@ -9,7 +11,9 @@ const NAV = [
   { href: "/tools/rent-increase", label: "Rent increase" },
 ];
 
-export default function SiteHeader() {
+export default async function SiteHeader() {
+  const currency = await getServerCurrency();
+
   return (
     <header className="sticky top-0 z-20 border-b border-[var(--border)] bg-[var(--panel)]">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2">
@@ -19,8 +23,11 @@ export default function SiteHeader() {
             <Link key={n.href} href={n.href} className="whitespace-nowrap hover:text-[var(--fg)]">{n.label}</Link>
           ))}
         </nav>
-        <div className="order-2 ms-auto w-full max-w-xs sm:order-3 sm:w-64">
-          <SearchBox />
+        <div className="order-2 ms-auto flex items-center gap-2">
+          <CurrencySwitcher initialCurrency={currency} />
+          <div className="w-48 sm:w-60">
+            <SearchBox />
+          </div>
         </div>
       </div>
     </header>

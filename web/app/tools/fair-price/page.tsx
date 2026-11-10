@@ -1,5 +1,6 @@
 import FairPriceForm from "@/components/FairPriceForm";
 import NoData from "@/components/NoData";
+import { getServerCurrency } from "@/lib/currency";
 import { hasDatabase } from "@/lib/db";
 import { buildingBySlug } from "@/lib/queries";
 
@@ -14,7 +15,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ b
       <h1 className="text-2xl font-semibold">Fair-price checker</h1>
       <p className="mt-1 max-w-2xl text-sm text-[var(--muted)]">Is an asking price in line with what homes in the same building actually sold for? We compare it with the last 12 months of DLD sales of the same bedroom type.</p>
       <div className="mt-6">
-        {hasDatabase() ? <FairPriceForm initial={b ? { slug: b.slug, name: b.name_en, community: b.community } : null} /> : <NoData />}
+        {hasDatabase() ? <FairPriceForm initial={b ? { slug: b.slug, name: b.name_en, community: b.community } : null} currency={await getServerCurrency()} /> : <NoData />}
       </div>
     </main>
   );

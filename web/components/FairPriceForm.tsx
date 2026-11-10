@@ -3,12 +3,14 @@
 import { useState } from "react";
 import BuildingPicker, { type Picked } from "./BuildingPicker";
 import { assessPrice, VERDICT_TEXT, type Comparables, type FairPriceResult } from "@/lib/fairPrice";
-import { aed, day, pct, psf, roomsLabel } from "@/lib/format";
+import { day, formatAedWithConverted, formatPsf, pct, roomsLabel } from "@/lib/format";
 import { DISCLAIMER, SOURCES } from "@/lib/sources";
+import { type Currency, DEFAULT_CURRENCY, getConversionNote } from "@/config/currency";
 
 const ROOM_OPTIONS = [0, 1, 2, 3, 4];
 
-export default function FairPriceForm({ initial }: { initial: Picked | null }) {
+export default function FairPriceForm({ initial, currency = DEFAULT_CURRENCY }: { initial: Picked | null; currency?: Currency }) {
+  const conversionNote = getConversionNote(currency);
   const [building, setBuilding] = useState<Picked | null>(initial);
   const [rooms, setRooms] = useState(1);
   const [size, setSize] = useState("");
@@ -79,15 +81,15 @@ export default function FairPriceForm({ initial }: { initial: Picked | null }) {
               </p>
             )}
             <dl className="mt-3 space-y-2 text-sm">
-              <div className="flex justify-between gap-2"><dt className="text-[var(--muted)]">Estimate</dt><dd className="font-semibold tabular-nums">{aed(result.estimate)}</dd></div>
-              <div className="flex justify-between gap-2"><dt className="text-[var(--muted)]">Typical range</dt><dd className="tabular-nums">{aed(result.low)} to {aed(result.high)}</dd></div>
-              <div className="flex justify-between gap-2"><dt className="text-[var(--muted)]">Median per sq ft</dt><dd className="tabular-nums">{psf(result.comps.medianPsf)}</dd></div>
-              {result.askingPsf && <div className="flex justify-between gap-2"><dt className="text-[var(--muted)]">Asking per sq ft</dt><dd className="tabular-nums">{psf(result.askingPsf)}</dd></div>}
+              <div className="flex justify-between gap-2"><dt className="text-[var(--muted)]">Estimate</dt><dd className="font-semibold tabular-nums">{formatAedWithConverted(result.estimate, currency)}</dd></div>
+              <div className="flex justify-between gap-2"><dt className="text-[var(--muted)]">Typical range</dt><dd className="tabular-nums">{formatAedWithConverted(result.low, currency)} to {formatAedWithConverted(result.high, currency)}</dd></div>
+              <div className="flex justify-between gap-2"><dt className="text-[var(--muted)]">Median per sq ft</dt><dd className="tabular-nums">{formatPsf(result.comps.medianPsf)}</dd></div>
+              {result.askingPsf && <div className="flex justify-between gap-2"><dt className="text-[var(--muted)]">Asking per sq ft</dt><dd className="tabular-nums">{formatPsf(result.askingPsf)}</dd></div>}
               <div className="flex justify-between gap-2"><dt className="text-[var(--muted)]">Based on</dt><dd className="text-end">{result.comps.count} sales ({roomsLabel(rooms)}) {result.comps.scope === "building" ? "in this building" : "in this community (too few in the building)"}</dd></div>
             </dl>
             {result.confidence === "limited" && <p className="mt-3 text-xs text-[var(--warn)]">Limited comparison: few sales, or the whole community rather than this building.</p>}
             <p className="mt-3 text-xs text-[var(--muted)]">
-              Source: {SOURCES.dldSales}, sales from {day(result.comps.from)} to {day(result.comps.to)}. Floor, view and condition are not known.{" "}
+              Source: {SOURCES.dldSales}, sales from {day(result.comps.from)} to {day(result.comps.to)}. Floor, view and condition are not known.{conversionNote ? ` ${conversionNote}` : ""}{" "}
               <strong className="font-medium">{DISCLAIMER}</strong>
             </p>
           </div>
