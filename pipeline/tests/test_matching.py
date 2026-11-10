@@ -133,4 +133,7 @@ def test_tower_letters_never_cross_and_old_names_merge():
     assert name_score("bloom a", "bloom a") == 1.0
     assert canonical_key("Old-Serenity Lakes 2") == canonical_key("Serenity Lakes 2") == "serenity lakes 2"
     assert canonical_key("Old Town Island") == "old town island"
+    assert canonical_key("Serenity Lakes 5-old") == canonical_key("Serenity Lakes 5 - OLD") == "serenity lakes 5"
+    assert canonical_key("Marina Old") == "marina old"  # no dash: part of the name
+    assert display_name(Counter({"Serenity Lakes 5-old": 9, "Serenity Lakes 5": 3})) == "Serenity Lakes 5"
     assert display_name(Counter({"Old-serenity Lakes 2": 9, "Serenity Lakes 2": 3})) == "Serenity Lakes 2"

@@ -4,14 +4,17 @@ DLD files carry no coordinates. Positions come from, in order of trust:
 1. `manual`: hand-placed towers in `db/seeds/manual_positions.csv` (slug, lat, lng). Always wins.
 2. `osm`: a named OpenStreetMap feature in or just outside (150 m) the building's community whose name matches
    the tower's name. Developer suffixes ("Serenz by Danube - Tower A" is also tried as "Serenz Tower A") are
-   ignored on both sides. With `--nominatim`, towers still unplaced are looked up by name in OpenStreetMap's
-   own search (Nominatim), inside the community's box, at most one request a second, with answers cached.
+   ignored on both sides.
+   `search`: with `--nominatim`, towers still unplaced are looked up by name in OpenStreetMap's own search
+   (Nominatim), inside the community's box, at most one request a second, with answers cached.
 3. Approximate positions, shown as such on the building page:
    - `plot`: another tower on the same DLD land number has a position (shared plot).
    - `project`: another tower of the same DLD project has a position.
    - `site`: an OpenStreetMap feature carries the development's name without the tower part
      ("Binghatti Aquarise" for "Binghatti Aquarise - Tower B"), e.g. a construction site.
-   Approximate positions are worked out again on every run, so they follow better exact positions.
+   Approximate positions are worked out again on every run, so they follow better exact positions. OSM
+   positions are rebuilt whenever OSM data is given, and search positions whenever `--nominatim` is, so a
+   tighter matching rule also takes back positions it no longer supports.
 
 OpenStreetMap data is © OpenStreetMap contributors (ODbL); the map shows that attribution.
 """
@@ -247,6 +250,7 @@ class PlaceReport:
 MIN_SCORE = 0.9
 SPREAD_M = 1000
 DERIVED = ("plot", "project", "site")
+EXACT = ("osm", "search", "manual")  # positions approximate ones are taken from
 
 
 def _scope(community_codes: list[str] | None) -> tuple[str, list]:
@@ -273,7 +277,15 @@ def place(conn, osm_json: dict | None, manual_csv: Path | None, community_codes:
     where, params = _scope(community_codes)
     with conn.cursor() as cur:
         # Approximate positions are rebuilt from the exact ones every run.
-        cur.execute("update buildings set geom = null, geom_source = null where geom_source = any(%s)", (list(DERIVED),))
+        in_scope = " and community_id in (select c.id from communities c where true" + where + ")"
+        cur.execute("update buildings set geom = null, geom_source = null where geom_source = any(%s)" + in_scope,
+                    [list(DERIVED), *params])
+        if osm:  # OSM positions come back below if they still match
+            cur.execute("update buildings set geom = null, geom_source = null, osm_id = null "
+                        "where geom_source = 'osm' and osm_id is not null" + in_scope, params)
+        if lookup is not None:  # likewise search positions ('osm' without an osm_id before they had their own label)
+            cur.execute("update buildings set geom = null, geom_source = null "
+                        "where (geom_source = 'search' or (geom_source = 'osm' and osm_id is null))" + in_scope, params)
         by_community: dict[int, list[OsmBuilding]] = {}
         if osm:
             # Which communities each OSM feature's centre falls in, or lies within NEAR_M of.
@@ -314,19 +326,19 @@ def place(conn, osm_json: dict | None, manual_csv: Path | None, community_codes:
         cur.execute("""
             update buildings b set geom = ST_PointOnSurface(p.geom), geom_source = 'plot'
             from (select distinct on (land_number, community_id) land_number, community_id, geom from buildings
-                  where geom is not null and land_number is not null and geom_source in ('osm', 'manual')
+                  where geom is not null and land_number is not null and geom_source = any(%(exact)s)
                   order by land_number, community_id, match_confidence desc) p
             where b.geom is null and b.land_number = p.land_number and b.community_id = p.community_id
-        """)
+        """, {"exact": list(EXACT)})
         report.plot = cur.rowcount
         # Towers of a project where another tower is placed: that tower's centre point.
         cur.execute("""
             update buildings b set geom = ST_PointOnSurface(p.geom), geom_source = 'project'
             from (select distinct on (project_id) project_id, geom from buildings
-                  where geom is not null and project_id is not null and geom_source in ('osm', 'manual')
+                  where geom is not null and project_id is not null and geom_source = any(%(exact)s)
                   order by project_id, match_confidence desc, id) p
             where b.geom is null and b.project_id = p.project_id
-        """)
+        """, {"exact": list(EXACT)})
         report.project = cur.rowcount
         if by_community:
             report.site += _sites(cur, by_community, where, params)
@@ -336,11 +348,11 @@ def place(conn, osm_json: dict | None, manual_csv: Path | None, community_codes:
         cur.execute("""
             select b.project_id, string_agg(b.name_en, ', ' order by b.name_en)
             from buildings b join communities c on c.id = b.community_id
-            where b.project_id is not null and b.geom_source in ('osm', 'manual')""" + where + """
+            where b.project_id is not null and b.geom_source = any(%s)""" + where + """
             group by b.project_id
             having count(*) > 1 and ST_MaxDistance(ST_Collect(ST_PointOnSurface(b.geom)),
                                                     ST_Collect(ST_PointOnSurface(b.geom))) * 111000 > %s
-            order by 2""", [*params, SPREAD_M])
+            order by 2""", [list(EXACT), *params, SPREAD_M])
         report.spread = [names for _, names in cur.fetchall()]
     conn.commit()
     return report
@@ -403,7 +415,7 @@ def _search(cur, lookup: Lookup, where: str, params: list) -> tuple[int, int]:
         shared = hits_at[(round(lng, 5), round(lat, 5))] > 1
         cur.execute("update buildings set geom = ST_SetSRID(ST_MakePoint(%s, %s), 4326), geom_source = %s, "
                     "match_confidence = greatest(match_confidence, %s) where id = %s",
-                    (lng, lat, "site" if shared else "osm", round(0.55 + 0.3 * score, 2), bid))
+                    (lng, lat, "site" if shared else "search", round(0.55 + 0.3 * score, 2), bid))
         n += 0 if shared else 1
     return n, len(found) - n
 
