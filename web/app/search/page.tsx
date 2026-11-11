@@ -1,5 +1,6 @@
 import Link from "next/link";
 import NoData from "@/components/NoData";
+import SearchBox from "@/components/SearchBox";
 import { getServerCurrency } from "@/lib/currency";
 import { hasDatabase } from "@/lib/db";
 import { formatPsf } from "@/lib/format";
@@ -15,6 +16,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ q
   return (
     <main className="mx-auto max-w-3xl p-4 sm:p-6">
       <h1 className="text-xl font-semibold">Search{q ? `: “${q}”` : ""}</h1>
+      <div className="mt-3 max-w-md"><SearchBox placeholder="Search a building or area" /></div>
       {!hasDatabase() ? <div className="mt-4"><NoData /></div> : results.length === 0 ? (
         <p className="mt-4 text-sm text-[var(--muted)]">No matches. Try part of the building name, for example “Marina Gate” or “Bloom”.</p>
       ) : (

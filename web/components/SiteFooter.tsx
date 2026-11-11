@@ -8,7 +8,7 @@ export default function SiteFooter() {
         <p>{DISCLAIMER}</p>
         <p>
           Sales and rents: Dubai Land Department open data (Dubai Pulse). Places: KHDA, DHA and © OpenStreetMap
-          contributors. Community boundaries: Dubai Municipality. <Link className="underline" href="/about">How the figures are made</Link>
+          contributors. Community boundaries: Dubai Municipality. <Link className="underline" href="/how-it-works">How the figures are made</Link>
         </p>
       </div>
     </footer>
