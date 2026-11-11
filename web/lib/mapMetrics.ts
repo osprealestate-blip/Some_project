@@ -287,7 +287,7 @@ export function colourise<T extends { properties: MapBuildingProps }>(
   const out = features.map((f, i) => {
     const k = classify(values[i], breaks);
     const color = k < 0 ? NO_DATA_COLOR : colors[k];
-    return { ...f, properties: { ...f.properties, _color: color, _tint: tint(color, 0.55), _cls: k } };
+    return { ...f, properties: { ...f.properties, _color: color, _tint: tint(color, 0.3), _cls: k } };
   });
   return { features: out, breaks, values };
 }

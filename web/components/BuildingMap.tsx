@@ -300,7 +300,8 @@ export default function BuildingMap({
         filter: ["==", ["get", "approx"], approx],
         paint: {
           "fill-extrusion-color": colour,
-          "fill-extrusion-height": ["+", ["get", "height"], 1],
+          // 4 m above the grey basemap tower: closer than that, the two roofs flicker as red and grey stripes.
+          "fill-extrusion-height": ["+", ["get", "height"], 4],
           "fill-extrusion-base": 0,
           // Fade in as the dots fade out, so zooming in turns each dot into its tower.
           "fill-extrusion-opacity": ["interpolate", ["linear"], ["zoom"], 12.5, 0, 14, opacity],
