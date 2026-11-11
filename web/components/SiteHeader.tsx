@@ -1,33 +1,33 @@
 import Link from "next/link";
 import SearchBox from "./SearchBox";
 import CurrencySwitcher from "./CurrencySwitcher";
+import MobileNav from "./MobileNav";
+import NavLinks from "./NavLinks";
 import { getServerCurrency } from "@/lib/currency";
-
-const NAV = [
-  { href: "/community/392", label: "Dubai Marina" },
-  { href: "/community/681", label: "JVC" },
-  { href: "/community/346", label: "Business Bay" },
-  { href: "/tools/fair-price", label: "Fair price" },
-  { href: "/tools/rent-increase", label: "Rent increase" },
-];
+import { MAIN_NAV } from "@/lib/nav";
 
 export default async function SiteHeader() {
   const currency = await getServerCurrency();
 
   return (
-    <header className="sticky top-0 z-20 border-b border-[var(--border)] bg-[var(--panel)]">
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2">
-        <Link href="/" className="font-semibold whitespace-nowrap">Dubai building intelligence</Link>
-        <nav aria-label="Main" className="order-3 flex w-full gap-3 overflow-x-auto text-sm text-[var(--muted)] sm:order-2 sm:w-auto">
-          {NAV.map((n) => (
-            <Link key={n.href} href={n.href} className="whitespace-nowrap hover:text-[var(--fg)]">{n.label}</Link>
-          ))}
+    <header className="sticky top-0 z-40 border-b border-[var(--border)] bg-[var(--panel)] [--header-h:3.5rem] md:[--header-h:4rem]">
+      <div className="mx-auto flex h-14 max-w-6xl items-center gap-x-4 px-4 md:h-16">
+        <Link href="/" className="whitespace-nowrap font-semibold">
+          <span className="md:hidden">Dubai building intel</span>
+          <span className="hidden md:inline">Dubai building intelligence</span>
+        </Link>
+        <nav aria-label="Main" className="ms-4 hidden md:block">
+          <NavLinks items={MAIN_NAV} className="flex items-center gap-5 text-sm" linkClassName="whitespace-nowrap py-2" />
         </nav>
-        <div className="order-2 ms-auto flex items-center gap-2">
+        <div className="ms-auto hidden items-center gap-2 md:flex">
           <CurrencySwitcher initialCurrency={currency} />
-          <div className="w-48 sm:w-60">
-            <SearchBox />
-          </div>
+          <div className="w-56 lg:w-72"><SearchBox /></div>
+        </div>
+        <div className="ms-auto md:hidden">
+          <MobileNav>
+            <SearchBox placeholder="Search a building or area" />
+            <div className="flex items-center gap-2 text-sm text-[var(--muted)]"><span>Currency</span><CurrencySwitcher initialCurrency={currency} /></div>
+          </MobileNav>
         </div>
       </div>
     </header>

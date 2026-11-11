@@ -2,7 +2,7 @@ import { DISCLAIMER, SOURCES } from "@/lib/sources";
 import { BANDS } from "@/lib/rentIncrease";
 import { LIFE_GROUPS } from "@/lib/lifeScore";
 
-export const metadata = { title: "How the figures are made" };
+export const metadata = { title: "How it works" };
 
 export default function Page() {
   return (
