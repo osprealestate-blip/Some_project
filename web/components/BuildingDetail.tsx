@@ -9,6 +9,8 @@ import NearbyPanel from "@/components/NearbyPanel";
 import NoData from "@/components/NoData";
 import RoomsTable from "@/components/RoomsTable";
 import SourceNote from "@/components/SourceNote";
+import Term from "@/components/Term";
+import KeyTerms from "@/components/KeyTerms";
 import Stat from "@/components/Stat";
 import { convertFromAed, getConversionNote } from "@/config/currency";
 import { getServerCurrency } from "@/lib/currency";
@@ -80,14 +82,15 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
       {!panel && <p className="mt-1 text-sm"><Link className="link" href={`/compare?ids=${b.slug}`}>Compare with other buildings</Link></p>}
 
       <section className={`mt-5 grid grid-cols-2 gap-3 ${panel ? "" : "md:grid-cols-4"}`}>
-        <Stat label="Median price per sq ft" value={formatPsf(all?.sale_median_psf_12m, currency)} note={`${count(all?.sale_count_12m ?? 0)} sales in 12 months`} />
+        <Stat term="price-per-sq-ft" label="Median price per sq ft" value={formatPsf(all?.sale_median_psf_12m, currency)} note={`${count(all?.sale_count_12m ?? 0)} sales in 12 months`} />
         <Stat label="Change on a year earlier" value={pct(yoy, 1, true)} note="Median per sq ft" />
         <Stat label={rentLevel === "project" ? "Project median annual rent" : rentLevel === "estimated" ? "Median annual rent (estimated)" : "Median annual rent"} value={formatShortPrice(all?.rent_median_12m, currency)} note={offPlan ? "Not completed yet: no rent contracts" : rentLevel === "project" ? (unfinished ? "Not completed yet: this is the whole project's rent, not this tower's" : "Whole project (rents are filed per project, not per tower)") : rentLevel === "estimated" ? `Estimated: ${count(all?.rent_count_12m ?? 0)} contracts, some placed by unit size` : `${count(all?.rent_count_12m ?? 0)} contracts`} />
-        <Stat label="Gross yield (estimate)" value={pct(midYield)} note="Median across bedroom types" />
+        <Stat term="gross-yield" label="Gross yield (estimate)" value={pct(midYield)} note="Median across bedroom types" />
       </section>
       <SourceNote source={`${SOURCES.dldSales}; ${SOURCES.dldRents}`} date={periodEnd} estimate>
         Apartments only; 12 months to the newest sale. Gross yield = median rent ÷ median price, same bedroom type.{conversionNote ? ` ${conversionNote}` : ""}
       </SourceNote>
+      <KeyTerms />
 
       <section className="mt-8">
         <h2 className="text-base font-semibold">By bedroom type, last 12 months</h2>
@@ -158,7 +161,7 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
                   <th className="py-1 text-end font-medium">Size</th>
                   <th className="py-1 text-end font-medium">Price</th>
                   <th className="py-1 text-end font-medium">Per sq ft</th>
-                  <th className="py-1 text-end font-medium">Status</th>
+                  <th className="py-1 text-end font-medium"><Term id="off-plan">Status</Term></th>
                 </tr>
               </thead>
               <tbody>

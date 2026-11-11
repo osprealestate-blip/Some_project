@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Term from "@/components/Term";
 import { BANDS } from "@/lib/rentIncrease";
 
 export const metadata = { title: "Rent a home" };
@@ -15,7 +16,7 @@ export default function Page() {
         <h2 className="text-base font-semibold">How rent works in Dubai</h2>
         <ol className="mt-4 space-y-4 text-sm list-decimal pl-6 text-[var(--muted)]">
           <li className="text-[var(--fg)]">
-            <span className="font-semibold">Market rent.</span> Building pages show median annual rent from Ejari contracts for each bedroom type over the last 12 months.{" "}
+            <span className="font-semibold">Market rent.</span> Building pages show median annual rent from <Term id="ejari">Ejari</Term> contracts for each bedroom type over the last 12 months.{" "}
             <Link href="/search" className="link">Find a building</Link>.
           </li>
           <li className="text-[var(--fg)]">

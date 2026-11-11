@@ -8,7 +8,9 @@ import LineChart from "@/components/LineChart";
 import NoData from "@/components/NoData";
 import RoomsTable from "@/components/RoomsTable";
 import SourceNote from "@/components/SourceNote";
+import KeyTerms from "@/components/KeyTerms";
 import Stat from "@/components/Stat";
+import Term from "@/components/Term";
 import { getConversionNote } from "@/config/currency";
 import { launchCommunity } from "@/lib/communities";
 import { getServerCurrency } from "@/lib/currency";
@@ -83,27 +85,28 @@ export default async function Page({ params }: Params) {
       {scope && <p className="mt-2 max-w-2xl text-sm">{scope}</p>}
 
       <section className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Stat label="Median price per sq ft" value={formatPsf(all?.sale_median_psf_12m, currency)} note={`${count(all?.sale_count_12m ?? 0)} apartment sales in 12 months`} />
+        <Stat term="price-per-sq-ft" label="Median price per sq ft" value={formatPsf(all?.sale_median_psf_12m, currency)} note={`${count(all?.sale_count_12m ?? 0)} apartment sales in 12 months`} />
         {lfl != null ? (
           <Stat label="Change on a year earlier" value={pct(lfl, 1, true)} note={`Same towers (${count(all?.like_for_like_towers ?? 0)}), per sq ft`} />
         ) : (
           <Stat label="Change on a year earlier" value={pct(plainYoy, 1, true)} note="Median per sq ft" />
         )}
         <Stat label="Median annual rent" value={formatMoneyShort(all?.rent_median_12m, currency)} note={`${count(all?.rent_count_12m ?? 0)} contracts, all bedroom types`} />
-        <Stat label="Gross yield (estimate)" value={pct(midYield)} note="Median across bedroom types" />
+        <Stat term="gross-yield" label="Gross yield (estimate)" value={pct(midYield)} note="Median across bedroom types" />
       </section>
       {conversionNote && <p className="mt-2 text-xs text-[var(--muted)]">{conversionNote}</p>}
       <SourceNote source={`${SOURCES.dldSales}; ${SOURCES.dldRents}`} date={all?.period_end} estimate>
         Apartments only; 12 months to the newest sale.
         {lfl != null && plainYoy != null && ` The area median itself moved ${pct(plainYoy, 1, true)}, partly because the mix of towers and off-plan sales changed; the same-tower figure compares each tower with itself.`}
       </SourceNote>
+      <KeyTerms />
 
       {(all?.sale_count_ready_12m || all?.sale_count_offplan_12m) ? (
         <section className="mt-6">
           <h2 className="text-base font-semibold">Ready and off-plan, last 12 months</h2>
           <div className="mt-2 grid grid-cols-2 gap-3 md:grid-cols-4">
-            <Stat label="Ready, median per sq ft" value={formatPsf(all?.sale_median_psf_ready_12m, currency)} note={`${count(all?.sale_count_ready_12m ?? 0)} sales; ${pct(readyYoy, 1, true)} on a year earlier`} />
-            <Stat label="Off-plan, median per sq ft" value={formatPsf(all?.sale_median_psf_offplan_12m, currency)} note={`${count(all?.sale_count_offplan_12m ?? 0)} sales; ${pct(offplanYoy, 1, true)} on a year earlier`} />
+            <Stat term="off-plan" label="Ready, median per sq ft" value={formatPsf(all?.sale_median_psf_ready_12m, currency)} note={`${count(all?.sale_count_ready_12m ?? 0)} sales; ${pct(readyYoy, 1, true)} on a year earlier`} />
+            <Stat term="off-plan" label="Off-plan, median per sq ft" value={formatPsf(all?.sale_median_psf_offplan_12m, currency)} note={`${count(all?.sale_count_offplan_12m ?? 0)} sales; ${pct(offplanYoy, 1, true)} on a year earlier`} />
           </div>
           <SourceNote source={SOURCES.dldSales} date={all?.period_end}>Off-plan = sold by the developer before completion (DLD registration type).</SourceNote>
         </section>
@@ -140,9 +143,9 @@ export default async function Page({ params }: Params) {
                 <tr className="border-b border-[var(--border)]">
                   <th className="py-1 text-start font-medium">Building</th>
                   <th className="py-1 text-end font-medium">Sales, 12 mo</th>
-                  <th className="py-1 text-end font-medium">Per sq ft</th>
+                  <th className="py-1 text-end font-medium"><Term id="price-per-sq-ft">Per sq ft</Term></th>
                   <th className="py-1 text-end font-medium">Median rent / yr</th>
-                  <th className="py-1 text-end font-medium">Gross yield*</th>
+                  <th className="py-1 text-end font-medium"><Term id="gross-yield">Gross yield</Term>*</th>
                 </tr>
               </thead>
               <tbody>

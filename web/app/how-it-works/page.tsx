@@ -1,6 +1,7 @@
 import { DISCLAIMER, SOURCES } from "@/lib/sources";
 import { BANDS } from "@/lib/rentIncrease";
 import { LIFE_GROUPS } from "@/lib/lifeScore";
+import { GLOSSARY, termAnchor } from "@/lib/glossary";
 
 export const metadata = { title: "How it works" };
 
@@ -9,6 +10,19 @@ export default function Page() {
     <main className="mx-auto max-w-3xl space-y-6 p-4 text-sm leading-relaxed sm:p-6">
       <h1 className="text-2xl font-semibold">How the figures are made</h1>
       <p className="font-medium">{DISCLAIMER}</p>
+
+      <section aria-labelledby="glossary">
+        <h2 id="glossary" className="text-base font-semibold">What the words mean</h2>
+        <dl className="mt-2 space-y-3">
+          {GLOSSARY.map((g) => (
+            <div key={g.id} id={termAnchor(g.id)} className="scroll-mt-20 rounded-lg border border-[var(--border)] bg-[var(--panel)] p-3 target:border-[var(--accent)]">
+              <dt className="font-semibold">{g.term}</dt>
+              <dd className="mt-1">{g.short}</dd>
+              <dd className="mt-1 text-[var(--muted)]">{g.long}</dd>
+            </div>
+          ))}
+        </dl>
+      </section>
 
       <section>
         <h2 className="text-base font-semibold">Sources</h2>

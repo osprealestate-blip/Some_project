@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import SourceNote from "@/components/SourceNote";
+import Term from "@/components/Term";
 import { type Currency, DEFAULT_CURRENCY, getConversionNote } from "@/config/currency";
 import { DEFAULT_COST_CONFIG } from "@/config/costs";
 import { calculateMonthlyCosts } from "@/lib/costs";
@@ -102,7 +103,7 @@ export default function MonthlyCostCalculator({
         <label className="font-medium">Size (sq ft)
           <input type="number" min={100} step={50} value={size} onChange={(e) => setSize(e.target.value)} placeholder={String(DEFAULT_COST_CONFIG.defaultSizeSqft)} className={inputCls} />
         </label>
-        <label className="font-medium">Service charge (AED per sq ft a year)
+        <label className="font-medium"><Term id="service-charge">Service charge</Term> (AED per sq ft a year)
           <input type="number" min={0} step={1} value={scPsf} onChange={(e) => setScPsf(e.target.value)} className={inputCls} />
         </label>
         <label className="font-medium">Utilities (AED a month)
@@ -115,7 +116,7 @@ export default function MonthlyCostCalculator({
           <dl className="mt-4 space-y-2 text-sm">
             <div className="flex justify-between gap-2"><dt className="font-medium">Total a month</dt><dd className="text-end font-semibold tabular-nums">{money(res.totalMonthlyCost)}</dd></div>
             <div className="flex justify-between gap-2"><dt className="text-[var(--muted)]">Mortgage</dt><dd className="text-end tabular-nums">{money(res.monthlyMortgage)}</dd></div>
-            <div className="flex justify-between gap-2"><dt className="text-[var(--muted)]">Service charge</dt><dd className="text-end tabular-nums">{money(res.monthlyServiceCharge)}</dd></div>
+            <div className="flex justify-between gap-2"><dt className="text-[var(--muted)]"><Term id="service-charge" /></dt><dd className="text-end tabular-nums">{money(res.monthlyServiceCharge)}</dd></div>
             <div className="flex justify-between gap-2"><dt className="text-[var(--muted)]">Utilities (DEWA and cooling)</dt><dd className="text-end tabular-nums">{money(res.monthlyUtilities)}</dd></div>
             <div className="flex justify-between gap-2 border-t border-[var(--border)] pt-2">
               <dt className="font-medium">Net yield (estimate)</dt>
