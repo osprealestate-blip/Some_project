@@ -54,7 +54,8 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
   ]);
   const all = summaries.find((s) => s.rooms === -1);
   const noRent = all?.rent_median_12m == null && series.rentLevel == null;
-  const offPlan = noRent && (await isOffPlanOnly(b.id));
+  const unfinished = await isOffPlanOnly(b.id); // every sale in 24 months was off-plan
+  const offPlan = noRent && unfinished;
   const offPlanRents = offPlan ? await offPlanRentEstimate(b) : [];
   const yoy = change(all?.sale_median_psf_12m, all?.sale_median_psf_prev_12m);
   const yields = summaries.filter((s) => s.rooms >= 0 && s.gross_yield != null).map((s) => s.gross_yield!).sort((a, c) => a - c);
@@ -80,7 +81,7 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
       <section className={`mt-5 grid grid-cols-2 gap-3 ${panel ? "" : "md:grid-cols-4"}`}>
         <Stat label="Median price per sq ft" value={formatPsf(all?.sale_median_psf_12m, currency)} note={`${count(all?.sale_count_12m ?? 0)} sales in 12 months`} />
         <Stat label="Change on a year earlier" value={pct(yoy, 1, true)} note="Median per sq ft" />
-        <Stat label="Median annual rent" value={formatShortPrice(all?.rent_median_12m, currency)} note={offPlan ? "Not completed yet: no rent contracts" : rentLevel === "project" ? "Whole project (rents are filed per project)" : rentLevel === "estimated" ? `Estimated: ${count(all?.rent_count_12m ?? 0)} contracts, some placed by unit size` : `${count(all?.rent_count_12m ?? 0)} contracts`} />
+        <Stat label={rentLevel === "project" ? "Project median annual rent" : rentLevel === "estimated" ? "Median annual rent (estimated)" : "Median annual rent"} value={formatShortPrice(all?.rent_median_12m, currency)} note={offPlan ? "Not completed yet: no rent contracts" : rentLevel === "project" ? (unfinished ? "Not completed yet: this is the whole project's rent, not this tower's" : "Whole project (rents are filed per project, not per tower)") : rentLevel === "estimated" ? `Estimated: ${count(all?.rent_count_12m ?? 0)} contracts, some placed by unit size` : `${count(all?.rent_count_12m ?? 0)} contracts`} />
         <Stat label="Gross yield (estimate)" value={pct(midYield)} note="Median across bedroom types" />
       </section>
       <SourceNote source={`${SOURCES.dldSales}; ${SOURCES.dldRents}`} date={periodEnd} estimate>
