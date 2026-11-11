@@ -251,7 +251,9 @@ export default function BuildingMap({
   // 3. Our layers on the current style: grey 3D city, launch outlines, coloured buildings.
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !styleGen || !map.isStyleLoaded()) return;
+    // No isStyleLoaded() check: it stays false while basemap tiles are still loading, which would skip our layers
+    // for good. "style.load" (which bumps styleGen) already means the style can take new layers.
+    if (!map || !styleGen || !map.getStyle()) return;
     const t = THEMES[live.current.theme];
 
     if (!map.getLayer("base-3d")) {
