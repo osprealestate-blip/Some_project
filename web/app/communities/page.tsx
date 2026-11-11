@@ -4,9 +4,10 @@ import { getServerCurrency } from "@/lib/currency";
 import { hasDatabase } from "@/lib/db";
 import { LAUNCH_COMMUNITIES } from "@/lib/communities";
 import { launchCommunities } from "@/lib/queries";
+import { pageMetadata } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Communities" };
+export const metadata = pageMetadata({ title: 'Communities', description: 'Dubai communities with median sale price, rent and gross yield from Dubai Land Department data.', path: '/communities' });
 
 async function loadCards() {
   if (!hasDatabase()) return null;

@@ -3,9 +3,10 @@ import NoData from "@/components/NoData";
 import { getServerCurrency } from "@/lib/currency";
 import { hasDatabase } from "@/lib/db";
 import { buildingBySlug } from "@/lib/queries";
+import { pageMetadata } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Fair-price checker" };
+export const metadata = pageMetadata({ title: 'Fair-price checker', description: 'Compare an asking price with what the same type of apartment sold for in that building. An estimate, not a valuation.', path: '/tools/fair-price' });
 
 export default async function Page({ searchParams }: { searchParams: Promise<{ building?: string }> }) {
   const { building } = await searchParams;

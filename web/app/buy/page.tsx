@@ -3,9 +3,10 @@ import { getServerCurrency } from "@/lib/currency";
 import { hasDatabase } from "@/lib/db";
 import { launchCommunities } from "@/lib/queries";
 import LaunchAreaCards from "@/components/LaunchAreaCards";
+import { pageMetadata } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Buy a home" };
+export const metadata = pageMetadata({ title: 'Buy a home', description: 'What apartments sold for in Dubai buildings, with the source and date for every figure.', path: '/buy' });
 
 async function loadCards() {
   if (!hasDatabase()) return null;

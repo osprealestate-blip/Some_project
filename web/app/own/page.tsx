@@ -1,6 +1,7 @@
 import Link from "next/link";
+import { pageMetadata } from "@/lib/seo";
 
-export const metadata = { title: "I own a property" };
+export const metadata = pageMetadata({ title: 'I own a property', description: "Check your building's recent sale prices and rents, and plan a rent increase, from Dubai Land Department data.", path: '/own' });
 
 export default function Page() {
   return (

@@ -3,9 +3,10 @@ import { getServerCurrency } from "@/lib/currency";
 import { hasDatabase } from "@/lib/db";
 import { launchCommunities } from "@/lib/queries";
 import LaunchAreaCards from "@/components/LaunchAreaCards";
+import { pageMetadata } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Invest for yield" };
+export const metadata = pageMetadata({ title: 'Invest for yield', description: 'Gross yields by Dubai building, as estimates from Dubai Land Department sales and rent contracts.', path: '/invest' });
 
 async function loadCards() {
   if (!hasDatabase()) return null;

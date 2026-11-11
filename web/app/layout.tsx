@@ -3,10 +3,14 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import "./globals.css";
 import SiteHeader from "@/components/SiteHeader";
 import SiteFooter from "@/components/SiteFooter";
+import { siteUrl } from "@/lib/site";
 
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl()),
   title: { default: "Dubai building intelligence", template: "%s · Dubai building intelligence" },
   description: "Dubai, building by building: prices, rents and yields from official DLD open data.",
+  openGraph: { type: "website", siteName: "Dubai building intelligence", locale: "en_AE" },
+  twitter: { card: "summary_large_image" },
 };
 
 export const viewport: Viewport = { width: "device-width", initialScale: 1 };

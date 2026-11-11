@@ -8,9 +8,10 @@ import { count, formatMoneyShort, formatPsf, pct, roomsLabel } from "@/lib/forma
 import { exploreBuildings, parseFilters } from "@/lib/explore";
 import { communityBuildings, communityByCode, launchCommunities, type BuildingListItem } from "@/lib/queries";
 import { SOURCES } from "@/lib/sources";
+import { pageMetadata } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Buildings" };
+export const metadata = pageMetadata({ title: 'Buildings', description: 'Dubai buildings with median sale price, rent and gross yield from Dubai Land Department data.', path: '/buildings' });
 
 const SORTS = {
   sales: { label: "Most sales", key: (b: BuildingListItem) => b.sale_count_12m },

@@ -2,9 +2,10 @@ import RentIncreaseForm from "@/components/RentIncreaseForm";
 import { getServerCurrency } from "@/lib/currency";
 import { hasDatabase } from "@/lib/db";
 import { buildingBySlug } from "@/lib/queries";
+import { pageMetadata } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Rent increase calculator" };
+export const metadata = pageMetadata({ title: 'Rent increase calculator', description: 'The most a landlord can raise the rent under Decree 43 of 2013, with the notice date.', path: '/tools/rent-increase' });
 
 export default async function Page({ searchParams }: { searchParams: Promise<{ building?: string }> }) {
   const { building } = await searchParams;

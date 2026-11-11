@@ -1,6 +1,7 @@
 import Link from "next/link";
+import { pageMetadata } from "@/lib/seo";
 
-export const metadata = { title: "Property tools" };
+export const metadata = pageMetadata({ title: 'Property tools', description: 'Fair-price checker and rent increase calculator, based on Dubai Land Department data and Decree 43 of 2013.', path: '/tools' });
 
 const TOOLS = [
   { href: "/tools/fair-price", title: "Fair-price checker", use: "Use this when you have an asking price.", text: "Compare it with what the same bedroom type sold for in that building over the last 12 months." },
