@@ -32,7 +32,10 @@ export default function FairPriceForm({ initial, currency = DEFAULT_CURRENCY }: 
       const r = await fetch(`/api/fair-price?building=${encodeURIComponent(building.slug)}&rooms=${rooms}`);
       const d = (await r.json()) as { comps: Comparables | null };
       const res = assessPrice(sizeN, askN, d.comps);
-      if (!res) setMessage(`Not enough ${roomsLabel(rooms).toLowerCase()} sales in the last 12 months to compare (we need at least 5).`);
+      if (!res) {
+        const found = d.comps?.count ?? 0;
+        setMessage(`We can't give a fair-price estimate for this one. We found ${found} ${roomsLabel(rooms).toLowerCase()} sale${found === 1 ? "" : "s"} in the last 12 months and need at least 5 to compare honestly. Try another bedroom type, or a nearby building.`);
+      }
       setResult(res);
     } catch {
       setMessage("Couldn't reach the data. Try again.");
@@ -47,11 +50,11 @@ export default function FairPriceForm({ initial, currency = DEFAULT_CURRENCY }: 
     <div className="grid gap-6 md:grid-cols-2">
       <form onSubmit={submit} className="space-y-4 rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
         <div>
-          <label className="mb-1 block text-sm font-medium">Building</label>
+          <label className="mb-1 block text-sm font-medium"><span className="text-[var(--muted)]">Step 1.</span> Which building?</label>
           <BuildingPicker value={building} onChange={(b) => { setBuilding(b); setResult(null); }} />
         </div>
         <fieldset>
-          <legend className="mb-1 text-sm font-medium">Bedrooms</legend>
+          <legend className="mb-1 text-sm font-medium"><span className="text-[var(--muted)]">Step 2.</span> How many bedrooms?</legend>
           <div className="flex flex-wrap gap-2">
             {ROOM_OPTIONS.map((r) => (
               <label key={r} className={`cursor-pointer rounded-md border px-3 py-1 text-sm ${rooms === r ? "border-[var(--accent)] bg-[var(--bg)]" : "border-[var(--border)]"}`}>
@@ -61,13 +64,14 @@ export default function FairPriceForm({ initial, currency = DEFAULT_CURRENCY }: 
           </div>
         </fieldset>
         <div className="grid grid-cols-2 gap-3">
-          <label className="text-sm font-medium">Size (sq ft)
+          <label className="text-sm font-medium"><span className="text-[var(--muted)]">Step 3.</span> Size (sq ft)
             <input inputMode="numeric" value={size} onChange={(e) => setSize(e.target.value)} placeholder="850" className="mt-1 w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-3 py-2 font-normal" />
           </label>
-          <label className="text-sm font-medium">Asking price (AED, optional)
+          <label className="text-sm font-medium"><span className="text-[var(--muted)]">Step 4.</span> Asking price (AED, optional)
             <input inputMode="numeric" value={asking} onChange={(e) => setAsking(e.target.value)} placeholder="1,500,000" className="mt-1 w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-3 py-2 font-normal" />
           </label>
         </div>
+        <p className="text-xs text-[var(--muted)]">Size is on the listing or the title deed. Leave the asking price empty to see the typical price only. We compare with completed sales recorded by DLD, not with other asking prices.</p>
         <button type="submit" disabled={busy} className="rounded-md bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white disabled:opacity-60">{busy ? "Checking…" : "Check price"}</button>
         {message && <p className="text-sm text-[var(--warn)]" role="status">{message}</p>}
       </form>
@@ -83,8 +87,8 @@ export default function FairPriceForm({ initial, currency = DEFAULT_CURRENCY }: 
             <dl className="mt-3 space-y-2 text-sm">
               <div className="flex justify-between gap-2"><dt className="text-[var(--muted)]">Estimate</dt><dd className="font-semibold tabular-nums">{formatAedWithConverted(result.estimate, currency)}</dd></div>
               <div className="flex justify-between gap-2"><dt className="text-[var(--muted)]">Typical range</dt><dd className="tabular-nums">{formatAedWithConverted(result.low, currency)} to {formatAedWithConverted(result.high, currency)}</dd></div>
-              <div className="flex justify-between gap-2"><dt className="text-[var(--muted)]">Median per sq ft</dt><dd className="tabular-nums">{formatPsf(result.comps.medianPsf)}</dd></div>
-              {result.askingPsf && <div className="flex justify-between gap-2"><dt className="text-[var(--muted)]">Asking per sq ft</dt><dd className="tabular-nums">{formatPsf(result.askingPsf)}</dd></div>}
+              <div className="flex justify-between gap-2"><dt className="text-[var(--muted)]">Median per sq ft</dt><dd className="tabular-nums">{formatPsf(result.comps.medianPsf, currency)}</dd></div>
+              {result.askingPsf && <div className="flex justify-between gap-2"><dt className="text-[var(--muted)]">Asking per sq ft</dt><dd className="tabular-nums">{formatPsf(result.askingPsf, currency)}</dd></div>}
               <div className="flex justify-between gap-2"><dt className="text-[var(--muted)]">Based on</dt><dd className="text-end">{result.comps.count} sales ({roomsLabel(rooms)}) {result.comps.scope === "building" ? "in this building" : "in this community (too few in the building)"}</dd></div>
             </dl>
             {result.confidence === "limited" && <p className="mt-3 text-xs text-[var(--warn)]">Limited comparison: few sales, or the whole community rather than this building.</p>}

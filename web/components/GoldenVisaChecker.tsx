@@ -31,6 +31,7 @@ export default function GoldenVisaChecker({
       <p className="mt-1 text-sm text-[var(--muted)]">
         The 10-year Golden Visa for property owners needs property worth at least {aed(threshold)}. Typical prices here, by bedroom type:
       </p>
+      <p className="mt-1 text-sm font-medium">This only compares prices with the threshold. It does not tell you whether you qualify.</p>
       {list.length ? (
         <table className="mt-2 w-full text-sm tabular-nums [&_td]:pe-3 [&_th]:pe-3">
           <thead className="text-xs text-[var(--muted)]">
