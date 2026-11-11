@@ -22,6 +22,7 @@ async function loadCards() {
 
 type EntryCard = {
   title: string;
+  href: string;
   description: string;
   primary: { label: string; href: string };
   secondary: { label: string; href: string };
@@ -30,6 +31,7 @@ type EntryCard = {
 const ENTRY_CARDS: EntryCard[] = [
   {
     title: "Buy a home",
+    href: "/buy",
     description:
       "Find a home at a fair price. Compare asking prices to recent DLD sales in the same building, and see median prices and yields by area.",
     primary: { label: "Browse buildings", href: "/search" },
@@ -37,20 +39,23 @@ const ENTRY_CARDS: EntryCard[] = [
   },
   {
     title: "Invest for yield",
+    href: "/invest",
     description:
       "Compare gross yields, price per sq ft and quarterly trends across communities. See which areas are moving and by how much.",
-    primary: { label: "Explore areas", href: "/community/392" },
-    secondary: { label: "Building pages", href: "/search" },
+    primary: { label: "Compare areas", href: "/community/392" },
+    secondary: { label: "Search buildings", href: "/search" },
   },
   {
     title: "I own a property",
+    href: "/own",
     description:
-      "Track your property's value, check rent-increase limits at renewal, and understand running costs. All figures from official DLD data.",
+      "Look up your building, check rent-increase limits at renewal, and see running costs on each building page. All figures from official DLD data.",
     primary: { label: "Rent increase calculator", href: "/tools/rent-increase" },
-    secondary: { label: "Running costs", href: "/search" },
+    secondary: { label: "Look up your building", href: "/search" },
   },
   {
     title: "Rent a home",
+    href: "/rent",
     description:
       "See fair market rents by building and bedroom type, and what a landlord can legally charge at renewal under Decree 43 of 2013.",
     primary: { label: "Browse rents", href: "/search" },
@@ -75,12 +80,12 @@ export default async function Home() {
             Prices, rents and yields from official Dubai Land Department data. Free, no login.
           </p>
           <div className="mt-8 sm:mt-10">
-            <a
+            <Link
               href="/map"
               className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--accent)] px-6 py-3 text-sm font-medium text-white hover:bg-[var(--accent)]/90 focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2"
             >
               Open the map <span aria-hidden="true">→</span>
-            </a>
+            </Link>
           </div>
         </div>
 
@@ -89,28 +94,19 @@ export default async function Home() {
         </h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4 max-w-6xl mx-auto sm:px-6 lg:px-0">
           {ENTRY_CARDS.map((card) => (
-            <Link
+            <div
               key={card.title}
-              href={card.primary.href}
-              className="group rounded-lg border border-[var(--border)] bg-[var(--panel)] p-5 hover:border-[var(--accent)] transition-colors"
+              className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-5 transition-colors focus-within:border-[var(--accent)] hover:border-[var(--accent)]"
             >
-              <h3 className="text-base font-semibold group-hover:text-[var(--accent)]">{card.title}</h3>
+              <h3 className="text-base font-semibold">
+                <Link href={card.href} className="hover:text-[var(--accent)] hover:underline">{card.title}</Link>
+              </h3>
               <p className="mt-2 text-sm text-[var(--muted)] leading-relaxed">{card.description}</p>
               <ul className="mt-4 space-y-2 text-sm">
-                <li>
-                  <span className="text-[var(--muted)]">▸ </span>
-                  <a href={card.primary.href} className="link hover:underline">
-                    {card.primary.label}
-                  </a>
-                </li>
-                <li>
-                  <span className="text-[var(--muted)]">▸ </span>
-                  <a href={card.secondary.href} className="link hover:underline">
-                    {card.secondary.label}
-                  </a>
-                </li>
+                <li><span className="text-[var(--muted)]" aria-hidden="true">▸ </span><Link href={card.primary.href} className="link hover:underline">{card.primary.label}</Link></li>
+                <li><span className="text-[var(--muted)]" aria-hidden="true">▸ </span><Link href={card.secondary.href} className="link hover:underline">{card.secondary.label}</Link></li>
               </ul>
-            </Link>
+            </div>
           ))}
         </div>
 
