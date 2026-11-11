@@ -132,7 +132,7 @@ export default function BuildingMap({
   const [styleGen, setStyleGen] = useState(0); // bumps each time a style finishes loading
 
   // Everything the map event handlers need, current without re-binding them.
-  const live = useRef({ settings, currency, theme, selected, hover: null as string | null });
+  const live = useRef({ settings, currency, theme, selected, hover: null as string | null, baseKey: null as string | null });
   live.current.settings = settings;
   live.current.currency = currency;
   live.current.theme = theme;
@@ -179,7 +179,9 @@ export default function BuildingMap({
 
     // Hover and tap. Touch screens have no hover: a tap shows the card with a "View details" button.
     const canHover = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
-    const popup = new maplibregl.Popup({ closeButton: !canHover, closeOnClick: false, offset: 14, maxWidth: "260px", className: "dpi-popup" });
+    // The hover card must never catch the mouse: it opens near the building under the pointer, and a card that steals the
+    // pointer makes the canvas see "mouse left", which closed the card and flickered the cursor. Touch cards stay tappable.
+    const popup = new maplibregl.Popup({ closeButton: !canHover, closeOnClick: false, offset: 14, maxWidth: "260px", className: canHover ? "dpi-popup dpi-popup-hover" : "dpi-popup" });
     const setHover = (slug: string | null) => {
       const prev = live.current.hover;
       if (prev === slug) return;
@@ -195,24 +197,60 @@ export default function BuildingMap({
       const { settings: s, currency: c } = live.current;
       popup.setLngLat([p.lng, p.lat]).setDOMContent(card(p, s, c, withButton ? () => open(p.slug) : null)).addTo(map);
     };
-    for (const id of DPI_LAYERS) {
-      map.on("mousemove", id, (e) => {
-        if (!canHover) return;
-        const p = featureAt(e);
-        if (!p) return;
-        map.getCanvas().style.cursor = "pointer";
+    // One handler for the whole map (not one per layer). Our priced buildings sit in three overlapping layers (3D,
+    // approximate, zoomed-out columns); per-layer enter/leave events fired against each other as the pointer moved,
+    // which flickered the cursor and the card. Here the pointer is hit-tested once per move and the result applied once.
+    const setBaseHover = (f: maplibregl.MapGeoJSONFeature | null) => {
+      const src = map.getSource("base-hover") as maplibregl.GeoJSONSource | undefined;
+      if (!src) return;
+      const g = f ? (f.geometry as GeoJSON.Geometry) : null;
+      const key = f ? `${f.id ?? ""}|${JSON.stringify((g as GeoJSON.Polygon).coordinates?.[0]?.[0] ?? "")}|${f.properties?.render_height ?? ""}` : null;
+      if (key === live.current.baseKey) return;
+      live.current.baseKey = key;
+      src.setData(f && g
+        ? { type: "FeatureCollection", features: [{ type: "Feature", geometry: g, properties: { h: Number(f.properties?.render_height ?? 4), b: Number(f.properties?.render_min_height ?? 0) } }] }
+        : EMPTY);
+    };
+    let leaveTimer: ReturnType<typeof setTimeout> | null = null;
+    const clearHover = () => {
+      leaveTimer = null;
+      setHover(null);
+      setBaseHover(null);
+      map.getCanvas().style.cursor = "";
+      popup.remove();
+    };
+    map.on("mousemove", (e) => {
+      if (!canHover) return;
+      const priced = DPI_LAYERS.filter((l) => map.getLayer(l));
+      const hit = priced.length ? map.queryRenderedFeatures(e.point, { layers: priced })[0] : undefined;
+      const p = hit?.properties as Props3 | undefined;
+      if (p) {
+        if (leaveTimer) { clearTimeout(leaveTimer); leaveTimer = null; }
+        setBaseHover(null);
+        map.getCanvas().style.cursor = "pointer"; // a priced building: it opens a page
         if (live.current.hover !== p.slug) {
           setHover(p.slug);
           show(p, false);
         }
-      });
-      map.on("mouseleave", id, () => {
-        if (!canHover) return;
-        map.getCanvas().style.cursor = "";
+        return;
+      }
+      // Not a priced building. The grey OpenStreetMap buildings around ours lift on hover too, so every building
+      // reacts the same way, but they have no figures and no page: no card and no pointer cursor.
+      const base = map.getLayer("base-hover-3d") && map.getLayer("base-3d") ? map.queryRenderedFeatures(e.point, { layers: ["base-3d"] })[0] : undefined;
+      if (base) {
+        if (leaveTimer) { clearTimeout(leaveTimer); leaveTimer = null; }
         setHover(null);
         popup.remove();
-      });
-    }
+        map.getCanvas().style.cursor = "";
+        setBaseHover(base);
+        return;
+      }
+      // Empty ground: clear after a short grace, so a building edge or a one-frame miss does not flicker.
+      if ((live.current.hover || live.current.baseKey) && !leaveTimer) leaveTimer = setTimeout(clearHover, 90);
+    });
+    map.getCanvas().addEventListener("mouseleave", () => {
+      if (canHover) clearHover();
+    });
     map.on("click", (e) => {
       const layers = DPI_LAYERS.filter((l) => map.getLayer(l));
       const f = layers.length ? map.queryRenderedFeatures(e.point, { layers })[0] : undefined;
@@ -303,6 +341,22 @@ export default function BuildingMap({
           "fill-extrusion-opacity": 0.75,
         },
       });
+      // The building under the pointer, when it is one of ours-without-figures: drawn again, taller, in a highlight colour.
+      if (tileSource && !map.getSource("base-hover")) {
+        map.addSource("base-hover", { type: "geojson", data: EMPTY });
+        map.addLayer({
+          id: "base-hover-3d",
+          type: "fill-extrusion",
+          source: "base-hover",
+          paint: {
+            "fill-extrusion-color": t.baseHover,
+            "fill-extrusion-height": ["+", ["*", ["get", "h"], 1.2], 25],
+            "fill-extrusion-base": ["get", "b"],
+            "fill-extrusion-opacity": 0.9,
+            "fill-extrusion-vertical-gradient": true,
+          },
+        });
+      }
     }
 
     if (!map.getSource("communities")) {

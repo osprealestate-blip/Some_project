@@ -10,6 +10,8 @@ export type MapTheme = {
   styleUrl: string;
   /** Colour for OpenStreetMap buildings we have no figures for (the grey 3D city around ours). */
   baseBuilding: string;
+  /** Colour of an OpenStreetMap building while the pointer is on it (it lifts like our priced buildings do). */
+  baseHover: string;
   /** Launch community outline. */
   outline: string;
   /** Ring around dots and the hover outline, contrasting with the map. */
@@ -24,12 +26,12 @@ export type MapTheme = {
 const OFM = "https://tiles.openfreemap.org/styles";
 
 export const THEMES: Record<ThemeId, MapTheme> = {
-  light: { label: "Light", styleUrl: `${OFM}/positron`, baseBuilding: "#e3e5e8", outline: "#2a69a6", halo: "#ffffff", highlight: "#111827", dark: false },
-  standard: { label: "Standard", styleUrl: `${OFM}/liberty`, baseBuilding: "#d9dde2", outline: "#2a69a6", halo: "#ffffff", highlight: "#111827", dark: false },
-  dark: { label: "Dark", styleUrl: `${OFM}/dark`, baseBuilding: "#2c3138", outline: "#7fb2e5", halo: "#0d0f12", highlight: "#ffffff", dark: true },
-  night: { label: "Night blue", styleUrl: `${OFM}/fiord`, baseBuilding: "#3a4a63", outline: "#a8c8f0", halo: "#1b2433", highlight: "#ffffff", dark: true },
+  light: { label: "Light", styleUrl: `${OFM}/positron`, baseBuilding: "#e3e5e8", baseHover: "#c9ced6", outline: "#2a69a6", halo: "#ffffff", highlight: "#111827", dark: false },
+  standard: { label: "Standard", styleUrl: `${OFM}/liberty`, baseBuilding: "#d9dde2", baseHover: "#c3c8ce", outline: "#2a69a6", halo: "#ffffff", highlight: "#111827", dark: false },
+  dark: { label: "Dark", styleUrl: `${OFM}/dark`, baseBuilding: "#2c3138", baseHover: "#4a525c", outline: "#7fb2e5", halo: "#0d0f12", highlight: "#ffffff", dark: true },
+  night: { label: "Night blue", styleUrl: `${OFM}/fiord`, baseBuilding: "#3a4a63", baseHover: "#5d7396", outline: "#a8c8f0", halo: "#1b2433", highlight: "#ffffff", dark: true },
   /** Pastel cartoon-like 3D look: the liberty style recoloured in the browser by illustratedTheme.ts. */
-  illustrated: { label: "Illustrated", styleUrl: `${OFM}/liberty`, baseBuilding: "#fbfbfa", outline: "#2a69a6", halo: "#ffffff", highlight: "#111827", dark: false, swatchLand: "#3fb4e8" },
+  illustrated: { label: "Illustrated", styleUrl: `${OFM}/liberty`, baseBuilding: "#efdfc2", baseHover: "#ffd98a", outline: "#2a69a6", halo: "#ffffff", highlight: "#111827", dark: false, swatchLand: "#a6dcf7" },
 };
 
 export const THEME_IDS = Object.keys(THEMES) as ThemeId[];

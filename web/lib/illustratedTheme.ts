@@ -16,22 +16,22 @@ import type { ExpressionSpecification } from "maplibre-gl";
 
 /** All Illustrated colours in one place. */
 export const ILLUSTRATED_PALETTE = {
-  land: "#f6ecd6", // soft pastel sand
-  sand: "#f1e0bb", // beaches and desert, a touch warmer
-  urban: "#f3ead8", // built-up landuse, close to the land so the city reads as one soft surface
-  water: "#3fb4e8", // bright blue sea
+  land: "#f5efdf", // warm cream ground
+  sand: "#f2e3bf", // beaches and desert, a touch warmer
+  urban: "#f2ead6", // built-up landuse, close to the land so the city reads as one soft surface
+  water: "#a6dcf7", // clear, light sky-blue water
   waterLabel: "#ffffff",
-  waterLabelHalo: "#2a8fc4",
-  park: "#9fd88a", // parks, golf courses, grass
-  wood: "#86c97a",
-  road: "#e3e5e9", // light grey roads
-  roadCasing: "#cfd3d9",
-  rail: "#c4c8cf",
-  airport: "#e9e4d8",
-  building: "#fbfbfa", // soft white 3D buildings around ours
-  buildingOutline: "#c9ced6", // light footprint outline
-  sky: "#bfe6f7",
-  horizon: "#fdf6e9",
+  waterLabelHalo: "#4aa6d8",
+  park: "#b5e09a", // parks, golf courses, grass: fresh, clearly green
+  wood: "#98d283",
+  road: "#ffffff", // white roads with a soft cream edge, like a toy map
+  roadCasing: "#e6dcc3",
+  rail: "#d8d0bd",
+  airport: "#ebe5d4",
+  building: "#efdfc2", // cream-tan 3D buildings; the light turns their walls a shade darker
+  buildingOutline: "#d6c4a0", // soft footprint outline
+  sky: "#cdeefc",
+  horizon: "#fff7e6",
 } as const;
 
 /** The opening view: tilted and turned so the coast runs across the screen with the sea at the top, framing
@@ -82,7 +82,7 @@ export function illustratedOverride(layer: StyleLayer): Override | null {
   if (type === "fill") {
     switch (src) {
       case "water":
-        return { paint: { "fill-color": P.water, "fill-opacity": 1 } };
+        return { paint: { "fill-color": P.water, "fill-opacity": 1, "fill-antialias": true } };
       case "park":
         return { paint: { "fill-color": P.park, "fill-opacity": 0.9 } };
       case "landcover":
@@ -110,9 +110,11 @@ export function illustratedOverride(layer: StyleLayer): Override | null {
     if (src === "waterway") return { paint: { "line-color": P.water } };
     if (src === "park") return { paint: { "line-color": P.wood, "line-opacity": 0.5 } };
     if (src === "transportation") {
-      if (/rail|transit/.test(id)) return { paint: { "line-color": P.rail } };
-      if (/casing/.test(id)) return { paint: { "line-color": P.roadCasing } };
-      return { paint: { "line-color": P.road } };
+      // Round caps and joins give the soft, toy-like road ends.
+      const round = { "line-cap": "round", "line-join": "round" };
+      if (/rail|transit/.test(id)) return { paint: { "line-color": P.rail }, layout: round };
+      if (/casing/.test(id)) return { paint: { "line-color": P.roadCasing }, layout: round };
+      return { paint: { "line-color": P.road }, layout: round };
     }
     return null;
   }
@@ -155,7 +157,7 @@ export function applyIllustratedOverrides(map: maplibregl.Map): void {
   // Soft white buildings with a light footprint outline under them.
   if (map.getLayer("base-3d")) {
     map.setPaintProperty("base-3d", "fill-extrusion-color", P.building);
-    map.setPaintProperty("base-3d", "fill-extrusion-opacity", 0.92);
+    map.setPaintProperty("base-3d", "fill-extrusion-opacity", 0.96);
     map.setPaintProperty("base-3d", "fill-extrusion-vertical-gradient", true);
     const source = (map.getLayer("base-3d") as { source?: string } | undefined)?.source;
     if (source && !map.getLayer("illustrated-building-outline")) {
@@ -174,7 +176,7 @@ export function applyIllustratedOverrides(map: maplibregl.Map): void {
   }
 
   // A low, warm light from the south-west gives the soft shading; a pale sky closes the tilted horizon.
-  map.setLight({ anchor: "map", color: "#ffffff", intensity: 0.32, position: [1.3, 210, 35] });
+  map.setLight({ anchor: "map", color: "#fffaf0", intensity: 0.42, position: [1.4, 215, 40] });
   try {
     map.setSky({ "sky-color": P.sky, "horizon-color": P.horizon, "fog-color": P.horizon, "sky-horizon-blend": 0.6, "horizon-fog-blend": 0.6, "fog-ground-blend": 0.9 });
   } catch {
