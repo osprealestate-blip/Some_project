@@ -185,7 +185,7 @@ export default function MapControls(p: Props) {
 
             <fieldset>
               <legend className="mb-1 font-medium">Map theme</legend>
-              <div className="grid grid-cols-4 gap-1.5">
+              <div className="grid grid-cols-3 gap-1.5">
                 {THEME_IDS.map((id) => (
                   <button
                     key={id}
@@ -194,7 +194,7 @@ export default function MapControls(p: Props) {
                     aria-pressed={p.theme === id}
                     className={`flex flex-col items-center gap-1 rounded border p-1 ${p.theme === id ? "border-[var(--accent)] ring-1 ring-[var(--accent)]" : "border-[var(--border)]"}`}
                   >
-                    <span className="block h-6 w-full rounded-sm ring-1 ring-black/10" style={{ background: `linear-gradient(135deg, ${THEMES[id].baseBuilding} 0 50%, ${THEMES[id].dark ? "#14171b" : "#f4f2ee"} 50% 100%)` }} />
+                    <span className="block h-6 w-full rounded-sm ring-1 ring-black/10" style={{ background: `linear-gradient(135deg, ${THEMES[id].baseBuilding} 0 50%, ${THEMES[id].swatchLand ?? (THEMES[id].dark ? "#14171b" : "#f4f2ee")} 50% 100%)` }} />
                     <span className="text-[11px]">{THEMES[id].label}</span>
                   </button>
                 ))}

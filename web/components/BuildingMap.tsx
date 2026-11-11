@@ -6,6 +6,7 @@ import maplibregl, { type ExpressionSpecification, type FilterSpecification, typ
 import { DEFAULT_CURRENCY, type Currency } from "@/config/currency";
 import { LAUNCH_CODES } from "@/lib/communities";
 import { formatPsf, formatShortPrice, pct } from "@/lib/format";
+import { applyIllustratedOverrides, goToIllustratedView, illustratedCamera, showLandmarks } from "@/lib/illustratedTheme";
 import {
   DEFAULT_SETTINGS, METRICS, colourise, legendItems, parseSettings, type MapBuildingProps, type MapSettings,
 } from "@/lib/mapMetrics";
@@ -159,13 +160,16 @@ export default function BuildingMap({
     setReady(true);
     live.current.theme = savedTheme;
 
+    // The Illustrated theme opens on its own tilted coast view, unless this map was given a place to show.
+    const illustratedStart = savedTheme === "illustrated" && !focus && !bounds;
     const map = new maplibregl.Map({
       container: container.current,
       style: THEMES[savedTheme].styleUrl,
-      ...(focus
-        ? { center: [focus.lng, focus.lat] as [number, number], zoom: 15.5 }
-        : { bounds: bounds ?? LAUNCH_BOUNDS, fitBoundsOptions: { padding: 24 } }),
-      pitch: DUBAI_PITCH,
+      ...(illustratedStart
+        ? illustratedCamera(container.current.clientWidth)
+        : focus
+          ? { center: [focus.lng, focus.lat] as [number, number], zoom: 15.5, pitch: DUBAI_PITCH }
+          : { bounds: bounds ?? LAUNCH_BOUNDS, fitBoundsOptions: { padding: 24 }, pitch: DUBAI_PITCH }),
       attributionControl: false,
     });
     mapRef.current = map;
@@ -255,6 +259,18 @@ export default function BuildingMap({
     if (appliedTheme.current === theme) return;
     appliedTheme.current = theme;
     map.setStyle(THEMES[theme].styleUrl, { diff: false }); // full reload, so "style.load" fires and step 3 redraws
+    // Choosing Illustrated on the main map also moves to its coast view; maps given a place stay where they are.
+    if (theme === "illustrated" && !focus && !bounds) goToIllustratedView(map);
+    // focus/bounds only set the first view.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [theme, ready]);
+
+  // Landmark tags for the Illustrated theme. They are page elements, so they outlive style swaps and are
+  // added or removed here rather than with the map layers.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready || theme !== "illustrated") return;
+    return showLandmarks(map, maplibregl.Marker);
   }, [theme, ready]);
 
   // 3. Our layers on the current style: grey 3D city, launch outlines, coloured buildings.
@@ -336,6 +352,9 @@ export default function BuildingMap({
         },
       });
     }
+
+    // Illustrated recolours the basemap and the grey city only; the coloured data buildings above stay as they are.
+    if (live.current.theme === "illustrated") applyIllustratedOverrides(map);
   }, [styleGen]);
 
   // 4. Data and colours into the layers, legend filters, selection.
