@@ -15,6 +15,7 @@ import Section from "@/components/Section";
 import DataBadge from "@/components/DataBadge";
 import Stat from "@/components/Stat";
 import ViewToggle from "@/components/ViewToggle";
+import FavouriteButton from "@/components/FavouriteButton";
 import { convertFromAed, getConversionNote } from "@/config/currency";
 import { getServerCurrency } from "@/lib/currency";
 import { hasDatabase } from "@/lib/db";
@@ -83,6 +84,7 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
         {b.unit_count ? ` · ${count(b.unit_count)} units` : ""}
       </p>
       {!panel && <p className="mt-1 text-sm"><Link className="link" href={`/compare?ids=${b.slug}`}>Compare with other buildings</Link></p>}
+      <FavouriteButton slug={b.slug} name={b.name_en} />
       <DataBadge saleCount={all?.sale_count_12m} periodEnd={periodEnd} />
       <ViewToggle />
 
