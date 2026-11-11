@@ -36,7 +36,7 @@ export default function NearbyPanel({ places, placed }: { places: Place[]; place
           </li>
         ))}
       </ul>
-      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+      <div className="mt-4 grid gap-4 sm:grid-cols-2 [&>*]:min-w-0">
         {GROUP_ORDER.map(([cat, label]) => {
           const list = places.filter((p) => p.category === cat).slice(0, 6);
           if (!list.length) return null;

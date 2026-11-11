@@ -3,6 +3,7 @@ import { BANDS } from "@/lib/rentIncrease";
 import { LIFE_GROUPS } from "@/lib/lifeScore";
 import { GLOSSARY, termAnchor } from "@/lib/glossary";
 import { pageMetadata } from "@/lib/seo";
+import { GOOD_COMPS, MIN_COMPS } from "@/lib/fairPrice";
 
 export const metadata = pageMetadata({ title: 'How it works', description: 'Where the figures come from, how they are calculated, and what they do not tell you.', path: '/how-it-works' });
 
@@ -23,6 +24,66 @@ export default function Page() {
             </div>
           ))}
         </dl>
+      </section>
+
+      <section aria-labelledby="at-a-glance">
+        <h2 id="at-a-glance" className="text-base font-semibold">Each figure at a glance</h2>
+        <p className="mt-2">Where it comes from, what it means and where it falls short. Every figure on a page also shows the date of the newest data behind it.</p>
+        <div className="mt-2 overflow-x-auto">
+          <table className="w-full min-w-[40rem] text-sm">
+            <thead className="text-xs text-[var(--muted)]">
+              <tr className="border-b border-[var(--border)]">
+                <th className="py-1 pe-3 text-start font-medium">Figure</th>
+                <th className="py-1 pe-3 text-start font-medium">Source</th>
+                <th className="py-1 pe-3 text-start font-medium">What it is</th>
+                <th className="py-1 text-start font-medium">Limits</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="border-b border-[var(--border)] align-top">
+                <th scope="row" className="py-2 pe-3 text-start font-medium">Median sale price, price per sq ft</th>
+                <td className="py-2 pe-3">{SOURCES.dldSales}</td>
+                <td className="py-2 pe-3">Completed sales in the last 12 months, apartments only. Off-plan sales are included and shown separately on area pages.</td>
+                <td className="py-2">A building with few sales can swing; the confidence label says how many sales it rests on.</td>
+              </tr>
+              <tr className="border-b border-[var(--border)] align-top">
+                <th scope="row" className="py-2 pe-3 text-start font-medium">Change on a year earlier</th>
+                <td className="py-2 pe-3">{SOURCES.dldSales}</td>
+                <td className="py-2 pe-3">Median price per sq ft now against the 12 months before. Areas compare each tower with itself.</td>
+                <td className="py-2">Reflects which flats sold as well as prices. Needs at least 3 sales in each period.</td>
+              </tr>
+              <tr className="border-b border-[var(--border)] align-top">
+                <th scope="row" className="py-2 pe-3 text-start font-medium">Median annual rent</th>
+                <td className="py-2 pe-3">{SOURCES.dldRents}</td>
+                <td className="py-2 pe-3">Registered Ejari rent contracts in the last 12 months.</td>
+                <td className="py-2">Contracts name the project, not the tower, so some are the whole project&apos;s or placed by unit size. Both are labelled.</td>
+              </tr>
+              <tr className="border-b border-[var(--border)] align-top">
+                <th scope="row" className="py-2 pe-3 text-start font-medium">Gross yield</th>
+                <td className="py-2 pe-3">{`${SOURCES.dldSales}; ${SOURCES.dldRents}`}</td>
+                <td className="py-2 pe-3">Median rent divided by median price, same bedroom type.</td>
+                <td className="py-2">Before service charges, vacancy and fees. An estimate, not a return.</td>
+              </tr>
+              <tr className="border-b border-[var(--border)] align-top">
+                <th scope="row" className="py-2 pe-3 text-start font-medium">Monthly cost and net yield</th>
+                <td className="py-2 pe-3">{`${SOURCES.dldSales}; ${SOURCES.dldRents}`}</td>
+                <td className="py-2 pe-3">Price, size and rent are DLD medians. Mortgage rate, service charge and utilities are general assumptions you can change.</td>
+                <td className="py-2">The assumptions are not this building&apos;s figures. Agent, trustee and bank fees are not included.</td>
+              </tr>
+              <tr className="border-b border-[var(--border)] align-top">
+                <th scope="row" className="py-2 pe-3 text-start font-medium">Nearby places and distances</th>
+                <td className="py-2 pe-3">{`${SOURCES.osm}; ${SOURCES.khda}; ${SOURCES.dha}`}</td>
+                <td className="py-2 pe-3">Straight-line distances from the building&apos;s map position.</td>
+                <td className="py-2">Not walking or driving time. Approximate map positions are flagged on the building page.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section aria-labelledby="confidence">
+        <h2 id="confidence" className="text-base font-semibold">Data confidence</h2>
+        <p className="mt-2">Building and area pages show how many sales the headline figures rest on: <strong>Good</strong> for {GOOD_COMPS} or more sales in the last 12 months, <strong>Limited</strong> for {MIN_COMPS} to {GOOD_COMPS - 1}, <strong>Low</strong> for fewer. It is a count of sales, not a judgement of the building, and it uses the same thresholds as the fair-price checker.</p>
       </section>
 
       <section>

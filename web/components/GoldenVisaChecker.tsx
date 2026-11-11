@@ -33,7 +33,7 @@ export default function GoldenVisaChecker({
       </p>
       <p className="mt-1 text-sm font-medium">This only compares prices with the threshold. It does not tell you whether you qualify.</p>
       {list.length ? (
-        <table className="mt-2 w-full text-sm tabular-nums [&_td]:pe-3 [&_th]:pe-3">
+        <div className="mt-2 overflow-x-auto"><table className="w-full text-sm tabular-nums [&_td]:pe-3 [&_th]:pe-3">
           <thead className="text-xs text-[var(--muted)]">
             <tr className="border-b border-[var(--border)]">
               <th className="py-1 text-start font-medium">Type</th>
@@ -52,7 +52,7 @@ export default function GoldenVisaChecker({
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       ) : (
         <p className="mt-2 text-sm text-[var(--muted)]">Too few recent sales here for a median price by bedroom type.</p>
       )}
