@@ -77,6 +77,7 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
         {b.floors ? ` · ${b.floors} floors` : ""}
         {b.unit_count ? ` · ${count(b.unit_count)} units` : ""}
       </p>
+      {!panel && <p className="mt-1 text-sm"><Link className="link" href={`/compare?ids=${b.slug}`}>Compare with other buildings</Link></p>}
 
       <section className={`mt-5 grid grid-cols-2 gap-3 ${panel ? "" : "md:grid-cols-4"}`}>
         <Stat label="Median price per sq ft" value={formatPsf(all?.sale_median_psf_12m, currency)} note={`${count(all?.sale_count_12m ?? 0)} sales in 12 months`} />

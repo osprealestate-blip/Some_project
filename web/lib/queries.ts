@@ -397,3 +397,17 @@ export async function offPlanRentEstimate(b: Building): Promise<OffPlanRent[]> {
     [b.id, SALE_TYPES, b.community_id],
   );
 }
+
+// ---------- compare ----------
+
+/** Buildings and their per-bedroom summaries for the compare page, in the order of the slugs given.
+ *  Slugs that match no visible building are skipped; the caller reports them as not found. */
+export async function buildingSummariesBySlug(slugs: string[]): Promise<{ building: Building; summaries: Summary[] }[]> {
+  const found = await Promise.all(
+    slugs.map(async (slug) => {
+      const building = await buildingBySlug(slug);
+      return building ? { building, summaries: await buildingSummaries(building.id) } : null;
+    }),
+  );
+  return found.filter((x): x is { building: Building; summaries: Summary[] } => x !== null);
+}
