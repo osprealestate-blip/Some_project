@@ -1,6 +1,7 @@
 import { Currency, DEFAULT_CURRENCY } from "@/config/currency";
 import { count, formatMoneyShort, formatPsf, pct, roomsLabel, sqft } from "@/lib/format";
 import type { Summary } from "@/lib/queries";
+import Term from "./Term";
 
 export default function RoomsTable({
   rows,
@@ -22,9 +23,9 @@ export default function RoomsTable({
             <th className="py-1 text-end font-medium">Sales</th>
             <th className="py-1 text-end font-medium">Median price</th>
             {showSize && <th className="py-1 text-end font-medium">Median size</th>}
-            <th className="py-1 text-end font-medium">Per sq ft</th>
+            <th className="py-1 text-end font-medium"><Term id="price-per-sq-ft">Per sq ft</Term></th>
             <th className="py-1 text-end font-medium">Median rent / yr</th>
-            <th className="py-1 text-end font-medium">Gross yield*</th>
+            <th className="py-1 text-end font-medium"><Term id="gross-yield">Gross yield</Term>*</th>
           </tr>
         </thead>
         <tbody>
