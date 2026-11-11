@@ -18,7 +18,7 @@ type Props = {
 
 const W = 640;
 const H = 220;
-const M = { top: 12, right: 12, bottom: 26, left: 64 };
+const M = { top: 12, right: 12, bottom: 26, left: 88 };
 
 function niceTicks(min: number, max: number, n = 4): number[] {
   if (min === max) { min *= 0.9; max *= 1.1; }
@@ -95,11 +95,11 @@ export default function LineChart({ title, points: aedPoints, unit, countLabel =
           {geo.ticks.map((t) => (
             <g key={t}>
               <line x1={M.left} x2={W - M.right} y1={geo.y(t)} y2={geo.y(t)} stroke="var(--grid)" strokeWidth={1} />
-              <text x={M.left - 8} y={geo.y(t)} dy="0.32em" textAnchor="end" fontSize={11} fill="var(--muted)">{format(t)}</text>
+              <text x={M.left - 8} y={geo.y(t)} dy="0.32em" textAnchor="end" fontSize={15} fill="var(--muted)">{format(t)}</text>
             </g>
           ))}
           {geo.years.map(({ i, p }) => (
-            <text key={p.period} x={geo.x(i)} y={H - 8} textAnchor="middle" fontSize={11} fill="var(--muted)">{p.period.slice(0, 4)}</text>
+            <text key={p.period} x={geo.x(i)} y={H - 8} textAnchor="middle" fontSize={15} fill="var(--muted)">{p.period.slice(0, 4)}</text>
           ))}
           <path d={geo.d} fill="none" stroke="var(--series-1)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
           {valid.length === 1 && <circle cx={geo.x(points.indexOf(valid[0]))} cy={geo.y(valid[0].value)} r={4} fill="var(--series-1)" />}

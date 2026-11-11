@@ -35,7 +35,7 @@ export default function ViewToggle() {
       type="button"
       aria-pressed={view === v}
       onClick={() => choose(v)}
-      className={`min-h-9 px-3 text-sm font-medium ${view === v ? "bg-[var(--accent)] text-white" : "text-[var(--muted)] hover:text-[var(--fg)]"}`}
+      className={`min-h-11 px-4 text-sm font-medium ${view === v ? "bg-[var(--accent)] text-white" : "text-[var(--muted)] hover:text-[var(--fg)]"}`}
     >
       {label}
     </button>
