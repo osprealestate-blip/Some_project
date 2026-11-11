@@ -281,7 +281,7 @@ export type MapFeature = {
   yield: number | null; sales: number;
 };
 
-/** Placed buildings for the map. `footprint` is GeoJSON: the OpenStreetMap outline grown by 1.5 m (so our coloured
+/** Placed buildings for the map. `footprint` is GeoJSON: the OpenStreetMap outline grown by 2.5 m (so our coloured
  *  tower wraps the grey basemap one instead of flickering against it), or a small octagon round an approximate
  *  position. Positions themselves are untouched here: they come from `dpi place-buildings`. */
 export async function mapBuildings(): Promise<MapFeature[]> {
@@ -289,9 +289,11 @@ export async function mapBuildings(): Promise<MapFeature[]> {
     `select b.slug, b.name_en as name, coalesce(c.name_common, c.name_official) as community,
             ST_X(ST_PointOnSurface(b.geom)) as lng, ST_Y(ST_PointOnSurface(b.geom)) as lat,
             ST_AsGeoJSON(case when ST_Dimension(b.geom) = 2
-                              then ST_Buffer(ST_SimplifyPreserveTopology(b.geom, 0.000005)::geography, 1.5)::geometry
+                              then ST_Buffer(ST_SimplifyPreserveTopology(b.geom, 0.000005)::geography, 2.5)::geometry
                               else ST_Buffer(ST_PointOnSurface(b.geom)::geography, 13, 'quad_segs=2')::geometry end, 6) as footprint,
-            coalesce(b.height_m, b.floors * 3.4, 30)::float8 as height,
+            -- The taller of the OSM height and the DLD floor count: OSM often outlines only the podium, with the tower
+            -- drawn as a separate part. At least 12 m, so a coloured block never hides inside the grey basemap one.
+            greatest(coalesce(greatest(b.height_m, b.floors * 3.4), 30), 12)::float8 as height,
             ST_Dimension(b.geom) <> 2 as approx,
             s.sale_median_psf_12m as psf, s.sale_median_psf_prev_12m as prev_psf, s.sale_median_price_12m as price,
             s.rent_median_12m as rent, s.rent_level, coalesce(s.sale_count_12m, 0) as sales,
