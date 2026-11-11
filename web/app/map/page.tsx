@@ -17,7 +17,7 @@ export default async function MapPage() {
   }
   const currency = await getServerCurrency();
   return (
-    <main className="relative h-[calc(100dvh-3.5rem)] min-h-[420px] w-full md:h-[calc(100dvh-4rem)]">
+    <main className="relative h-[calc(100dvh-3.5rem-1px)] min-h-[420px] w-full md:h-[calc(100dvh-4rem-1px)]">
       <BuildingMap currency={currency} />
       <div className="pointer-events-none absolute inset-x-4 top-4 flex justify-center">
         <div className="pointer-events-auto w-full max-w-md rounded-lg border border-[var(--border)] bg-[var(--panel)]/95 p-4 shadow-sm">
