@@ -19,6 +19,7 @@ import { getServerCurrency } from "@/lib/currency";
 import { hasDatabase } from "@/lib/db";
 import { count, formatMoneyShort, formatPsf, pct } from "@/lib/format";
 import { communityBuildings, communityByCode, communitySeries, communitySummaries } from "@/lib/queries";
+import { pageMetadata } from "@/lib/seo";
 import { SOURCES } from "@/lib/sources";
 import { change } from "@/lib/stats";
 
@@ -48,7 +49,9 @@ async function polygon(code: string): Promise<{ name: string; bounds: [[number, 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { code } = await params;
   const p = await polygon(code);
-  return { title: p?.name ?? "Community" };
+  if (!p) return { title: "Community" };
+  const label = launchCommunity(code)?.label ?? p.name;
+  return pageMetadata({ title: label, description: `Sale prices, rents and yields across ${label}, from Dubai Land Department data.`, path: `/community/${code}` });
 }
 
 export default async function Page({ params }: Params) {

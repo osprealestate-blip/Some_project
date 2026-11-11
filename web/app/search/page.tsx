@@ -5,9 +5,10 @@ import { getServerCurrency } from "@/lib/currency";
 import { hasDatabase } from "@/lib/db";
 import { formatPsf } from "@/lib/format";
 import { search } from "@/lib/queries";
+import { pageMetadata } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Search" };
+export const metadata = pageMetadata({ title: 'Search', description: 'Search Dubai buildings and communities.', path: '/search', noindex: true });
 
 export default async function Page({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const { q = "" } = await searchParams;

@@ -2,8 +2,9 @@ import { DISCLAIMER, SOURCES } from "@/lib/sources";
 import { BANDS } from "@/lib/rentIncrease";
 import { LIFE_GROUPS } from "@/lib/lifeScore";
 import { GLOSSARY, termAnchor } from "@/lib/glossary";
+import { pageMetadata } from "@/lib/seo";
 
-export const metadata = { title: "How it works" };
+export const metadata = pageMetadata({ title: 'How it works', description: 'Where the figures come from, how they are calculated, and what they do not tell you.', path: '/how-it-works' });
 
 export default function Page() {
   return (

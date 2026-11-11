@@ -9,9 +9,10 @@ import { getServerCurrency } from "@/lib/currency";
 import { hasDatabase } from "@/lib/db";
 import { buildingSummariesBySlug } from "@/lib/queries";
 import { SOURCES } from "@/lib/sources";
+import { pageMetadata } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Compare buildings", description: "Up to four Dubai buildings side by side, from DLD data." };
+export const metadata = pageMetadata({ title: 'Compare buildings', description: 'Up to four Dubai buildings side by side, from DLD data.', path: '/compare', noindex: true });
 
 export default async function Page({ searchParams }: { searchParams: Promise<{ ids?: string | string[] }> }) {
   const sp = await searchParams;

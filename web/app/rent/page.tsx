@@ -1,8 +1,9 @@
 import Link from "next/link";
 import Term from "@/components/Term";
 import { BANDS } from "@/lib/rentIncrease";
+import { pageMetadata } from "@/lib/seo";
 
-export const metadata = { title: "Rent a home" };
+export const metadata = pageMetadata({ title: 'Rent a home', description: 'What apartments rent for in Dubai buildings, and the most a landlord can raise the rent.', path: '/rent' });
 
 export default function Page() {
   return (
