@@ -20,47 +20,13 @@ async function loadCards() {
   }
 }
 
-type EntryCard = {
-  title: string;
-  href: string;
-  description: string;
-  primary: { label: string; href: string };
-  secondary: { label: string; href: string };
-};
+type EntryCard = { title: string; href: string; blurb: string };
 
 const ENTRY_CARDS: EntryCard[] = [
-  {
-    title: "Buy a home",
-    href: "/buy",
-    description:
-      "Find a home at a fair price. Compare asking prices to recent DLD sales in the same building, and see median prices and yields by area.",
-    primary: { label: "Browse buildings", href: "/search" },
-    secondary: { label: "Fair-price checker", href: "/tools/fair-price" },
-  },
-  {
-    title: "Invest for yield",
-    href: "/invest",
-    description:
-      "Compare gross yields, price per sq ft and quarterly trends across communities. See which areas are moving and by how much.",
-    primary: { label: "Compare areas", href: "/community/392" },
-    secondary: { label: "Search buildings", href: "/search" },
-  },
-  {
-    title: "I own a property",
-    href: "/own",
-    description:
-      "Look up your building, check rent-increase limits at renewal, and see running costs on each building page. All figures from official DLD data.",
-    primary: { label: "Rent increase calculator", href: "/tools/rent-increase" },
-    secondary: { label: "Look up your building", href: "/search" },
-  },
-  {
-    title: "Rent a home",
-    href: "/rent",
-    description:
-      "See fair market rents by building and bedroom type, and what a landlord can legally charge at renewal under Decree 43 of 2013.",
-    primary: { label: "Browse rents", href: "/search" },
-    secondary: { label: "Rent increase calculator", href: "/tools/rent-increase" },
-  },
+  { title: "I'm buying", href: "/buy", blurb: "Compare an asking price with recent sales in the same building." },
+  { title: "I'm investing", href: "/invest", blurb: "Yields, price per sq ft and trends by area and building." },
+  { title: "I own a property", href: "/own", blurb: "Look up your building and check the rent increase at renewal." },
+  { title: "I'm renting", href: "/rent", blurb: "Fair rents by building and bedrooms, and the legal renewal limit." },
 ];
 
 export default async function Home() {
@@ -72,41 +38,42 @@ export default async function Home() {
   return (
     <main>
       <section className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:py-16">
-        <div className="text-center sm:text-left lg:text-center">
-          <h1 className="text-3xl font-semibold sm:text-4xl lg:text-5xl tracking-tight">
-            Find the right property. Understand the real market.
+        <div className="text-center">
+          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl lg:text-5xl">
+            Is the asking price fair?
           </h1>
-          <p className="mt-4 text-lg text-[var(--muted)] sm:text-xl max-w-2xl mx-auto sm:mx-0 lg:mx-auto">
-            Prices, rents and yields from official Dubai Land Department data. Free, no login.
+          <p className="mx-auto mt-4 max-w-2xl text-lg text-[var(--muted)] sm:text-xl">
+            Check any Dubai apartment against real Dubai Land Department sales and rents in the same building. Free, no login.
           </p>
-          <div className="mt-8 sm:mt-10">
+          <div className="mt-8 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center">
+            <Link
+              href="/tools/fair-price"
+              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-[var(--accent)] px-6 py-3 text-base font-semibold text-white hover:opacity-90 focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2"
+            >
+              Check a price <span aria-hidden="true">→</span>
+            </Link>
             <Link
               href="/map"
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--accent)] px-6 py-3 text-sm font-medium text-white hover:bg-[var(--accent)]/90 focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2"
+              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--panel)] px-6 py-3 text-base font-semibold hover:border-[var(--accent)]"
             >
-              Open the map <span aria-hidden="true">→</span>
+              Explore the map
             </Link>
           </div>
         </div>
 
-        <h2 className="mt-12 sm:mt-16 mb-4 text-base font-semibold sm:text-center sm:mx-auto lg:text-center lg:mx-auto max-w-2xl">
-          Get started
+        <h2 className="mx-auto mb-4 mt-12 max-w-2xl text-center text-base font-semibold sm:mt-16">
+          What do you want to do?
         </h2>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4 max-w-6xl mx-auto sm:px-6 lg:px-0">
+        <div className="mx-auto grid max-w-6xl gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {ENTRY_CARDS.map((card) => (
-            <div
+            <Link
               key={card.title}
-              className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-5 transition-colors focus-within:border-[var(--accent)] hover:border-[var(--accent)]"
+              href={card.href}
+              className="flex min-h-24 flex-col justify-center rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4 transition-colors hover:border-[var(--accent)] focus-visible:border-[var(--accent)]"
             >
-              <h3 className="text-base font-semibold">
-                <Link href={card.href} className="hover:text-[var(--accent)] hover:underline">{card.title}</Link>
-              </h3>
-              <p className="mt-2 text-sm text-[var(--muted)] leading-relaxed">{card.description}</p>
-              <ul className="mt-4 space-y-2 text-sm">
-                <li><span className="text-[var(--muted)]" aria-hidden="true">▸ </span><Link href={card.primary.href} className="link hover:underline">{card.primary.label}</Link></li>
-                <li><span className="text-[var(--muted)]" aria-hidden="true">▸ </span><Link href={card.secondary.href} className="link hover:underline">{card.secondary.label}</Link></li>
-              </ul>
-            </div>
+              <span className="text-base font-semibold">{card.title} <span aria-hidden="true" className="text-[var(--accent)]">→</span></span>
+              <span className="mt-1 text-sm text-[var(--muted)]">{card.blurb}</span>
+            </Link>
           ))}
         </div>
 
