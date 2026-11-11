@@ -23,7 +23,7 @@ describe("Currency configuration & rates", () => {
   it("defines supported currencies with AED as default", () => {
     expect(DEFAULT_CURRENCY).toBe("AED");
     expect(CURRENCIES).toEqual(["AED", "USD", "EUR", "GBP", "INR"]);
-    expect(RATES_AS_OF).toBe("2026-11-01");
+    expect(RATES_AS_OF).toBe("2026-11-10");
   });
 
   it("pegs AED to USD at exactly 3.6725 AED per USD", () => {
@@ -34,16 +34,16 @@ describe("Currency configuration & rates", () => {
   it("converts from AED to all supported currencies", () => {
     expect(convertFromAed(1000, "AED")).toBe(1000);
     expect(convertFromAed(36725, "USD")).toBeCloseTo(10000, 5);
-    expect(convertFromAed(3980, "EUR")).toBeCloseTo(1000, 5);
-    expect(convertFromAed(4650, "GBP")).toBeCloseTo(1000, 5);
-    expect(convertFromAed(100, "INR")).toBe(2300);
+    expect(convertFromAed(4120, "EUR")).toBeCloseTo(1000, 5);
+    expect(convertFromAed(4930, "GBP")).toBeCloseTo(1000, 5);
+    expect(convertFromAed(100, "INR")).toBeCloseTo(2558, 5);
   });
 
   it("converts back to AED correctly", () => {
     expect(convertToAed(10000, "USD")).toBeCloseTo(36725, 5);
-    expect(convertToAed(1000, "EUR")).toBeCloseTo(3980, 5);
-    expect(convertToAed(1000, "GBP")).toBeCloseTo(4650, 5);
-    expect(convertToAed(2300, "INR")).toBe(100);
+    expect(convertToAed(1000, "EUR")).toBeCloseTo(4120, 5);
+    expect(convertToAed(1000, "GBP")).toBeCloseTo(4930, 5);
+    expect(convertToAed(2558, "INR")).toBeCloseTo(100, 5);
   });
 });
 
@@ -107,22 +107,22 @@ describe("Currency formatting and rounding", () => {
   });
 
   it("formats EUR prices with € prefix", () => {
-    expect(formatMoney(398_000, "EUR")).toBe("€100,000");
-    expect(formatShortPrice(398_000, "EUR")).toBe("€100K");
-    expect(formatPsf(398, "EUR")).toBe("€100/sq ft");
+    expect(formatMoney(412_000, "EUR")).toBe("€100,000");
+    expect(formatShortPrice(412_000, "EUR")).toBe("€100K");
+    expect(formatPsf(412, "EUR")).toBe("€100/sq ft");
   });
 
   it("formats GBP prices with £ prefix", () => {
-    expect(formatMoney(465_000, "GBP")).toBe("£100,000");
-    expect(formatShortPrice(465_000, "GBP")).toBe("£100K");
-    expect(formatPsf(465, "GBP")).toBe("£100/sq ft");
+    expect(formatMoney(493_000, "GBP")).toBe("£100,000");
+    expect(formatShortPrice(493_000, "GBP")).toBe("£100K");
+    expect(formatPsf(493, "GBP")).toBe("£100/sq ft");
   });
 
   it("formats INR prices with ₹ prefix", () => {
-    // 100,000 AED * 23 = 2,300,000 INR
-    expect(formatMoney(100_000, "INR")).toBe("₹2,300,000");
-    expect(formatShortPrice(100_000, "INR")).toBe("₹2.30M");
-    expect(formatPsf(100, "INR")).toBe("₹2,300/sq ft");
+    // 100,000 AED * 25.58 = 2,558,000 INR
+    expect(formatMoney(100_000, "INR")).toBe("₹2,558,000");
+    expect(formatShortPrice(100_000, "INR")).toBe("₹2.56M");
+    expect(formatPsf(100, "INR")).toBe("₹2,558/sq ft");
   });
 
   it("handles null and undefined values gracefully", () => {
