@@ -12,6 +12,7 @@ import SourceNote from "@/components/SourceNote";
 import Term from "@/components/Term";
 import KeyTerms from "@/components/KeyTerms";
 import Stat from "@/components/Stat";
+import ViewToggle from "@/components/ViewToggle";
 import { convertFromAed, getConversionNote } from "@/config/currency";
 import { getServerCurrency } from "@/lib/currency";
 import { hasDatabase } from "@/lib/db";
@@ -80,6 +81,7 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
         {b.unit_count ? ` · ${count(b.unit_count)} units` : ""}
       </p>
       {!panel && <p className="mt-1 text-sm"><Link className="link" href={`/compare?ids=${b.slug}`}>Compare with other buildings</Link></p>}
+      <ViewToggle />
 
       <section className={`mt-5 grid grid-cols-2 gap-3 ${panel ? "" : "md:grid-cols-4"}`}>
         <Stat term="price-per-sq-ft" label="Median price per sq ft" value={formatPsf(all?.sale_median_psf_12m, currency)} note={`${count(all?.sale_count_12m ?? 0)} sales in 12 months`} />
@@ -92,7 +94,7 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
       </SourceNote>
       <KeyTerms />
 
-      <section className="mt-8">
+      <section className="adv-only mt-8">
         <h2 className="text-base font-semibold">By bedroom type, last 12 months</h2>
         <div className="mt-2"><RoomsTable rows={summaries} currency={currency} /></div>
         <p className="mt-1 text-xs text-[var(--muted)]">* Estimate. Rows need 3 or more deals for a median.{rentLevel === "project" ? " Rents are for the whole project, because DLD rent contracts name the project, not the tower." : ""}{rentLevel === "estimated" ? " Rent contracts do not name the tower, so some were placed in this building because their exact size and bedrooms match flats sold here and in no other tower nearby. Estimated." : ""}</p>
@@ -133,7 +135,7 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
         </section>
       )}
 
-      <section className={`mt-8 grid gap-6 ${panel ? "" : "lg:grid-cols-2"}`}>
+      <section className={`adv-only mt-8 grid gap-6 ${panel ? "" : "lg:grid-cols-2"}`}>
         <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
           <LineChart title="Median sale price per sq ft, by quarter" points={series.sales} unit="psf" countLabel="sales" currency={currency} />
           <SourceNote source={SOURCES.dldSales} date={periodEnd} />
@@ -149,7 +151,7 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
         <GoldenVisaChecker rows={summaries} periodEnd={periodEnd} currency={currency} />
       </section>
 
-      <section className="mt-8">
+      <section className="adv-only mt-8">
         <h2 className="text-base font-semibold">Recent sales</h2>
         {sales.length ? (
           <div className="mt-2 overflow-x-auto">
@@ -222,7 +224,7 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
         </section>
       )}
 
-      <section className="mt-8 text-xs text-[var(--muted)]">
+      <section className="adv-only mt-8 text-xs text-[var(--muted)]">
         <h2 className="text-sm font-semibold text-[var(--fg)]">About this page</h2>
         <p className="mt-1">
           {METHOD_TEXT[b.match_method ?? "name"] ?? METHOD_TEXT.name}. Names seen in DLD files: {b.aliases.slice(0, 6).join(", ")}.

@@ -66,3 +66,7 @@ a.link:hover { text-decoration: underline; }
   margin-top: 8px; width: 100%; border-radius: 8px; padding: 8px 10px;
   background: var(--accent); color: #fff; font-weight: 600; font-size: 13px;
 }
+
+/* Simple / Advanced view (components/ViewToggle.tsx). Simple is the default, so these blocks stay hidden until the
+   reader switches to Advanced. Nothing is removed from the page's data. */
+html:not([data-view="advanced"]) .adv-only { display: none; }

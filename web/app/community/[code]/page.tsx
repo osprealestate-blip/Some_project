@@ -10,6 +10,7 @@ import RoomsTable from "@/components/RoomsTable";
 import SourceNote from "@/components/SourceNote";
 import KeyTerms from "@/components/KeyTerms";
 import Stat from "@/components/Stat";
+import ViewToggle from "@/components/ViewToggle";
 import Term from "@/components/Term";
 import { getConversionNote } from "@/config/currency";
 import { launchCommunity } from "@/lib/communities";
@@ -83,6 +84,7 @@ export default async function Page({ params }: Params) {
       <h1 className="mt-1 text-2xl font-semibold">{title}</h1>
       {official !== title && <p className="text-sm text-[var(--muted)]">Official community name: {official} (DM {code})</p>}
       {scope && <p className="mt-2 max-w-2xl text-sm">{scope}</p>}
+      <ViewToggle />
 
       <section className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat term="price-per-sq-ft" label="Median price per sq ft" value={formatPsf(all?.sale_median_psf_12m, currency)} note={`${count(all?.sale_count_12m ?? 0)} apartment sales in 12 months`} />
@@ -102,7 +104,7 @@ export default async function Page({ params }: Params) {
       <KeyTerms />
 
       {(all?.sale_count_ready_12m || all?.sale_count_offplan_12m) ? (
-        <section className="mt-6">
+        <section className="adv-only mt-6">
           <h2 className="text-base font-semibold">Ready and off-plan, last 12 months</h2>
           <div className="mt-2 grid grid-cols-2 gap-3 md:grid-cols-4">
             <Stat term="off-plan" label="Ready, median per sq ft" value={formatPsf(all?.sale_median_psf_ready_12m, currency)} note={`${count(all?.sale_count_ready_12m ?? 0)} sales; ${pct(readyYoy, 1, true)} on a year earlier`} />
@@ -112,12 +114,12 @@ export default async function Page({ params }: Params) {
         </section>
       ) : null}
 
-      <section className="mt-8">
+      <section className="adv-only mt-8">
         <h2 className="text-base font-semibold">By bedroom type, last 12 months</h2>
         <div className="mt-2"><RoomsTable rows={summaries} showSize={false} currency={currency} /></div>
       </section>
 
-      <section className="mt-8 grid gap-6 lg:grid-cols-2">
+      <section className="adv-only mt-8 grid gap-6 lg:grid-cols-2">
         <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
           <LineChart title="Median sale price per sq ft, by quarter" points={series.sales} unit="psf" countLabel="sales" currency={currency} />
           <SourceNote source={SOURCES.dldSales} date={all?.period_end} />
