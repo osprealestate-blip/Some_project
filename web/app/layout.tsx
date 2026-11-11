@@ -16,8 +16,9 @@ export default function RootLayout({ children, modal }: { children: React.ReactN
   return (
     <html lang="en" dir="ltr">
       <body className="flex min-h-dvh flex-col antialiased">
+        <a href="#main" className="skip-link">Skip to content</a>
         <SiteHeader />
-        <div className="flex-1">{children}</div>
+        <div id="main" tabIndex={-1} className="flex-1 outline-none">{children}</div>
         <SiteFooter />
         {modal}
       </body>
