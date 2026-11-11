@@ -12,6 +12,7 @@ import SourceNote from "@/components/SourceNote";
 import Term from "@/components/Term";
 import KeyTerms from "@/components/KeyTerms";
 import Section from "@/components/Section";
+import BuildingGallery from "@/components/BuildingGallery";
 import DataBadge from "@/components/DataBadge";
 import Stat from "@/components/Stat";
 import ViewToggle from "@/components/ViewToggle";
@@ -21,7 +22,7 @@ import { getServerCurrency } from "@/lib/currency";
 import { hasDatabase } from "@/lib/db";
 import { count, day, formatMoney, formatPsf, formatShortPrice, pct, roomsLabel, sqft } from "@/lib/format";
 import {
-  buildingBySlug, buildingSeries, buildingSummaries, isOffPlanOnly, nearbyPlaces, offPlanRentEstimate, recentSales, siblingBuildings,
+  buildingBySlug, buildingImages, buildingSeries, buildingSummaries, isOffPlanOnly, nearbyPlaces, offPlanRentEstimate, recentSales, siblingBuildings,
 } from "@/lib/queries";
 import { SOURCES } from "@/lib/sources";
 import { change } from "@/lib/stats";
@@ -55,8 +56,8 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
   if (!b) notFound();
   const currency = await getServerCurrency();
   const conversionNote = getConversionNote(currency);
-  const [summaries, series, sales, places, siblings] = await Promise.all([
-    buildingSummaries(b.id), buildingSeries(b), recentSales(b.id), nearbyPlaces(b), siblingBuildings(b),
+  const [summaries, series, sales, places, siblings, images] = await Promise.all([
+    buildingSummaries(b.id), buildingSeries(b), recentSales(b.id), nearbyPlaces(b), siblingBuildings(b), buildingImages(b.id),
   ]);
   const all = summaries.find((s) => s.rooms === -1);
   const noRent = all?.rent_median_12m == null && series.rentLevel == null;
@@ -84,6 +85,7 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
         {b.unit_count ? ` · ${count(b.unit_count)} units` : ""}
       </p>
       {!panel && <p className="mt-1 text-sm"><Link className="link" href={`/compare?ids=${b.slug}`}>Compare with other buildings</Link></p>}
+      <BuildingGallery images={images} name={b.name_en} />
       <FavouriteButton slug={b.slug} name={b.name_en} />
       <DataBadge saleCount={all?.sale_count_12m} periodEnd={periodEnd} />
       <ViewToggle />

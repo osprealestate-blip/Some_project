@@ -5,6 +5,7 @@ export const MAIN_NAV: NavItem[] = [
   { href: "/map", label: "Explore Map" },
   { href: "/communities", label: "Communities", match: ["/community"] },
   { href: "/buildings", label: "Buildings", match: ["/building"] },
+  { href: "/off-plan", label: "Off-plan" },
   { href: "/tools", label: "Property Tools" },
   { href: "/how-it-works", label: "How It Works" },
 ];

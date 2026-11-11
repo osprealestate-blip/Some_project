@@ -5,7 +5,7 @@ import { query } from "./db";
 import { MIN_CONFIDENCE } from "./queries";
 
 /** Pages that do not depend on the database. Search, compare and saved buildings are left out on purpose. */
-export const STATIC_PATHS = ["/", "/map", "/communities", "/buildings", "/tools", "/tools/fair-price", "/tools/rent-increase", "/buy", "/invest", "/own", "/rent", "/how-it-works"];
+export const STATIC_PATHS = ["/", "/map", "/communities", "/buildings", "/tools", "/tools/fair-price", "/tools/rent-increase", "/buy", "/off-plan", "/invest", "/own", "/rent", "/how-it-works"];
 
 export function sitemapEntries(base: string, buildingSlugs: string[], communityCodes: readonly string[] = LAUNCH_CODES): MetadataRoute.Sitemap {
   const paths = [...STATIC_PATHS, ...communityCodes.map((c) => `/community/${c}`), ...buildingSlugs.map((s) => `/building/${s}`)];
