@@ -115,7 +115,7 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
             {offPlanRents.length ? " For comparison, this is what flats of a similar size rent for in the same community:" : ""}
           </p>
           {offPlanRents.length > 0 && (
-            <table className="mt-2 w-full text-sm tabular-nums [&_td]:pe-3 [&_th]:pe-3">
+            <div className="mt-2 overflow-x-auto"><table className="w-full whitespace-nowrap text-sm tabular-nums [&_td]:pe-3 [&_th]:pe-3">
               <thead className="text-xs text-[var(--muted)]">
                 <tr className="border-b border-[var(--border)]">
                   <th className="py-1 text-start font-medium">Type</th>
@@ -134,7 +134,7 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           )}
           <SourceNote source={SOURCES.dldRents} date={offPlanRents[0]?.to ?? periodEnd} estimate>
             * Estimate from other buildings in {b.community}, not rents of this building.
@@ -159,7 +159,7 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
       </Section>
 
       <Section id="history" title="History" adv>
-        <div className={`grid gap-6 ${panel ? "" : "lg:grid-cols-2"}`}>
+        <div className={`grid gap-6 [&>*]:min-w-0 ${panel ? "" : "lg:grid-cols-2"}`}>
           <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
             <LineChart title="Median sale price per sq ft, by quarter" points={series.sales} unit="psf" countLabel="sales" currency={currency} />
             <SourceNote source={SOURCES.dldSales} date={periodEnd} />
@@ -204,14 +204,14 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
       </Section>
 
       <Section id="ownership-costs" title="Ownership costs">
-        <div className={`grid gap-6 ${panel ? "" : "lg:grid-cols-2"}`}>
+        <div className={`grid gap-6 [&>*]:min-w-0 ${panel ? "" : "lg:grid-cols-2"}`}>
           <MonthlyCostCalculator rows={summaries} periodEnd={periodEnd} currency={currency} />
           <GoldenVisaChecker rows={summaries} periodEnd={periodEnd} currency={currency} />
         </div>
       </Section>
 
       <Section id="nearby" title="Nearby">
-        <div className={`grid gap-6 ${panel ? "" : "lg:grid-cols-[1fr_1fr]"}`}>
+        <div className={`grid gap-6 [&>*]:min-w-0 ${panel ? "" : "lg:grid-cols-[1fr_1fr]"}`}>
           <NearbyPanel places={places} placed={placed} />
           {/* In the panel the big map behind already shows the building, highlighted. */}
           {!panel && (
