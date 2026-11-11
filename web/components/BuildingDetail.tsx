@@ -88,17 +88,29 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
       <DataBadge saleCount={all?.sale_count_12m} periodEnd={periodEnd} />
       <ViewToggle />
 
-      <section aria-label="Key figures" className={`mt-4 grid grid-cols-2 gap-3 ${panel ? "" : "sm:grid-cols-3 lg:grid-cols-5"}`}>
+      <section aria-label="Key figures" className={`mt-4 grid grid-cols-[repeat(2,minmax(0,1fr))] gap-3 [&>*]:min-w-0 ${panel ? "" : "sm:grid-cols-3 lg:grid-cols-5"}`}>
         <Stat label="Median sale price" value={formatShortPrice(all?.sale_median_price_12m, currency)} note={`${count(all?.sale_count_12m ?? 0)} sales in 12 months`} meaning="Half of the apartments sold here in the last 12 months went for less than this." />
         <Stat term="price-per-sq-ft" label="Median price per sq ft" value={formatPsf(all?.sale_median_psf_12m, currency)} meaning="Price for each square foot, so flats of different sizes can be compared." />
         <Stat label="Change on a year earlier" value={pct(yoy, 1, true)} note="Median per sq ft" meaning="Compares the last 12 months with the 12 before. It also reflects which flats happened to sell, not only prices." />
         <Stat label={rentLevel === "project" ? "Project median annual rent" : rentLevel === "estimated" ? "Median annual rent (estimated)" : "Median annual rent"} value={formatShortPrice(all?.rent_median_12m, currency)} note={offPlan ? "Not completed yet: no rent contracts" : rentLevel === "project" ? (unfinished ? "Not completed yet: this is the whole project's rent, not this tower's" : "Whole project (rents are filed per project, not per tower)") : rentLevel === "estimated" ? `Estimated: ${count(all?.rent_count_12m ?? 0)} contracts, some placed by unit size` : `${count(all?.rent_count_12m ?? 0)} contracts`} meaning="Typical yearly rent on contracts registered in the last 12 months." />
-        <Stat term="gross-yield" label="Gross yield (estimate)" value={pct(midYield)} note="Median across bedroom types" meaning="Yearly rent as a share of the price, before service charges and other costs. Not a promised return." />
+        <Stat inv term="gross-yield" label="Gross yield (estimate)" value={pct(midYield)} note="Median across bedroom types" meaning="Yearly rent as a share of the price, before service charges and other costs. Not a promised return." />
       </section>
       <SourceNote source={`${SOURCES.dldSales}; ${SOURCES.dldRents}`} date={periodEnd} estimate>
         Apartments only; 12 months to the newest sale. Gross yield = median rent ÷ median price, same bedroom type.{conversionNote ? ` ${conversionNote}` : ""}
       </SourceNote>
       <KeyTerms />
+
+      <Link href={`/tools/fair-price?building=${b.slug}`} className="owner-only mt-4 block rounded-lg border border-[var(--accent)] bg-[var(--panel)] p-4 hover:bg-[var(--bg)]">
+        <div className="font-semibold">Are you paying a fair price?</div>
+        <p className="mt-1 text-sm text-[var(--muted)]">Check an asking price against recent DLD sales in {b.name_en}.</p>
+      </Link>
+      <section className="inv-only mt-4 rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
+        <h2 className="text-base font-semibold">Investor snapshot</h2>
+        <p className="mt-1 text-sm text-[var(--muted)]">
+          Gross yield {pct(midYield)} (median across bedroom types), median annual rent {formatShortPrice(all?.rent_median_12m, currency)}, price per sq ft {pct(yoy, 1, true)} on a year earlier.
+          Bedroom-type yields, quarterly trends and recent sales are below. <Link className="link" href={`/compare?ids=${b.slug}`}>Compare with other buildings</Link>.
+        </p>
+      </section>
 
       <nav aria-label="On this page" className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-sm">
         <a className="link adv-only" href="#sale-prices">Sale prices and rentals</a>
@@ -143,17 +155,6 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
           </SourceNote>
         </section>
       )}
-
-      <section className={`adv-only mt-8 grid gap-6 ${panel ? "" : "lg:grid-cols-2"}`}>
-        <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
-          <LineChart title="Median sale price per sq ft, by quarter" points={series.sales} unit="psf" countLabel="sales" currency={currency} />
-          <SourceNote source={SOURCES.dldSales} date={periodEnd} />
-        </div>
-        <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
-          <LineChart title={`Median annual rent, by quarter${series.rentLevel === "project" ? " (whole project)" : series.rentLevel === "estimated" ? " (estimated)" : ""}`} points={series.rents} unit="aed" countLabel="contracts" currency={currency} />
-          <SourceNote source={SOURCES.dldRents} date={periodEnd} />
-        </div>
-      </section>
 
       <Section id="sale-prices" title="Sale prices and rentals" adv>
         <RoomsTable rows={summaries} currency={currency} />
