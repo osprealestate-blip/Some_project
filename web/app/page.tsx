@@ -30,7 +30,7 @@ export default async function Home() {
   return (
     <main>
       <section className="relative h-[70dvh] min-h-[420px] w-full">
-        <BuildingMap />
+        <BuildingMap currency={currency} />
         <div className="pointer-events-none absolute inset-x-4 top-4 flex justify-start">
           <div className="pointer-events-auto w-full max-w-sm rounded-lg border border-[var(--border)] bg-[var(--panel)]/95 p-4 shadow-sm">
             <h1 className="text-lg font-semibold">Dubai, building by building</h1>
