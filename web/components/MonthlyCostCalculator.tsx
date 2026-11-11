@@ -70,7 +70,7 @@ export default function MonthlyCostCalculator({
   return (
     <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
       <h2 className="text-base font-semibold">Monthly cost and net yield</h2>
-      <p className="mt-1 text-sm text-[var(--muted)]">Starts from this building&apos;s median price for one bedroom type. Change any figure.</p>
+      <p className="mt-1 text-sm text-[var(--muted)]">Pick a bedroom type. We fill in its typical price and size from DLD sales; everything else is an assumption you set.</p>
 
       {types.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-2">
@@ -87,29 +87,38 @@ export default function MonthlyCostCalculator({
         </div>
       )}
 
-      <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-        <label className="col-span-2 font-medium">Purchase price (AED)
-          <input inputMode="numeric" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="1,500,000" className={inputCls} />
-        </label>
-        <label className="font-medium">Down payment (%)
-          <input type="number" min={0} max={100} step={5} value={downPct} onChange={(e) => setDownPct(e.target.value)} className={inputCls} />
-        </label>
-        <label className="font-medium">Mortgage rate (%)
-          <input type="number" min={0} max={20} step={0.1} value={rate} onChange={(e) => setRate(e.target.value)} className={inputCls} />
-        </label>
-        <label className="font-medium">Loan term (years)
-          <input type="number" min={1} max={25} step={1} value={term} onChange={(e) => setTerm(e.target.value)} className={inputCls} />
-        </label>
-        <label className="font-medium">Size (sq ft)
-          <input type="number" min={100} step={50} value={size} onChange={(e) => setSize(e.target.value)} placeholder={String(DEFAULT_COST_CONFIG.defaultSizeSqft)} className={inputCls} />
-        </label>
-        <label className="font-medium"><Term id="service-charge">Service charge</Term> (AED per sq ft a year)
-          <input type="number" min={0} step={1} value={scPsf} onChange={(e) => setScPsf(e.target.value)} className={inputCls} />
-        </label>
-        <label className="font-medium">Utilities (AED a month)
-          <input type="number" min={0} step={50} value={utilities} onChange={(e) => setUtilities(e.target.value)} className={inputCls} />
-        </label>
-      </div>
+      <fieldset className="mt-4">
+        <legend className="text-sm font-semibold">From DLD data <span className="font-normal text-[var(--muted)]">(typical for this building and bedroom type; you can change them)</span></legend>
+        <div className="mt-2 grid grid-cols-2 gap-3 text-sm">
+          <label className="font-medium">Purchase price (AED)
+            <input inputMode="numeric" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="1,500,000" className={inputCls} />
+          </label>
+          <label className="font-medium">Size (sq ft)
+            <input type="number" min={100} step={50} value={size} onChange={(e) => setSize(e.target.value)} placeholder={String(DEFAULT_COST_CONFIG.defaultSizeSqft)} className={inputCls} />
+          </label>
+        </div>
+      </fieldset>
+
+      <fieldset className="mt-4">
+        <legend className="text-sm font-semibold">Your assumptions <span className="font-normal text-[var(--muted)]">(general starting values, not facts about this building: replace them with your own)</span></legend>
+        <div className="mt-2 grid grid-cols-2 gap-3 text-sm">
+          <label className="font-medium">Down payment (%)
+            <input type="number" min={0} max={100} step={5} value={downPct} onChange={(e) => setDownPct(e.target.value)} className={inputCls} />
+          </label>
+          <label className="font-medium">Mortgage rate (%)
+            <input type="number" min={0} max={20} step={0.1} value={rate} onChange={(e) => setRate(e.target.value)} className={inputCls} />
+          </label>
+          <label className="font-medium">Loan term (years)
+            <input type="number" min={1} max={25} step={1} value={term} onChange={(e) => setTerm(e.target.value)} className={inputCls} />
+          </label>
+          <label className="font-medium"><Term id="service-charge">Service charge</Term> (AED per sq ft a year)
+            <input type="number" min={0} step={1} value={scPsf} onChange={(e) => setScPsf(e.target.value)} className={inputCls} />
+          </label>
+          <label className="font-medium">Utilities (AED a month)
+            <input type="number" min={0} step={50} value={utilities} onChange={(e) => setUtilities(e.target.value)} className={inputCls} />
+          </label>
+        </div>
+      </fieldset>
 
       {res.isValid ? (
         <>
@@ -119,7 +128,7 @@ export default function MonthlyCostCalculator({
             <div className="flex justify-between gap-2"><dt className="text-[var(--muted)]"><Term id="service-charge" /></dt><dd className="text-end tabular-nums">{money(res.monthlyServiceCharge)}</dd></div>
             <div className="flex justify-between gap-2"><dt className="text-[var(--muted)]">Utilities (DEWA and cooling)</dt><dd className="text-end tabular-nums">{money(res.monthlyUtilities)}</dd></div>
             <div className="flex justify-between gap-2 border-t border-[var(--border)] pt-2">
-              <dt className="font-medium">Net yield (estimate)</dt>
+              <dt className="font-medium">Net yield (estimate, after service charge only)</dt>
               <dd className="text-end font-semibold tabular-nums">{res.netYield != null ? pct(res.netYield) : "–"}</dd>
             </div>
           </dl>
