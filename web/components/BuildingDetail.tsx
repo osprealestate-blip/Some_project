@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import BuildingMap from "@/components/BuildingMap";
+import BuildingMap from "@/components/LazyBuildingMap";
 import GoldenVisaChecker from "@/components/GoldenVisaChecker";
 import LineChart from "@/components/LineChart";
 import MonthlyCostCalculator from "@/components/MonthlyCostCalculator";
