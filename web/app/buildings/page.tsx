@@ -34,8 +34,9 @@ export default async function Page({ searchParams }: { searchParams: Promise<SP>
   const community = await communityByCode(code);
   const filters = parseFilters(new URLSearchParams({ rooms: sp.rooms ?? "", maxPrice: sp.maxPrice ?? "", minYield: sp.minYield ?? "" }), code);
   const filtered = filters.rooms !== -1 || filters.maxPrice != null || filters.minYield != null;
+  let filterFailed = false;
   const [rows, totals] = await Promise.all([
-    filtered ? exploreBuildings(filters) : community ? communityBuildings(community.id) : [],
+    filtered ? exploreBuildings(filters).catch(() => { filterFailed = true; return []; }) : community ? communityBuildings(community.id) : [],
     launchCommunities().catch(() => []),
   ]);
   const total = totals.find((t) => t.dm_code === code)?.buildings ?? rows.length;
@@ -133,7 +134,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<SP>
             </tbody>
           </table>
         </div>
-      ) : <p className="mt-4 text-sm text-[var(--muted)]">{filtered ? "No buildings match those filters. Try a higher price or a lower yield." : "No buildings match that name."}</p>}
+      ) : <p className="mt-4 text-sm text-[var(--muted)]">{filterFailed ? "The filters could not be applied just now. Please try again." : filtered ? "No buildings match those filters. Try a higher price or a lower yield." : "No buildings match that name."}</p>}
 
       <SourceNote source={`${SOURCES.dldSales}; ${SOURCES.dldRents}`} date={periodEnd} estimate>
         * Gross yield is an estimate, shown only where the rent it comes from is shown. “project” = rents for the whole project, because DLD rent contracts name the project, not the tower; “est.” = some rents placed in the tower by unit size. A dash means too few deals for a median.
