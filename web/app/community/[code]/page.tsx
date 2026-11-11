@@ -9,6 +9,7 @@ import NoData from "@/components/NoData";
 import RoomsTable from "@/components/RoomsTable";
 import SourceNote from "@/components/SourceNote";
 import KeyTerms from "@/components/KeyTerms";
+import DataBadge from "@/components/DataBadge";
 import Stat from "@/components/Stat";
 import ViewToggle from "@/components/ViewToggle";
 import Term from "@/components/Term";
@@ -84,6 +85,7 @@ export default async function Page({ params }: Params) {
       <h1 className="mt-1 text-2xl font-semibold">{title}</h1>
       {official !== title && <p className="text-sm text-[var(--muted)]">Official community name: {official} (DM {code})</p>}
       {scope && <p className="mt-2 max-w-2xl text-sm">{scope}</p>}
+      <DataBadge saleCount={all?.sale_count_12m} periodEnd={all?.period_end} />
       <ViewToggle />
 
       <section className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
