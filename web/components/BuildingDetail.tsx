@@ -88,7 +88,7 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
       <DataBadge saleCount={all?.sale_count_12m} periodEnd={periodEnd} />
       <ViewToggle />
 
-      <section aria-label="Key figures" className={`mt-4 grid grid-cols-2 gap-3 ${panel ? "" : "sm:grid-cols-3 lg:grid-cols-5"}`}>
+      <section aria-label="Key figures" className={`mt-4 grid grid-cols-[repeat(2,minmax(0,1fr))] gap-3 [&>*]:min-w-0 ${panel ? "" : "sm:grid-cols-3 lg:grid-cols-5"}`}>
         <Stat label="Median sale price" value={formatShortPrice(all?.sale_median_price_12m, currency)} note={`${count(all?.sale_count_12m ?? 0)} sales in 12 months`} meaning="Half of the apartments sold here in the last 12 months went for less than this." />
         <Stat term="price-per-sq-ft" label="Median price per sq ft" value={formatPsf(all?.sale_median_psf_12m, currency)} meaning="Price for each square foot, so flats of different sizes can be compared." />
         <Stat label="Change on a year earlier" value={pct(yoy, 1, true)} note="Median per sq ft" meaning="Compares the last 12 months with the 12 before. It also reflects which flats happened to sell, not only prices." />

@@ -27,6 +27,8 @@
   }
 }
 html, body { height: 100%; }
+/* Never let one wide element make the whole page scroll sideways on a phone. */
+html, body { max-width: 100%; overflow-x: clip; }
 body { background: var(--bg); color: var(--fg); }
 
 a.link { color: var(--accent); }
