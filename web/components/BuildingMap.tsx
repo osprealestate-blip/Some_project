@@ -28,7 +28,16 @@ type Feature = { type: "Feature"; geometry: GeoJSON.Geometry; properties: Props3
 type Collection = { type: "FeatureCollection"; features: Feature[]; meta?: { periodEnd?: string | null } };
 
 const STORE = { settings: "dpi.map.settings", theme: "dpi.map.theme" };
-const DPI_LAYERS = ["dpi-3d", "dpi-3d-approx", "dpi-dots"];
+const DPI_LAYERS = ["dpi-3d", "dpi-3d-approx", "dpi-columns"];
+const DPI_SOURCES = ["dpi-footprints", "dpi-columns"];
+const COLUMN_HALF_M = 55; // zoomed-out stand-in for each building: a 110 m square column
+/** A square polygon of half-side `half` metres around a point. */
+function square(lng: number, lat: number, half: number): GeoJSON.Polygon {
+  const dLat = half / 111_320;
+  const dLng = half / (111_320 * Math.cos((lat * Math.PI) / 180));
+  return { type: "Polygon", coordinates: [[[lng - dLng, lat - dLat], [lng + dLng, lat - dLat], [lng + dLng, lat + dLat], [lng - dLng, lat + dLat], [lng - dLng, lat - dLat]]] };
+}
+
 const EMPTY: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
 
 function load(key: string): string | null {
@@ -170,7 +179,7 @@ export default function BuildingMap({
     const setHover = (slug: string | null) => {
       const prev = live.current.hover;
       if (prev === slug) return;
-      for (const src of ["dpi-footprints", "dpi-points"]) {
+      for (const src of DPI_SOURCES) {
         if (!map.getSource(src)) continue;
         if (prev) map.setFeatureState({ source: src, id: prev }, { hover: false });
         if (slug) map.setFeatureState({ source: src, id: slug }, { hover: true });
@@ -289,54 +298,41 @@ export default function BuildingMap({
 
     if (!map.getSource("dpi-footprints")) {
       map.addSource("dpi-footprints", { type: "geojson", data: EMPTY, promoteId: "slug" });
-      map.addSource("dpi-points", { type: "geojson", data: EMPTY, promoteId: "slug" });
+      map.addSource("dpi-columns", { type: "geojson", data: EMPTY, promoteId: "slug" });
       const active: ExpressionSpecification = ["any", ["boolean", ["feature-state", "hover"], false], ["boolean", ["feature-state", "selected"], false]];
       const colour: ExpressionSpecification = ["case", active, ["get", "_tint"], ["get", "_color"]];
+      // 4 m above the grey basemap tower: closer than that, the two roofs flicker as red and grey stripes.
+      // The hovered or selected building grows 20% taller (and at least 25 m) so it stands out from its neighbours.
+      const height: ExpressionSpecification = ["case", active, ["+", ["*", ["get", "height"], 1.2], 25], ["+", ["get", "height"], 4]];
       const extrusion = (id: string, approx: boolean, opacity: number) => map.addLayer({
         id,
         type: "fill-extrusion",
         source: "dpi-footprints",
-        minzoom: 12.5,
+        minzoom: 13,
         filter: ["==", ["get", "approx"], approx],
         paint: {
           "fill-extrusion-color": colour,
-          // 4 m above the grey basemap tower: closer than that, the two roofs flicker as red and grey stripes.
-          "fill-extrusion-height": ["+", ["get", "height"], 4],
+          "fill-extrusion-height": height,
           "fill-extrusion-base": 0,
-          // Fade in as the dots fade out, so zooming in turns each dot into its tower.
-          "fill-extrusion-opacity": ["interpolate", ["linear"], ["zoom"], 12.5, 0, 14, opacity],
+          // Fade in as the columns fade out, so zooming in turns each column into its real building.
+          "fill-extrusion-opacity": ["interpolate", ["linear"], ["zoom"], 13, 0, 14, opacity],
           "fill-extrusion-vertical-gradient": true,
         },
       });
       extrusion("dpi-3d", false, 0.95);
       extrusion("dpi-3d-approx", true, 0.6); // approximate positions: see-through, and said so on the card
+      // Zoomed out, footprints are too small to see: each building is a coloured column at its position instead.
       map.addLayer({
-        id: "dpi-dots",
-        type: "circle",
-        source: "dpi-points",
-        maxzoom: 15,
+        id: "dpi-columns",
+        type: "fill-extrusion",
+        source: "dpi-columns",
+        maxzoom: 14.5,
         paint: {
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 10, ["case", active, 6, 3.5], 13, ["case", active, 9, 6], 15, ["case", active, 11, 8]],
-          "circle-color": ["get", "_color"],
-          "circle-stroke-color": ["case", active, t.highlight, t.halo],
-          "circle-stroke-width": ["case", active, 2.5, 1],
-          "circle-opacity": ["interpolate", ["linear"], ["zoom"], 13.5, 1, 15, 0],
-          "circle-stroke-opacity": ["interpolate", ["linear"], ["zoom"], 13.5, 1, 15, 0],
-        },
-      });
-      // Ring on the ground under the hovered / selected building, at every zoom.
-      map.addLayer({
-        id: "dpi-ring",
-        type: "circle",
-        source: "dpi-points",
-        minzoom: 13.5,
-        paint: {
-          "circle-radius": ["interpolate", ["exponential", 2], ["zoom"], 13.5, 10, 18, 120],
-          "circle-color": "rgba(0,0,0,0)",
-          "circle-stroke-color": t.highlight,
-          "circle-stroke-width": 2.5,
-          "circle-stroke-opacity": ["case", active, 0.9, 0],
-          "circle-pitch-alignment": "map",
+          "fill-extrusion-color": colour,
+          "fill-extrusion-height": height,
+          "fill-extrusion-base": 0,
+          "fill-extrusion-opacity": ["interpolate", ["linear"], ["zoom"], 13.5, 0.95, 14.5, 0],
+          "fill-extrusion-vertical-gradient": true,
         },
       });
     }
@@ -347,12 +343,12 @@ export default function BuildingMap({
     const map = mapRef.current;
     if (!map || !styleGen || !coloured) return;
     const fp = map.getSource("dpi-footprints") as maplibregl.GeoJSONSource | undefined;
-    const pt = map.getSource("dpi-points") as maplibregl.GeoJSONSource | undefined;
-    if (!fp || !pt) return;
+    const cols = map.getSource("dpi-columns") as maplibregl.GeoJSONSource | undefined;
+    if (!fp || !cols) return;
     fp.setData({ type: "FeatureCollection", features: coloured.features } as GeoJSON.FeatureCollection);
-    pt.setData({
+    cols.setData({
       type: "FeatureCollection",
-      features: coloured.features.map((f) => ({ type: "Feature", geometry: { type: "Point", coordinates: [f.properties.lng, f.properties.lat] }, properties: f.properties })),
+      features: coloured.features.map((f) => ({ type: "Feature", geometry: square(f.properties.lng, f.properties.lat, COLUMN_HALF_M), properties: f.properties })),
     } as GeoJSON.FeatureCollection);
   }, [coloured, styleGen]);
 
@@ -362,16 +358,15 @@ export default function BuildingMap({
     const show: ExpressionSpecification = ["!", ["in", ["get", "_cls"], ["literal", hidden]]];
     for (const id of DPI_LAYERS) {
       if (!map.getLayer(id)) continue;
-      const base: FilterSpecification | null = id === "dpi-dots" ? null : ["==", ["get", "approx"], id === "dpi-3d-approx"];
+      const base: FilterSpecification | null = id === "dpi-columns" ? null : ["==", ["get", "approx"], id === "dpi-3d-approx"];
       map.setFilter(id, (base ? ["all", base, show] : show) as FilterSpecification);
     }
-    if (map.getLayer("dpi-ring")) map.setFilter("dpi-ring", show as FilterSpecification);
   }, [hidden, styleGen]);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !styleGen || !coloured) return;
-    for (const src of ["dpi-footprints", "dpi-points"]) {
+    for (const src of DPI_SOURCES) {
       if (!map.getSource(src)) continue;
       map.removeFeatureState({ source: src });
       if (selected) map.setFeatureState({ source: src, id: selected }, { selected: true });
