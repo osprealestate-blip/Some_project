@@ -77,7 +77,7 @@ export default async function Page({ params }: Params) {
 
   return (
     <main className="mx-auto max-w-5xl p-4 sm:p-6">
-      <nav className="text-xs text-[var(--muted)]"><Link className="link" href="/">Map</Link> / Communities</nav>
+      <nav className="text-xs text-[var(--muted)]"><Link className="link" href="/map">Map</Link> / Communities</nav>
       <h1 className="mt-1 text-2xl font-semibold">{title}</h1>
       {official !== title && <p className="text-sm text-[var(--muted)]">Official community name: {official} (DM {code})</p>}
       {scope && <p className="mt-2 max-w-2xl text-sm">{scope}</p>}

@@ -67,7 +67,7 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
   return (
     <main className={panel ? "p-4 sm:p-5" : "mx-auto max-w-5xl p-4 sm:p-6"}>
       <nav className="text-xs text-[var(--muted)]">
-        {!panel && <><Link className="link" href="/">Map</Link> /{" "}</>}
+        {!panel && <><Link className="link" href="/map">Map</Link> /{" "}</>}
         {b.dm_code ? <Link className="link" href={`/community/${b.dm_code}`}>{b.community}</Link> : b.community}
       </nav>
       <h1 id={panel ? "building-panel-title" : undefined} className="mt-1 text-2xl font-semibold">{b.name_en}</h1>

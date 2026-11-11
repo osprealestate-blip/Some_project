@@ -7,7 +7,7 @@ export default function NotFound() {
       <p className="mt-2 text-sm text-[var(--muted)]">
         We don&apos;t have a page for that yet. Buildings get a page once enough DLD sales are matched to them.
       </p>
-      <p className="mt-4 text-sm"><Link className="link" href="/">Back to the map</Link></p>
+      <p className="mt-4 text-sm"><Link className="link" href="/map">Back to the map</Link></p>
     </main>
   );
 }
