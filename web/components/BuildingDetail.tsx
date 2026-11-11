@@ -11,6 +11,8 @@ import RoomsTable from "@/components/RoomsTable";
 import SourceNote from "@/components/SourceNote";
 import Term from "@/components/Term";
 import KeyTerms from "@/components/KeyTerms";
+import Section from "@/components/Section";
+import DataBadge from "@/components/DataBadge";
 import Stat from "@/components/Stat";
 import ViewToggle from "@/components/ViewToggle";
 import { convertFromAed, getConversionNote } from "@/config/currency";
@@ -81,24 +83,29 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
         {b.unit_count ? ` · ${count(b.unit_count)} units` : ""}
       </p>
       {!panel && <p className="mt-1 text-sm"><Link className="link" href={`/compare?ids=${b.slug}`}>Compare with other buildings</Link></p>}
+      <DataBadge saleCount={all?.sale_count_12m} periodEnd={periodEnd} />
       <ViewToggle />
 
-      <section className={`mt-5 grid grid-cols-2 gap-3 ${panel ? "" : "md:grid-cols-4"}`}>
-        <Stat term="price-per-sq-ft" label="Median price per sq ft" value={formatPsf(all?.sale_median_psf_12m, currency)} note={`${count(all?.sale_count_12m ?? 0)} sales in 12 months`} />
-        <Stat label="Change on a year earlier" value={pct(yoy, 1, true)} note="Median per sq ft" />
-        <Stat label={rentLevel === "project" ? "Project median annual rent" : rentLevel === "estimated" ? "Median annual rent (estimated)" : "Median annual rent"} value={formatShortPrice(all?.rent_median_12m, currency)} note={offPlan ? "Not completed yet: no rent contracts" : rentLevel === "project" ? (unfinished ? "Not completed yet: this is the whole project's rent, not this tower's" : "Whole project (rents are filed per project, not per tower)") : rentLevel === "estimated" ? `Estimated: ${count(all?.rent_count_12m ?? 0)} contracts, some placed by unit size` : `${count(all?.rent_count_12m ?? 0)} contracts`} />
-        <Stat term="gross-yield" label="Gross yield (estimate)" value={pct(midYield)} note="Median across bedroom types" />
+      <section aria-label="Key figures" className={`mt-4 grid grid-cols-2 gap-3 ${panel ? "" : "sm:grid-cols-3 lg:grid-cols-5"}`}>
+        <Stat label="Median sale price" value={formatShortPrice(all?.sale_median_price_12m, currency)} note={`${count(all?.sale_count_12m ?? 0)} sales in 12 months`} meaning="Half of the apartments sold here in the last 12 months went for less than this." />
+        <Stat term="price-per-sq-ft" label="Median price per sq ft" value={formatPsf(all?.sale_median_psf_12m, currency)} meaning="Price for each square foot, so flats of different sizes can be compared." />
+        <Stat label="Change on a year earlier" value={pct(yoy, 1, true)} note="Median per sq ft" meaning="Compares the last 12 months with the 12 before. It also reflects which flats happened to sell, not only prices." />
+        <Stat label={rentLevel === "project" ? "Project median annual rent" : rentLevel === "estimated" ? "Median annual rent (estimated)" : "Median annual rent"} value={formatShortPrice(all?.rent_median_12m, currency)} note={offPlan ? "Not completed yet: no rent contracts" : rentLevel === "project" ? (unfinished ? "Not completed yet: this is the whole project's rent, not this tower's" : "Whole project (rents are filed per project, not per tower)") : rentLevel === "estimated" ? `Estimated: ${count(all?.rent_count_12m ?? 0)} contracts, some placed by unit size` : `${count(all?.rent_count_12m ?? 0)} contracts`} meaning="Typical yearly rent on contracts registered in the last 12 months." />
+        <Stat term="gross-yield" label="Gross yield (estimate)" value={pct(midYield)} note="Median across bedroom types" meaning="Yearly rent as a share of the price, before service charges and other costs. Not a promised return." />
       </section>
       <SourceNote source={`${SOURCES.dldSales}; ${SOURCES.dldRents}`} date={periodEnd} estimate>
         Apartments only; 12 months to the newest sale. Gross yield = median rent ÷ median price, same bedroom type.{conversionNote ? ` ${conversionNote}` : ""}
       </SourceNote>
       <KeyTerms />
 
-      <section className="adv-only mt-8">
-        <h2 className="text-base font-semibold">By bedroom type, last 12 months</h2>
-        <div className="mt-2"><RoomsTable rows={summaries} currency={currency} /></div>
-        <p className="mt-1 text-xs text-[var(--muted)]">* Estimate. Rows need 3 or more deals for a median.{rentLevel === "project" ? " Rents are for the whole project, because DLD rent contracts name the project, not the tower." : ""}{rentLevel === "estimated" ? " Rent contracts do not name the tower, so some were placed in this building because their exact size and bedrooms match flats sold here and in no other tower nearby. Estimated." : ""}</p>
-      </section>
+      <nav aria-label="On this page" className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+        <a className="link adv-only" href="#sale-prices">Sale prices and rentals</a>
+        <a className="link adv-only" href="#history">History</a>
+        <a className="link adv-only" href="#recent-sales">Recent transactions</a>
+        <a className="link" href="#ownership-costs">Ownership costs</a>
+        <a className="link" href="#nearby">Nearby</a>
+        <a className="link adv-only" href="#methodology">Data and methodology</a>
+      </nav>
 
       {offPlan && (
         <section className="mt-8 rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
@@ -146,13 +153,25 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
         </div>
       </section>
 
-      <section className={`mt-8 grid gap-6 ${panel ? "" : "lg:grid-cols-2"}`}>
-        <MonthlyCostCalculator rows={summaries} periodEnd={periodEnd} currency={currency} />
-        <GoldenVisaChecker rows={summaries} periodEnd={periodEnd} currency={currency} />
-      </section>
+      <Section id="sale-prices" title="Sale prices and rentals" adv>
+        <RoomsTable rows={summaries} currency={currency} />
+        <p className="mt-1 text-xs text-[var(--muted)]">* Estimate. Rows need 3 or more deals for a median.{rentLevel === "project" ? " Rents are for the whole project, because DLD rent contracts name the project, not the tower." : ""}{rentLevel === "estimated" ? " Rent contracts do not name the tower, so some were placed in this building because their exact size and bedrooms match flats sold here and in no other tower nearby. Estimated." : ""}</p>
+      </Section>
 
-      <section className="adv-only mt-8">
-        <h2 className="text-base font-semibold">Recent sales</h2>
+      <Section id="history" title="History" adv>
+        <div className={`grid gap-6 ${panel ? "" : "lg:grid-cols-2"}`}>
+          <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
+            <LineChart title="Median sale price per sq ft, by quarter" points={series.sales} unit="psf" countLabel="sales" currency={currency} />
+            <SourceNote source={SOURCES.dldSales} date={periodEnd} />
+          </div>
+          <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
+            <LineChart title={`Median annual rent, by quarter${series.rentLevel === "project" ? " (whole project)" : series.rentLevel === "estimated" ? " (estimated)" : ""}`} points={series.rents} unit="aed" countLabel="contracts" currency={currency} />
+            <SourceNote source={SOURCES.dldRents} date={periodEnd} />
+          </div>
+        </div>
+      </Section>
+
+      <Section id="recent-sales" title="Recent transactions" adv>
         {sales.length ? (
           <div className="mt-2 overflow-x-auto">
             <table className="w-full whitespace-nowrap text-sm tabular-nums [&_td]:pe-3 [&_th]:pe-3">
@@ -182,27 +201,32 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
           </div>
         ) : <p className="mt-2 text-sm text-[var(--muted)]">No counted sales.</p>}
         <SourceNote source={SOURCES.dldSales} date={periodEnd}>Market fields only; unit numbers and parties are never shown.</SourceNote>
-      </section>
+      </Section>
 
-      <section className={`mt-8 grid gap-6 ${panel ? "" : "lg:grid-cols-[1fr_1fr]"}`}>
-        <div>
-          <h2 className="text-base font-semibold">Nearby</h2>
-          <div className="mt-2"><NearbyPanel places={places} placed={placed} /></div>
+      <Section id="ownership-costs" title="Ownership costs">
+        <div className={`grid gap-6 ${panel ? "" : "lg:grid-cols-2"}`}>
+          <MonthlyCostCalculator rows={summaries} periodEnd={periodEnd} currency={currency} />
+          <GoldenVisaChecker rows={summaries} periodEnd={periodEnd} currency={currency} />
         </div>
-        {/* In the panel the big map behind already shows the building, highlighted. */}
-        {!panel && (
-          <div className="h-72 overflow-hidden rounded-lg border border-[var(--border)] lg:h-auto lg:min-h-72">
-            {placed ? <BuildingMap focus={{ lng: b.lng!, lat: b.lat! }} currency={currency} controls="legend" /> : <div className="flex h-full items-center justify-center p-4 text-sm text-[var(--muted)]">Map position not confirmed yet.</div>}
+      </Section>
+
+      <Section id="nearby" title="Nearby">
+        <div className={`grid gap-6 ${panel ? "" : "lg:grid-cols-[1fr_1fr]"}`}>
+          <NearbyPanel places={places} placed={placed} />
+          {/* In the panel the big map behind already shows the building, highlighted. */}
+          {!panel && (
+            <div className="h-72 overflow-hidden rounded-lg border border-[var(--border)] lg:h-auto lg:min-h-72">
+              {placed ? <BuildingMap focus={{ lng: b.lng!, lat: b.lat! }} currency={currency} controls="legend" /> : <div className="flex h-full items-center justify-center p-4 text-sm text-[var(--muted)]">Map position not confirmed yet.</div>}
+            </div>
+          )}
+        </div>
+        {placed && (
+          <div className="mt-6">
+            <h3 className="text-sm font-semibold">How far to key places</h3>
+            <div className="mt-2"><KeyDistances lng={b.lng!} lat={b.lat!} places={places} /></div>
           </div>
         )}
-      </section>
-
-      {placed && (
-        <section className="mt-8">
-          <h2 className="text-base font-semibold">How far to key places</h2>
-          <div className="mt-2"><KeyDistances lng={b.lng!} lat={b.lat!} places={places} /></div>
-        </section>
-      )}
+      </Section>
 
       <section className={`mt-8 grid gap-3 ${panel ? "" : "sm:grid-cols-2"}`}>
         <Link href={`/tools/fair-price?building=${b.slug}`} className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4 hover:border-[var(--accent)]">
@@ -224,14 +248,14 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
         </section>
       )}
 
-      <section className="adv-only mt-8 text-xs text-[var(--muted)]">
-        <h2 className="text-sm font-semibold text-[var(--fg)]">About this page</h2>
-        <p className="mt-1">
+      <Section id="methodology" title="Data and methodology" adv open={false}>
+        <p className="text-xs text-[var(--muted)]">
           {METHOD_TEXT[b.match_method ?? "name"] ?? METHOD_TEXT.name}. Names seen in DLD files: {b.aliases.slice(0, 6).join(", ")}.
           {b.geom_source ? ` ${POSITION_TEXT[b.geom_source] ?? ""}` : " Not on the map yet."}
-          {" "}Something wrong? Building pages are hand-checked first in Dubai Marina, JVC and Business Bay.
+          {" "}Something wrong? Building pages are hand-checked first in Dubai Marina, JVC and Business Bay.{" "}
+          <Link className="link" href="/how-it-works">How the figures are made</Link>.
         </p>
-      </section>
+      </Section>
     </main>
   );
 }
