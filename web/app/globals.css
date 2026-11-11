@@ -44,6 +44,7 @@ a.link:hover { text-decoration-thickness: 2px; }
   font-size: 12px;
 }
 .dpi-popup .maplibregl-popup-tip { display: none; }
+.dpi-popup-hover { pointer-events: none; }
 .dpi-popup .maplibregl-popup-close-button { color: var(--muted); font-size: 18px; padding: 0 6px; }
 .dpi-card-title { font-weight: 600; font-size: 14px; line-height: 1.2; padding-inline-end: 14px; }
 .dpi-card-sub { color: var(--muted); margin-top: 1px; }
