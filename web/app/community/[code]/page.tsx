@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import fs from "node:fs/promises";
 import path from "node:path";
-import BuildingMap from "@/components/BuildingMap";
+import BuildingMap from "@/components/LazyBuildingMap";
 import LineChart from "@/components/LineChart";
 import NoData from "@/components/NoData";
 import RoomsTable from "@/components/RoomsTable";
