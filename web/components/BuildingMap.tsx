@@ -334,6 +334,10 @@ export default function BuildingMap({
         source: tileSource,
         "source-layer": "building",
         minzoom: 13,
+        // Same rule as the basemap's own 3D layer: a whole-complex outline (hide_3d) is skipped, because its separate
+        // parts are drawn instead. Without this the outline is drawn on top of its towers, and hovering any one of them
+        // lifted the whole outline: a slab over its neighbours.
+        filter: ["!", ["has", "hide_3d"]],
         paint: {
           "fill-extrusion-color": t.baseBuilding,
           "fill-extrusion-height": ["coalesce", ["get", "render_height"], 4],
