@@ -4,8 +4,8 @@ import { INTENT_NAV, MAIN_NAV, isActive } from "./nav";
 const item = (href: string) => MAIN_NAV.find((n) => n.href === href)!;
 
 describe("nav", () => {
-  it("has the five main links in order", () => {
-    expect(MAIN_NAV.map((n) => n.label)).toEqual(["Explore Map", "Communities", "Buildings", "Property Tools", "How It Works"]);
+  it("has the six main links in order", () => {
+    expect(MAIN_NAV.map((n) => n.label)).toEqual(["Explore Map", "Communities", "Buildings", "Off-plan", "Property Tools", "How It Works"]);
   });
   it("links the four guided pages", () => {
     expect(INTENT_NAV.map((n) => n.href)).toEqual(["/buy", "/invest", "/own", "/rent"]);

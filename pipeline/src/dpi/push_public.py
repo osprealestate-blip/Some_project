@@ -17,6 +17,8 @@ PLAN: list[tuple[str, str]] = [
     ("projects", "community_id in (select id from communities where dm_code = any(%(codes)s))"),
     ("buildings", "community_id in (select id from communities where dm_code = any(%(codes)s))"),
     ("building_aliases", "community_id in (select id from communities where dm_code = any(%(codes)s))"),
+    ("building_images", "approved and building_id in (select b.id from buildings b join communities c on c.id = b.community_id "
+                        "where c.dm_code = any(%(codes)s))"),
     ("building_summary", "building_id in (select b.id from buildings b join communities c on c.id = b.community_id "
                          "where c.dm_code = any(%(codes)s))"),
     ("community_summary", "true"),

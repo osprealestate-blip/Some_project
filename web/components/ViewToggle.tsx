@@ -10,7 +10,7 @@ function current(): View {
 }
 
 /**
- * Simple / Advanced switch for building and community pages. Simple is the default. It only hides or shows blocks
+ * Homeowner / Investor switch (stored as simple / advanced) for building and community pages. Simple is the default. It only hides or shows blocks
  * marked with the `adv-only` class (see globals.css); no figure is removed from the page, and none is recalculated.
  * The choice is remembered in this browser only.
  */
@@ -43,12 +43,12 @@ export default function ViewToggle() {
 
   return (
     <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
-      <div role="group" aria-label="How much detail to show" className="inline-flex overflow-hidden rounded-lg border border-[var(--border)]">
-        {btn("simple", "Simple")}
-        {btn("advanced", "Advanced")}
+      <div role="group" aria-label="Who is reading: homeowner or investor" className="inline-flex overflow-hidden rounded-lg border border-[var(--border)]">
+        {btn("simple", "Homeowner")}
+        {btn("advanced", "Investor")}
       </div>
       <p className="text-xs text-[var(--muted)]">
-        {view === "simple" ? "Advanced adds bedroom types, quarterly charts, recent sales and data notes." : "Showing every figure and the data notes."}
+        {view === "simple" ? "Homeowner view: the key figures. Investor view adds bedroom types, yields, quarterly charts, recent sales and data notes." : "Investor view: every figure, quarterly charts and the data notes."}
       </p>
     </div>
   );

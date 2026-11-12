@@ -36,6 +36,19 @@ def main(argv: list[str] | None = None) -> int:
     pb.add_argument("--nominatim", action="store_true",
                     help="look up still-unplaced towers by name in OpenStreetMap's search (1 request a second, cached)")
     pb.add_argument("--nominatim-cache", type=Path, default=Path("data/clean/nominatim_cache.json"))
+    ip = sub.add_parser("import-projects", help="DLD Projects file: developer, status, % completed, dates (off-plan facts)")
+    ip.add_argument("path", type=Path)
+    im = sub.add_parser("import-images", help="Bulk building photos from a manifest CSV (stored hidden until approved)")
+    im.add_argument("manifest", type=Path)
+    im.add_argument("--approve", action="store_true", help="make the imported images visible straight away")
+    im.add_argument("--dry-run", action="store_true", help="check every row, store nothing, upload nothing")
+    ap = sub.add_parser("approve-images", help="Make stored images visible (all pending, or only the building slugs given)")
+    ap.add_argument("slugs", nargs="*")
+    fc = sub.add_parser("find-commons-images", help="List free-licence Wikimedia Commons photos for busy buildings, to review")
+    fc.add_argument("--out", type=Path, default=Path("data/clean/commons_candidates.csv"))
+    fc.add_argument("--communities", default="392,681,346")
+    fc.add_argument("--per-building", type=int, default=3)
+    fc.add_argument("--limit", type=int, default=100, help="how many buildings to look up (busiest first)")
     sub.add_parser("compute-metrics", help="Trailing 12-month medians, yields and monthly series")
     sub.add_parser("rent-backtest", help="How often rents placed by unit size land in the right tower (read-only)")
     lp = sub.add_parser("load-pois", help="Nearby places: KHDA schools, DHA facilities, OpenStreetMap")
@@ -113,6 +126,34 @@ def main(argv: list[str] | None = None) -> int:
                     args.save_osm.write_text(json.dumps(data), encoding="utf-8")
             lookup = osm.Nominatim(args.nominatim_cache) if args.nominatim else None
             print(osm.place(conn, data, args.manual, codes, lookup).render())
+    elif args.cmd == "import-projects":
+        from dpi.db import connect
+        from dpi.importers import projects
+
+        with connect() as conn:
+            print(projects.import_file(conn, args.path).render())
+    elif args.cmd == "import-images":
+        from dpi import images
+        from dpi.db import connect
+
+        with connect() as conn:
+            print(images.import_manifest(conn, args.manifest, args.approve, args.dry_run).render())
+    elif args.cmd == "approve-images":
+        from dpi import images
+        from dpi.db import connect
+
+        with connect() as conn:
+            print(f"approved {images.approve(conn, args.slugs or None)} images")
+    elif args.cmd == "find-commons-images":
+        from dpi import images
+        from dpi.db import connect
+
+        codes = [c.strip() for c in args.communities.split(",") if c.strip()]
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        with connect() as conn:
+            n = images.write_commons_manifest(conn, args.out, codes, args.per_building, args.limit)
+        print(f"{n} candidate photos written to {args.out}. Open it, delete rows that do not show the building, "
+              f"then run: dpi import-images {args.out} --approve")
     elif args.cmd == "compute-metrics":
         from dpi.db import connect
         from dpi.metrics import compute

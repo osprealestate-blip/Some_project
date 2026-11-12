@@ -27,6 +27,9 @@
   }
 }
 html, body { height: 100%; }
+html, body { overflow-x: clip; }
+/* iOS Safari zooms the page when a field under 16px is focused, which pushed panels off screen. */
+@media (pointer: coarse) { input, select, textarea { font-size: 16px; } }
 body { background: var(--bg); color: var(--fg); }
 
 a.link { color: var(--accent); }

@@ -64,7 +64,7 @@ export default function SearchBox({ autoFocus = false, placeholder = "Search a b
             else if (q.trim()) router.push(`/search?q=${encodeURIComponent(q.trim())}`);
           } else if (e.key === "Escape") setOpen(false);
         }}
-        className="w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-3 py-1.5 text-sm outline-none focus:border-[var(--accent)]"
+        className="w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-3 py-1.5 text-base outline-none sm:text-sm focus:border-[var(--accent)]"
       />
       {open && hits.length > 0 && (
         <ul id={listId} role="listbox" className="absolute inset-x-0 top-full z-30 mt-1 max-h-80 overflow-auto rounded-md border border-[var(--border)] bg-[var(--panel)] py-1 text-sm shadow-lg">

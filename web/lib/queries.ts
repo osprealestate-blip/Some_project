@@ -411,3 +411,62 @@ export async function buildingSummariesBySlug(slugs: string[]): Promise<{ buildi
   );
   return found.filter((x): x is { building: Building; summaries: Summary[] } => x !== null);
 }
+
+// ---------- photos ----------
+
+export type BuildingImage = {
+  url: string; source: "own" | "wikimedia" | "mapillary" | "map"; author: string | null; licence: string | null;
+  licence_url: string | null; source_url: string | null; title: string | null; is_primary: boolean;
+};
+
+/** Approved photos only. Returns none when the table is not there yet (migration 0006 not applied). */
+export async function buildingImages(buildingId: number): Promise<BuildingImage[]> {
+  try {
+    return await query<BuildingImage>(
+      `select url, source, author, licence, licence_url, source_url, title, is_primary
+         from building_images where building_id = $1 and approved order by is_primary desc, sort, id limit 8`,
+      [buildingId],
+    );
+  } catch {
+    return [];
+  }
+}
+
+// ---------- off-plan ----------
+
+export type OffPlanProject = {
+  slug: string; name_en: string; community: string; dm_code: string | null;
+  sales_12m: number; median_psf: number | null; median_price: number | null;
+  first_sale: string; last_sale: string;
+  developer: string | null; dld_status: string | null; percent_completed: number | null; completion_date: string | null;
+};
+
+/** Buildings with off-plan apartment sales in the 12 months to the newest sale, busiest first. Developer, status and
+ *  % complete come from the DLD Projects file when it has been loaded (`dpi import-projects`); otherwise they are null. */
+export async function offPlanProjects(dmCode: string | null, limit = 60): Promise<OffPlanProject[]> {
+  const base = (extra: string, join: string) => `
+    with newest as (select max(txn_date) as d from transactions)
+    select b.slug, b.name_en, coalesce(c.name_common, c.name_official) as community, c.dm_code,
+           count(*)::int as sales_12m,
+           percentile_cont(0.5) within group (order by t.price_psf)::float8 as median_psf,
+           percentile_cont(0.5) within group (order by t.price)::float8 as median_price,
+           min(t.txn_date)::text as first_sale, max(t.txn_date)::text as last_sale ${extra}
+      from transactions t
+      join buildings b on b.id = t.building_id and b.match_confidence >= $1
+      join communities c on c.id = b.community_id ${join}
+     where t.off_plan is true and t.excluded is null and t.property_type = any($2)
+       and t.txn_date > (select d from newest) - interval '12 months'
+       and ($3::text is null or c.dm_code = $3)
+     group by b.slug, b.name_en, c.name_common, c.name_official, c.dm_code ${extra ? ", p.developer_name, p.dld_status, p.percent_completed, p.completion_date" : ""}
+    having count(*) >= 3
+     order by count(*) desc limit $4`;
+  const args = [MIN_CONFIDENCE, SALE_TYPES, dmCode, limit];
+  try {
+    return await query<OffPlanProject>(
+      base(", p.developer_name as developer, p.dld_status, p.percent_completed::float8 as percent_completed, p.completion_date::text as completion_date",
+        "left join projects p on p.id = b.project_id"), args);
+  } catch {
+    const rows = await query<OffPlanProject>(base("", ""), args);
+    return rows.map((r) => ({ ...r, developer: null, dld_status: null, percent_completed: null, completion_date: null }));
+  }
+}
