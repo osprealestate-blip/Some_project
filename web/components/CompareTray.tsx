@@ -9,7 +9,6 @@ import { km } from "@/lib/facilities";
 import { count, day, formatPsf, formatShortPrice, pct } from "@/lib/format";
 import { DISCLAIMER } from "@/lib/sources";
 
-export const MAX_COMPARE = 3;
 
 type Props = { slugs: string[]; names: Record<string, string>; currency: Currency; onRemove: (slug: string) => void; onClear: () => void; onShow: (slug: string) => void };
 

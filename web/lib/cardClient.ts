@@ -13,3 +13,17 @@ export function fetchCard(slug: string): Promise<CardData> {
   }
   return p;
 }
+
+export type SeriesData = { sales: { period: string; value: number | null; count: number }[]; rents: { period: string; value: number | null; count: number }[]; rentLevel: string | null };
+const seriesCache = new Map<string, Promise<SeriesData>>();
+
+/** Charts load only when a chart tab is opened, so the card itself stays light. */
+export function fetchSeries(slug: string): Promise<SeriesData> {
+  let p = seriesCache.get(slug);
+  if (!p) {
+    p = fetch(`/api/building-series/${encodeURIComponent(slug)}`).then((r) => (r.ok ? (r.json() as Promise<SeriesData>) : Promise.reject(new Error("series"))));
+    p.catch(() => seriesCache.delete(slug));
+    seriesCache.set(slug, p);
+  }
+  return p;
+}

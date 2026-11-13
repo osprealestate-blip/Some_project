@@ -12,9 +12,14 @@ import {
 } from "@/lib/mapMetrics";
 import { DUBAI_PITCH, LAUNCH_BOUNDS, MAP_ATTRIBUTION, webglAvailable } from "@/lib/mapStyle";
 import { DEFAULT_THEME, THEMES, parseTheme, type ThemeId } from "@/lib/mapThemes";
-import BuildingCard from "./BuildingCard";
-import ForYouPanel from "./ForYouPanel";
-import CompareTray, { MAX_COMPARE } from "./CompareTray";
+import dynamic from "next/dynamic";
+import { fetchCard } from "@/lib/cardClient";
+import { MAP_COMPARE_MAX as MAX_COMPARE } from "@/lib/mapCompare";
+
+// The card, panel, compare table and For you list load when first used, not with the map.
+const ForYouPanel = dynamic(() => import("./ForYouPanel"));
+const CompareTray = dynamic(() => import("./CompareTray"));
+const BuildingCard = dynamic(() => import("./BuildingCard"));
 import { FACILITIES, iconSvg, km, nearbyLines, type FacilityId, type NearestFacility } from "@/lib/facilities";
 import MapControls from "./MapControls";
 
@@ -38,7 +43,10 @@ const STORE = { settings: "dpi.map.settings", theme: "dpi.map.theme" };
 const CAMERA_KEY = "dpi.map.camera"; // this tab only: where the map was, so Back to map returns there
 const SELECTED_ATTR = "data-building-selected";
 const CYAN = "#22d3ee";
-const DPI_LAYERS = ["dpi-3d", "dpi-3d-approx", "dpi-columns"];
+const DPI_LAYERS = ["dpi-3d", "dpi-3d-approx", "dpi-columns", "dpi-columns-minor"];
+/** Adaptive density: zoomed far out only buildings with this many sales (12 months) get a column, so the city stays readable. */
+const BUSY_SALES = 10;
+const MINOR_FROM_ZOOM = 12.8;
 const DPI_SOURCES = ["dpi-footprints", "dpi-columns"];
 const COLUMN_HALF_M = 55; // zoomed-out stand-in for each building: a 110 m square column
 /** A square polygon of half-side `half` metres around a point. */
@@ -163,6 +171,7 @@ export default function BuildingMap({
   const [facilities, setFacilities] = useState<NearestFacility[]>([]);
   const [compare, setCompare] = useState<string[]>([]);
   const [forYou, setForYou] = useState(false);
+  const [thinned, setThinned] = useState(false); // zoomed out far enough that only busy buildings are drawn
 
   // Everything the map event handlers need, current without re-binding them.
   const live = useRef({ settings, currency, theme, selected, hover: null as string | null, baseKey: null as string | null, restored: false });
@@ -239,6 +248,10 @@ export default function BuildingMap({
     map.addControl(new maplibregl.AttributionControl({ compact: true, customAttribution: MAP_ATTRIBUTION }));
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "bottom-right");
     map.on("style.load", () => setStyleGen((g) => g + 1));
+    // Says so when the smaller buildings are left out at this zoom.
+    const syncZoom = () => setThinned(map.getZoom() < MINOR_FROM_ZOOM);
+    map.on("zoom", syncZoom);
+    map.on("load", syncZoom);
     if (cardMode) {
       map.on("moveend", () => {
         const c = map.getCenter();
@@ -281,6 +294,7 @@ export default function BuildingMap({
         : EMPTY);
     };
     let leaveTimer: ReturnType<typeof setTimeout> | null = null;
+    let prefetchTimer: ReturnType<typeof setTimeout> | null = null;
     const clearHover = () => {
       leaveTimer = null;
       setHover(null);
@@ -300,6 +314,8 @@ export default function BuildingMap({
         if (live.current.hover !== p.slug) {
           setHover(p.slug);
           if (p.slug === live.current.selected) popup.remove(); else show(p, false);
+          // Light preview: fetch the card's figures while the pointer rests on a building, so the click opens it at once.
+          if (cardMode) { const slug = p.slug; if (prefetchTimer) clearTimeout(prefetchTimer); prefetchTimer = setTimeout(() => { fetchCard(slug).catch(() => {}); }, 200); }
         }
         return;
       }
@@ -469,19 +485,22 @@ export default function BuildingMap({
       extrusion("dpi-3d", false, 0.95);
       extrusion("dpi-3d-approx", true, 0.6); // approximate positions: see-through, and said so on the card
       // Zoomed out, footprints are too small to see: each building is a coloured column at its position instead.
-      map.addLayer({
-        id: "dpi-columns",
-        type: "fill-extrusion",
-        source: "dpi-columns",
-        maxzoom: 14.5,
-        paint: {
-          "fill-extrusion-color": colour,
-          "fill-extrusion-height": height,
-          "fill-extrusion-base": 0,
-          "fill-extrusion-opacity": ["interpolate", ["linear"], ["zoom"], 13.5, 0.95, 14.5, 0],
-          "fill-extrusion-vertical-gradient": true,
-        },
-      });
+      for (const [id, minzoom] of [["dpi-columns", 0], ["dpi-columns-minor", MINOR_FROM_ZOOM]] as const) {
+        map.addLayer({
+          id,
+          type: "fill-extrusion",
+          source: "dpi-columns",
+          minzoom,
+          maxzoom: 14.5,
+          paint: {
+            "fill-extrusion-color": colour,
+            "fill-extrusion-height": height,
+            "fill-extrusion-base": 0,
+            "fill-extrusion-opacity": ["interpolate", ["linear"], ["zoom"], 13.5, 0.95, 14.5, 0],
+            "fill-extrusion-vertical-gradient": true,
+          },
+        });
+      }
     }
 
     // Glow round the selected building's footprint: a wide soft line under a crisp one.
@@ -526,7 +545,9 @@ export default function BuildingMap({
     const show: ExpressionSpecification = ["!", ["in", ["get", "_cls"], ["literal", hidden]]];
     for (const id of DPI_LAYERS) {
       if (!map.getLayer(id)) continue;
-      const base: FilterSpecification | null = id === "dpi-columns" ? null : ["==", ["get", "approx"], id === "dpi-3d-approx"];
+      const base: FilterSpecification | null = id === "dpi-columns" ? [">=", ["get", "sales"], BUSY_SALES]
+        : id === "dpi-columns-minor" ? ["<", ["get", "sales"], BUSY_SALES]
+        : ["==", ["get", "approx"], id === "dpi-3d-approx"];
       map.setFilter(id, (base ? ["all", base, show] : show) as FilterSpecification);
     }
   }, [hidden, styleGen]);
@@ -702,6 +723,11 @@ export default function BuildingMap({
       )}
       {cardMode && forYou && (
         <ForYouPanel features={raw?.features.map((f) => f.properties) ?? []} currency={currency} periodEnd={raw?.meta?.periodEnd ?? null} onPick={(slug) => select(slug)} onClose={() => setForYou(false)} />
+      )}
+      {cardMode && thinned && !selected && (
+        <p role="status" className="pointer-events-none absolute inset-x-0 bottom-[4.75rem] z-10 flex justify-center px-2 md:bottom-[4.5rem]">
+          <span className="rounded-full bg-[var(--panel)]/95 px-3 py-1 text-xs text-[var(--muted)] shadow-md backdrop-blur">Showing the busiest buildings (10+ sales). Zoom in to see all.</span>
+        </p>
       )}
       {cardMode && legend && (
         <div role="group" aria-label="Colour the map by" className={`absolute inset-x-0 bottom-9 z-10 flex justify-center px-2 ${selected ? "max-md:hidden" : ""} ${compare.length ? "md:bottom-20" : ""}`}>

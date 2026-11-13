@@ -4,12 +4,14 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Currency } from "@/config/currency";
 import type { CardData } from "@/lib/cardData";
-import { fetchCard } from "@/lib/cardClient";
+import { fetchCard, fetchSeries, type SeriesData } from "@/lib/cardClient";
 import type { FacilityId, NearestFacility } from "@/lib/facilities";
 import { count, day, formatMoney, formatPsf, formatShortPrice, pct, roomsLabel, sqft } from "@/lib/format";
 import type { MapBuildingProps } from "@/lib/mapMetrics";
 import { DISCLAIMER, SOURCES } from "@/lib/sources";
+import CompareBars from "./CompareBars";
 import DataBadge from "./DataBadge";
+import LineChart from "./LineChart";
 import FacilityChips from "./FacilityChips";
 import NearbyPanel from "./NearbyPanel";
 import SaveMenu from "./SaveMenu";
@@ -70,6 +72,8 @@ export default function BuildingCard({ slug, view, currency, features, onClose, 
   const [full, setFull] = useState(false); // phone only: the sheet at full height
   const [drag, setDrag] = useState<number | null>(null);
   const [shared, setShared] = useState("");
+  const [series, setSeries] = useState<SeriesData | null>(null);
+  const [seriesFailed, setSeriesFailed] = useState(false);
   const closeRef = useRef<HTMLButtonElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const startY = useRef(0);
@@ -86,6 +90,13 @@ export default function BuildingCard({ slug, view, currency, features, onClose, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
 
+  useEffect(() => { setSeries(null); setSeriesFailed(false); }, [slug]);
+  useEffect(() => {
+    if ((tab !== "prices" && tab !== "rent") || series || seriesFailed) return;
+    let live = true;
+    fetchSeries(slug).then((d) => { if (live) setSeries(d); }).catch(() => { if (live) setSeriesFailed(true); });
+    return () => { live = false; };
+  }, [tab, slug, series, seriesFailed]);
   useEffect(() => { if (view === "card") setFull(false); }, [view]);
   useEffect(() => { bodyRef.current?.scrollTo({ top: 0 }); }, [tab, slug]);
 
@@ -221,15 +232,23 @@ export default function BuildingCard({ slug, view, currency, features, onClose, 
         <button ref={showPanel ? closeRef : undefined} type="button" onClick={onClose} aria-label="Close building details" title="Close"
           className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/10 hover:bg-white/20">✕</button>
       </div>
-      <div role="tablist" aria-label="Building sections" className="flex gap-1 overflow-x-auto border-b border-white/10 px-3 py-1.5 md:px-4">
+      <div role="tablist" aria-label="Building sections" className="flex gap-1 overflow-x-auto border-b border-white/10 px-3 py-1.5 md:px-4"
+        onKeyDown={(e) => {
+          const i = TABS.findIndex(([id]) => id === tab);
+          const n = e.key === "ArrowRight" ? (i + 1) % TABS.length : e.key === "ArrowLeft" ? (i + TABS.length - 1) % TABS.length : e.key === "Home" ? 0 : e.key === "End" ? TABS.length - 1 : -1;
+          if (n < 0) return;
+          e.preventDefault();
+          chooseTab(TABS[n][0]);
+          (e.currentTarget.querySelectorAll<HTMLElement>('[role="tab"]')[n])?.focus();
+        }}>
         {TABS.map(([id, label]) => (
-          <button key={id} role="tab" aria-selected={tab === id} type="button" onClick={() => chooseTab(id)}
+          <button key={id} role="tab" id={`tab-${id}`} aria-controls="building-tabpanel" tabIndex={tab === id ? 0 : -1} aria-selected={tab === id} type="button" onClick={() => chooseTab(id)}
             className={`shrink-0 rounded-full px-3 py-1.5 text-[13px] ${tab === id ? "bg-cyan-300 font-semibold text-slate-900" : "text-[var(--fg)] hover:bg-white/10"}`}>
             {label}
           </button>
         ))}
       </div>
-      <div ref={bodyRef} role="tabpanel" className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 text-sm md:p-5">
+      <div ref={bodyRef} id="building-tabpanel" role="tabpanel" aria-labelledby={`tab-${tab}`} key={tab} className="dpi-tab-in min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 text-sm md:p-5">
         {state === "loading" && <div className="space-y-3"><div className="h-16 animate-pulse rounded-lg bg-white/[0.06]" /><div className="h-40 animate-pulse rounded-lg bg-white/[0.06]" /></div>}
         {state === "error" && (
           <p>Could not load this building. <Link className="link" href={`/building/${encodeURIComponent(slug)}`}>Open the full page</Link> instead.</p>
@@ -244,6 +263,10 @@ export default function BuildingCard({ slug, view, currency, features, onClose, 
               <Tile label={data.summary.rentLevel === "project" ? "Annual rent (whole project)" : "Median annual rent"} value={formatShortPrice(data.summary.rent, currency)} note={`${count(data.summary.rentCount)} contracts`} />
               <Tile label="Change on a year earlier" value={pct(data.summary.change, 1, true)} note="Median per sq ft" />
               <Tile label="Sales, 12 months" value={count(data.summary.sales)} />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <CompareBars label="Price per sq ft" building={data.summary.psf} community={data.benchmark.psf} communityName={data.community} format={(n) => formatMoney(n, currency)} />
+              <CompareBars label="Gross yield (est.)" building={data.summary.yield} community={data.benchmark.yield} communityName={data.community} format={(n) => pct(n)} />
             </div>
             <DataBadge saleCount={data.summary.sales} periodEnd={data.periodEnd} />
             <div>
@@ -263,7 +286,11 @@ export default function BuildingCard({ slug, view, currency, features, onClose, 
                 <tr key={r.rooms} className="border-b border-white/10"><td>{roomsLabel(r.rooms)}</td><td className="text-end">{count(r.sale_count_12m)}</td><td className="text-end">{r.sale_count_12m >= 3 ? formatShortPrice(r.sale_median_price_12m, currency) : "–"}</td><td className="text-end">{r.sale_count_12m >= 3 ? formatPsf(r.sale_median_psf_12m, currency) : "–"}</td></tr>
               ))}</tbody>
             </table></div>
-            <p className="mt-1 text-xs text-[var(--muted)]">Rows with fewer than 3 deals show no median. Charts by quarter are on the full page.</p>
+            <div className="mt-4 rounded-lg border border-white/10 bg-white/[0.04] p-3">
+              {series ? <LineChart title="Median sale price per sq ft, by quarter" points={series.sales} unit="psf" countLabel="sales" currency={currency} />
+                : seriesFailed ? <p className="text-[var(--muted)]">The chart could not be loaded.</p> : <div className="h-40 animate-pulse rounded bg-white/[0.06]" role="status" aria-label="Loading chart" />}
+            </div>
+            <p className="mt-1 text-xs text-[var(--muted)]">Rows with fewer than 3 deals show no median; quarters with fewer than 3 sales are left blank in the chart.</p>
             <SourceNote source={SOURCES.dldSales} date={data.periodEnd} />
           </div>
         )}
@@ -277,6 +304,10 @@ export default function BuildingCard({ slug, view, currency, features, onClose, 
               ))}</tbody>
             </table></div>
             {!data.rows.some((r) => r.rooms >= 0 && r.rent_count_12m > 0) && <p className="text-[var(--muted)]">No rent contracts counted for this building yet.</p>}
+            <div className="mt-4 rounded-lg border border-white/10 bg-white/[0.04] p-3">
+              {series ? <LineChart title={`Median annual rent, by quarter${series.rentLevel === "project" ? " (whole project)" : series.rentLevel === "estimated" ? " (estimated)" : ""}`} points={series.rents} unit="aed" countLabel="contracts" currency={currency} />
+                : seriesFailed ? <p className="text-[var(--muted)]">The chart could not be loaded.</p> : <div className="h-40 animate-pulse rounded bg-white/[0.06]" role="status" aria-label="Loading chart" />}
+            </div>
             <p className="mt-1 text-xs text-[var(--muted)]">* Estimate: yearly rent as a share of price, before service charges.{data.summary.rentLevel === "project" ? " Rents are for the whole project: DLD rent contracts name the project, not the tower." : ""}</p>
             <SourceNote source={SOURCES.dldRents} date={data.periodEnd} estimate />
           </div>
@@ -343,9 +374,19 @@ export default function BuildingCard({ slug, view, currency, features, onClose, 
         role="dialog"
         aria-modal={showPanel && desktop}
         aria-labelledby={showPanel ? "building-panel-title" : "building-card-title"}
-        className={`dpi-glass fixed z-40 overflow-hidden ${drag !== null ? "is-dragging" : ""}`}
+        className={`dpi-glass dpi-enter fixed z-40 overflow-hidden ${drag !== null ? "is-dragging" : ""}`}
         style={style}
+        onKeyDown={(e) => {
+          // The desktop panel is modal: keep Tab inside it.
+          if (e.key !== "Tab" || !showPanel || !desktop) return;
+          const items = [...e.currentTarget.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], input, [tabindex="0"]')].filter((el) => !el.closest("[inert]") && el.tabIndex >= 0);
+          if (!items.length) return;
+          const first = items[0], last = items[items.length - 1];
+          if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+          else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+        }}
       >
+        <div className="sr-only" role="status" aria-live="polite">{name} selected{showPanel ? ", details open" : ""}</div>
         {!desktop && (
           <div role="button" tabIndex={0} aria-label="Resize building sheet" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={() => setDrag(null)}
             onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (sheet === "compact") onView("panel"); else if (sheet === "expanded") setFull(true); else setFull(false); } }}

@@ -123,3 +123,9 @@ html[data-building-selected] .map-intro { display: none; }
   color: #fff; background: rgb(12 18 32 / 0.88); border: 1px solid var(--c); box-shadow: 0 0 10px var(--c);
 }
 @media (max-width: 767px) { html[data-compare-active] .map-intro { display: none; } }
+
+/* Entrance and tab animations (Phase 4). Removed for people who ask for less motion by the rule above. */
+@keyframes dpi-rise { from { opacity: 0; transform: translateY(14px) scale(0.98); } to { opacity: 1; transform: none; } }
+.dpi-enter { animation: dpi-rise 0.32s cubic-bezier(.2,.8,.2,1); }
+@keyframes dpi-tab { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.dpi-tab-in { animation: dpi-tab 0.2s ease; }
