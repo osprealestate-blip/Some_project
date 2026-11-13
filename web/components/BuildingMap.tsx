@@ -320,11 +320,32 @@ export default function BuildingMap({
     // One handler for the whole map (not one per layer). Our priced buildings sit in three overlapping layers (3D,
     // approximate, zoomed-out columns); per-layer enter/leave events fired against each other as the pointer moved,
     // which flickered the cursor and the card. Here the pointer is hit-tested once per move and the result applied once.
-    const setBaseHover = (f: maplibregl.MapGeoJSONFeature | null) => {
+    // A grey vector-tile feature can be a merged block (several buildings joined into one MultiPolygon, or a long
+    // complex), and lifting all of it made a whole cluster of neighbours rise at once. So only the single ring under the
+    // pointer is lifted, and only when it is the size of one building. Anything bigger is left alone.
+    const ringHas = (ring: number[][], x: number, y: number) => {
+      let inside = false;
+      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const [xi, yi] = ring[i], [xj, yj] = ring[j];
+        if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+      }
+      return inside;
+    };
+    const oneBuilding = (g: GeoJSON.Geometry, at: maplibregl.LngLat): GeoJSON.Polygon | null => {
+      let rings: number[][][] | null = null;
+      if (g.type === "Polygon") rings = g.coordinates as number[][][];
+      else if (g.type === "MultiPolygon") rings = ((g.coordinates as number[][][][]).find((poly) => ringHas(poly[0], at.lng, at.lat)) ?? null);
+      if (!rings || !rings[0]) return null;
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      for (const [x, y] of rings[0]) { if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; }
+      if (maxX - minX > 0.0012 || maxY - minY > 0.0012) return null; // about 130 m: a block, not one building
+      return { type: "Polygon", coordinates: rings };
+    };
+    const setBaseHover = (f: maplibregl.MapGeoJSONFeature | null, at?: maplibregl.LngLat) => {
       const src = map.getSource("base-hover") as maplibregl.GeoJSONSource | undefined;
       if (!src) return;
-      const g = f ? (f.geometry as GeoJSON.Geometry) : null;
-      const key = f ? `${f.id ?? ""}|${JSON.stringify((g as GeoJSON.Polygon).coordinates?.[0]?.[0] ?? "")}|${f.properties?.render_height ?? ""}` : null;
+      const g = f && at && map.getZoom() >= 15 ? oneBuilding(f.geometry as GeoJSON.Geometry, at) : null;
+      const key = f && g ? `${JSON.stringify(g.coordinates[0][0])}|${f.properties?.render_height ?? ""}` : null;
       if (key === live.current.baseKey) return;
       live.current.baseKey = key;
       src.setData(f && g
@@ -365,7 +386,7 @@ export default function BuildingMap({
         setHover(null);
         popup.remove();
         map.getCanvas().style.cursor = "";
-        setBaseHover(base);
+        setBaseHover(base, e.lngLat);
         return;
       }
       // Empty ground: clear after a short grace, so a building edge or a one-frame miss does not flicker.
