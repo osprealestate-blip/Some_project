@@ -141,6 +141,29 @@ export default async function Page({ params }: Params) {
         </section>
       )}
 
+      {buildings.length > 0 && (
+        <section className="mt-8 grid gap-6 lg:grid-cols-2">
+          <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
+            <h2 className="text-base font-semibold">Most traded buildings</h2>
+            <ol className="mt-2 space-y-1 text-sm">
+              {[...buildings].filter((b) => (b.sale_count_12m ?? 0) > 0).sort((a, b) => (b.sale_count_12m ?? 0) - (a.sale_count_12m ?? 0)).slice(0, 5).map((b) => (
+                <li key={b.slug} className="flex justify-between gap-3"><Link className="link" href={`/building/${b.slug}`}>{b.name_en}</Link><span className="tabular-nums text-[var(--muted)]">{count(b.sale_count_12m ?? 0)} sales</span></li>
+              ))}
+            </ol>
+            <SourceNote source={SOURCES.dldSales} date={all?.period_end}>Ranked by recorded sales in the last 12 months. More sales means more data behind the figures, not a better building.</SourceNote>
+          </div>
+          <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
+            <h2 className="text-base font-semibold">What matters most to you?</h2>
+            <p className="mt-1 text-sm text-[var(--muted)]">Open this area on the map coloured by what you care about.</p>
+            <ul className="mt-2 flex flex-wrap gap-2 text-sm">
+              {[["Value for money", "psf"], ["Rental return", "yield"], ["Most active", "sales"], ["Price movement", "change"]].map(([label, m]) => (
+                <li key={m}><Link className="inline-block rounded-full border border-[var(--border)] px-3 py-1.5 hover:bg-[var(--grid)]" href={`/map?f=area:${code}${m === "psf" ? "" : `&m=${m}`}`}>{label}</Link></li>
+              ))}
+            </ul>
+          </div>
+        </section>
+      )}
+
       <section className="mt-8">
         <h2 className="text-base font-semibold">Buildings ({buildings.length})</h2>
         {buildings.length ? (
