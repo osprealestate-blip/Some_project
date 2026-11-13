@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "next/navigation";
 import { useT } from "./LangProvider";
@@ -20,6 +20,12 @@ export default function MapFilterMenu() {
   const t = useT();
   const [open, setOpen] = useState(false);
   const cur = parseFilter(useSearchParams().get("f"));
+  useEffect(() => {
+    if (!open) return;
+    const k = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    window.addEventListener("keydown", k);
+    return () => window.removeEventListener("keydown", k);
+  }, [open]);
   const chip = (on: boolean) => `rounded-full border px-3 py-1.5 text-xs ${on ? "border-[var(--accent)] bg-[var(--accent)] text-white" : "border-[var(--border)] hover:bg-[var(--grid)]"}`;
   return (
     <div className="shrink-0">
@@ -27,7 +33,7 @@ export default function MapFilterMenu() {
         {t("Filters")}{cur ? " •" : ""}
       </button>
       {open && createPortal(
-        <div id="map-filter-menu" role="group" aria-label={t("Map filters")} className="dpi-glass fixed bottom-24 left-1/2 z-20 w-72 max-w-[calc(100vw-24px)] -translate-x-1/2 rounded-2xl p-3 text-start">
+        <div id="map-filter-menu" role="region" aria-label={t("Map filters")} className="dpi-glass fixed bottom-24 left-1/2 z-20 w-72 max-w-[calc(100vw-24px)] -translate-x-1/2 rounded-2xl p-3 text-start">
           <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">{t("Median sale price")}</p>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {UNDER.map(([v, l]) => <button key={v} type="button" aria-pressed={cur?.type === "under" && cur.value === v} className={chip(cur?.type === "under" && cur.value === v)} onClick={() => setFilter({ type: "under", value: v })}>{t(l)}</button>)}
