@@ -13,9 +13,9 @@ export const FACILITIES: { id: FacilityId; label: string; colour: string }[] = [
 export type NearestFacility = { id: FacilityId; name: string; distanceM: number; lng: number; lat: number; approx: boolean };
 
 /** "0.8 km" always in km with one decimal under 10 km, so figures line up and read as straight-line distance. */
-export function km(m: number): string {
+export function km(m: number, unit = "km"): string {
   const k = m / 1000;
-  return `${k < 10 ? k.toFixed(1) : Math.round(k)} km`;
+  return `${k < 10 ? k.toFixed(1) : Math.round(k)} ${unit}`;
 }
 
 /** Inner SVG markup of each icon (24x24 box, stroked). One set of drawings for React chips and map pins. */

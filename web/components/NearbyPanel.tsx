@@ -1,3 +1,5 @@
+"use client";
+import { useT } from "./LangProvider";
 import { lifeScore } from "@/lib/lifeScore";
 import { metres } from "@/lib/format";
 import type { Place } from "@/lib/queries";
@@ -12,11 +14,12 @@ const GROUP_ORDER: [string, string][] = [
 ];
 
 export default function NearbyPanel({ places, placed }: { places: Place[]; placed: boolean }) {
+  const t = useT();
   if (!placed) {
-    return <p className="text-sm text-[var(--muted)]">This building is not on the map yet, so nearby places can&apos;t be shown.</p>;
+    return <p className="text-sm text-[var(--muted)]">{t("This building is not on the map yet, so nearby places can't be shown.")}</p>;
   }
   if (places.length === 0) {
-    return <p className="text-sm text-[var(--muted)]">No places loaded within 2 km yet.</p>;
+    return <p className="text-sm text-[var(--muted)]">{t("No places loaded within 2 km yet.")}</p>;
   }
   const ls = lifeScore(places);
   const sources = [...new Set(places.map((p) => `${POI_SOURCE[p.source] ?? p.source} (${p.source_date})`))];
@@ -24,14 +27,14 @@ export default function NearbyPanel({ places, placed }: { places: Place[]; place
     <div>
       <div className="flex items-baseline gap-3">
         <div className="text-3xl font-semibold tabular-nums">{ls.score}</div>
-        <div className="text-sm text-[var(--muted)]">Life Score out of 100 (basic)</div>
+        <div className="text-sm text-[var(--muted)]">{t("Life Score out of 100 (basic)")}</div>
       </div>
       <ul className="mt-3 text-sm">
         {ls.groups.map((g) => (
           <li key={g.id} className="flex justify-between gap-2 border-b border-[var(--border)] py-1">
-            <span>{g.label}</span>
+            <span>{t(g.label)}</span>
             <span className="text-[var(--muted)] tabular-nums">
-              {g.nearest ? `${metres(g.nearest.distance_m)} · ${Math.round(g.points)}/${g.weight}` : `none within 2 km · 0/${g.weight}`}
+              {g.nearest ? `${metres(g.nearest.distance_m)} · ${Math.round(g.points)}/${g.weight}` : `${t("none within 2 km")} · 0/${g.weight}`}
             </span>
           </li>
         ))}
@@ -42,7 +45,7 @@ export default function NearbyPanel({ places, placed }: { places: Place[]; place
           if (!list.length) return null;
           return (
             <div key={cat}>
-              <h4 className="text-sm font-medium">{label}</h4>
+              <h4 className="text-sm font-medium">{t(label)}</h4>
               <ul className="mt-1 text-sm">
                 {list.map((p, i) => (
                   <li key={`${p.name}-${i}`} className="flex justify-between gap-2 py-0.5">
@@ -62,7 +65,7 @@ export default function NearbyPanel({ places, placed }: { places: Place[]; place
         })}
       </div>
       <p className="mt-3 text-xs text-[var(--muted)]">
-        Straight-line distances; ≈ marks a place whose official position is rounded to about 1 km. Score: each group earns full points within 400 m, falling to none at 2 km. Places: {sources.join("; ")}.
+        {t("Straight-line distances; ≈ marks a place whose official position is rounded to about 1 km. Score: each group earns full points within 400 m, falling to none at 2 km.")} {t("Places")}: {sources.join("; ")}.
       </p>
     </div>
   );

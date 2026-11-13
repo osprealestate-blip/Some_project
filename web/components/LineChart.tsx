@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import { type Currency, DEFAULT_CURRENCY, convertFromAed } from "@/config/currency";
+import { useT } from "./LangProvider";
 import { formatConverted, quarterLabel } from "@/lib/format";
 
 export type Point = { period: string; value: number | null; count: number };
@@ -33,6 +34,7 @@ function niceTicks(min: number, max: number, n = 4): number[] {
 
 /** One series over time: 2px line, gaps where a quarter has too few deals, crosshair tooltip, table view. */
 export default function LineChart({ title, points: aedPoints, unit, countLabel = "deals", currency = DEFAULT_CURRENCY }: Props) {
+  const t = useT();
   const points = useMemo(
     () => (currency === "AED" ? aedPoints : aedPoints.map((p) => ({ ...p, value: p.value == null ? null : convertFromAed(p.value, currency) }))),
     [aedPoints, currency],
@@ -80,7 +82,7 @@ export default function LineChart({ title, points: aedPoints, unit, countLabel =
   const last = points[lastIdx];
 
   return (
-    <figure className="viz-root">
+    <figure className="viz-root" dir="ltr">
       <figcaption className="mb-1 text-sm font-medium">{title}</figcaption>
       <div className="relative">
         <svg
@@ -88,7 +90,7 @@ export default function LineChart({ title, points: aedPoints, unit, countLabel =
           viewBox={`0 0 ${W} ${H}`}
           className="h-auto w-full touch-none select-none"
           role="img"
-          aria-label={`${title}. Latest ${periodLabel(last.period)}: ${format(last.value!)}.`}
+          aria-label={t("{title}. Latest {period}: {value}.", { title, period: periodLabel(last.period), value: format(last.value!) })}
           onPointerMove={onMove}
           onPointerLeave={() => setHover(null)}
         >
@@ -125,7 +127,7 @@ export default function LineChart({ title, points: aedPoints, unit, countLabel =
       <details className="mt-1 text-xs text-[var(--muted)]">
         <summary className="cursor-pointer">Show as table</summary>
         <table className="mt-1 w-full text-start tabular-nums">
-          <thead><tr><th className="text-start font-medium">Period</th><th className="text-end font-medium">Median</th><th className="text-end font-medium">{countLabel}</th></tr></thead>
+          <thead><tr><th className="text-start font-medium">{t("Period")}</th><th className="text-end font-medium">{t("Median")}</th><th className="text-end font-medium">{countLabel}</th></tr></thead>
           <tbody>
             {[...points].reverse().map((p) => (
               <tr key={p.period}><td>{periodLabel(p.period)}</td><td className="text-end">{p.value != null ? format(p.value) : "–"}</td><td className="text-end">{p.count}</td></tr>

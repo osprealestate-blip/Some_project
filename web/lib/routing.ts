@@ -1,3 +1,5 @@
+import { makeT, type T } from "./i18n";
+
 /** Walking and driving routes with real minutes, from an OSRM-compatible service chosen by the site owner.
  *  Ships OFF: nothing is requested and no minutes are shown unless ROUTING_ENABLED=1 and a base URL is set.
  *  Minutes come only from a successful route. A failed or missing route never produces a number. */
@@ -56,10 +58,9 @@ export function parseOsrm(json: unknown): RouteResult | null {
 }
 
 /** "8 min walk", "12 min drive". Only called with a real route. */
-export function minutesLabel(minutes: number, mode: RouteMode): string {
-  const verb = ROUTE_MODES.find((m) => m.id === mode)!.verb;
-  if (minutes >= 90) { const h = Math.floor(minutes / 60), m = minutes % 60; return `${h} h${m ? ` ${m} min` : ""} ${verb}`; }
-  return `${minutes} min ${verb}`;
+export function minutesLabel(minutes: number, mode: RouteMode, t: T = makeT("en")): string {
+  if (minutes >= 90) { const h = Math.floor(minutes / 60), m = minutes % 60; return m ? t(mode === "walk" ? "{h} h {m} min walk" : "{h} h {m} min drive", { h, m }) : t(mode === "walk" ? "{h} h walk" : "{h} h drive", { h }); }
+  return t(mode === "walk" ? "{n} min walk" : "{n} min drive", { n: minutes });
 }
 
 // ---------- server-side helpers: cache and rate limit (per server instance; the CDN cache sits in front) ----------

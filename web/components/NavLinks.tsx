@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useT } from "./LangProvider";
 import { isActive, type NavItem } from "@/lib/nav";
 
 /** Header links with the current section marked (aria-current and an underline, not colour alone). */
@@ -9,6 +10,7 @@ export default function NavLinks({ items, onNavigate, className = "", linkClassN
   items: NavItem[]; onNavigate?: () => void; className?: string; linkClassName?: string;
 }) {
   const pathname = usePathname();
+  const t = useT();
   return (
     <ul className={className}>
       {items.map((n) => {
@@ -21,7 +23,7 @@ export default function NavLinks({ items, onNavigate, className = "", linkClassN
               aria-current={active ? "page" : undefined}
               className={`${linkClassName} ${active ? "font-semibold text-[var(--fg)] underline decoration-2 underline-offset-8" : "text-[var(--muted)] hover:text-[var(--fg)]"}`}
             >
-              {n.label}
+              {t(n.label)}
             </Link>
           </li>
         );

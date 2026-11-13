@@ -2,6 +2,7 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useT } from "./LangProvider";
 import {
   Currency,
   CURRENCIES,
@@ -11,6 +12,7 @@ import {
 
 export default function CurrencySwitcher({ initialCurrency }: { initialCurrency: Currency }) {
   const router = useRouter();
+  const t = useT();
   const [isPending, startTransition] = useTransition();
 
   const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -25,7 +27,7 @@ export default function CurrencySwitcher({ initialCurrency }: { initialCurrency:
   return (
     <div className="relative inline-flex items-center">
       <label htmlFor="currency-select" className="sr-only">
-        Currency
+        {t("Currency")}
       </label>
       <select
         id="currency-select"
@@ -33,7 +35,7 @@ export default function CurrencySwitcher({ initialCurrency }: { initialCurrency:
         onChange={handleChange}
         disabled={isPending}
         className="rounded border border-[var(--border)] bg-[var(--bg)] px-2 py-1 text-xs font-medium text-[var(--fg)] hover:border-[var(--accent)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)] disabled:opacity-60"
-        title="Change display currency"
+        title={t("Change display currency")}
       >
         {CURRENCIES.map((code) => (
           <option key={code} value={code}>

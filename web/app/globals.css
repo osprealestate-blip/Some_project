@@ -130,3 +130,10 @@ html[data-building-selected] .map-intro, html[data-map-started] .map-intro { dis
 .dpi-enter { animation: dpi-rise 0.32s cubic-bezier(.2,.8,.2,1); }
 @keyframes dpi-tab { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 .dpi-tab-in { animation: dpi-tab 0.2s ease; }
+
+/* Arabic: a font stack that carries Arabic letters everywhere, and charts keep left-to-right time and number order. */
+html[lang="ar"] body { font-family: "Segoe UI", Tahoma, "Noto Sans Arabic", "Noto Naskh Arabic", system-ui, sans-serif; }
+html[lang="ar"] [dir="ltr"] { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+
+/* Map credits: links are underlined so they do not rely on colour alone (WCAG 1.4.1). */
+.maplibregl-ctrl.maplibregl-ctrl-attrib a { text-decoration: underline !important; }
