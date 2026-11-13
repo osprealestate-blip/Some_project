@@ -239,6 +239,7 @@ export const AR: Record<string, string> = {
   "not available": "غير متوفر",
   "Data confidence:": "موثوقية البيانات:",
   "Good": "جيدة",
+  "Strong": "قوية",
   "Limited": "محدودة",
   "Low": "منخفضة",
   "{n} sales in 12 months": "{n} عملية بيع خلال 12 شهراً",
@@ -413,4 +414,7 @@ export const AR: Record<string, string> = {
   "Favourites": "المفضلة",
   "Popular buildings in this area": "مبانٍ شائعة في هذه المنطقة",
   "Ranked by sales in the last 12 months. Source: Dubai Land Department.": "مرتبة حسب المبيعات في آخر 12 شهراً. المصدر: دائرة الأراضي والأملاك في دبي.",
+  "Data confidence": "موثوقية البيانات",
+  "Year on year": "على أساس سنوي",
+  "Data confidence counts how many sales the figures rest on: Strong is 15 or more in 12 months, Limited is 5 to 14, Low is under 5. It measures how much data there is, not the quality of the building.": "تعتمد موثوقية البيانات على عدد عمليات البيع التي تستند إليها الأرقام: قوية إذا بلغت 15 أو أكثر خلال 12 شهراً، ومحدودة من 5 إلى 14، ومنخفضة إذا كانت أقل من 5. وهي تقيس كمية البيانات وليس جودة المبنى.",
 };

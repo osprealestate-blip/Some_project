@@ -8,6 +8,7 @@ import { fetchCard, fetchSeries, type SeriesData } from "@/lib/cardClient";
 import type { FacilityId, NearestFacility } from "@/lib/facilities";
 import type { RouteMap } from "@/lib/routeLines";
 import { ROUTE_MODES, type RouteMode } from "@/lib/routing";
+import { dataConfidence } from "@/lib/confidence";
 import { count, day, formatMoney, formatPsf, formatShortPrice, pct, roomsLabel, sqft } from "@/lib/format";
 import type { MapBuildingProps } from "@/lib/mapMetrics";
 import { DISCLAIMER, SOURCES } from "@/lib/sources";
@@ -158,6 +159,10 @@ export default function BuildingCard({ slug, view, currency, features, onClose, 
   const psf = sum ? sum.psf : feature?.psf ?? null;
   const yld = sum ? sum.yield : feature?.yield ?? null;
   const sales = sum ? sum.sales : feature?.sales ?? 0;
+  const price = sum ? sum.price : feature?.price ?? null;
+  const change = sum ? sum.change : feature?.change ?? null;
+  const conf = dataConfidence(sales, t);
+  const [confInfo, setConfInfo] = useState(false);
   const periodEnd = data?.periodEnd ?? null;
 
   // Geometry. Desktop: the card sits bottom-left and grows into a centred panel. Phone: a sheet from the bottom.
@@ -193,11 +198,22 @@ export default function BuildingCard({ slug, view, currency, features, onClose, 
       <div className="rounded-lg border-s-2 border-cyan-300/80 bg-cyan-300/[0.08] px-3 py-2 text-[13px] leading-snug">
         {state === "ok" && data?.verdict ? data.verdict.text : state === "error" ? t("Could not load the summary. Try again, or open the full page.") : <span className="text-[var(--muted)]">{t("Reading the numbers…")}</span>}
       </div>
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-3 gap-1.5">
         <Tile label="Price / sq ft" value={formatMoney(psf, currency)} />
+        <Tile label="Median sale price" value={formatShortPrice(price, currency)} />
         <Tile label="Gross yield (est.)" value={pct(yld)} />
         <Tile label="Sales, 12 mo" value={count(sales)} />
+        <Tile label="Year on year" value={pct(change, 1, true)} />
+        <button type="button" onClick={() => setConfInfo((v) => !v)} aria-expanded={confInfo} className="min-w-0 rounded-lg bg-white/[0.06] px-2.5 py-2 text-start ring-1 ring-white/10 hover:bg-white/10">
+          <div className="truncate text-[11px] text-[var(--muted)]">{t("Data confidence")} ⓘ</div>
+          <div className={`mt-0.5 truncate text-[15px] font-semibold ${conf.level === "good" ? "text-[var(--good)]" : conf.level === "limited" ? "text-[var(--warn)]" : "text-[var(--muted)]"}`}>{conf.label}</div>
+        </button>
       </div>
+      {confInfo && (
+        <p role="note" className="rounded-lg bg-white/[0.06] px-3 py-2 text-xs leading-snug">
+          {t("Data confidence counts how many sales the figures rest on: Strong is 15 or more in 12 months, Limited is 5 to 14, Low is under 5. It measures how much data there is, not the quality of the building.")}
+        </p>
+      )}
       <div>
         <div className="mb-1 flex items-center justify-between gap-2">
           <span className="text-[11px] font-medium uppercase tracking-wide text-[var(--muted)]">{routeMode === "line" ? t("Nearest, straight-line") : t("Nearest · km straight-line, time by route")}</span>

@@ -90,21 +90,33 @@ html:not([data-view="advanced"]) .adv-only { display: none; }
 /* Building card, panel and phone sheet over the map (components/BuildingCard.tsx). Dark glass in every map theme, so
    the map stays visible behind it. The variables below re-theme any shared component placed inside. */
 .dpi-glass {
-  --fg: #e8edf3; --muted: #9fb0c3; --border: rgb(255 255 255 / 0.14); --panel: rgb(15 23 42 / 0.55);
-  --bg: rgb(2 6 23 / 0.45); --accent: #67e8f9; --grid: rgb(255 255 255 / 0.08); --good: #4ade80; --warn: #fbbf24;
+  --fg: #0f2742; --muted: #5b6b80; --border: rgb(15 39 66 / 0.14); --panel: rgb(255 255 255 / 0.7);
+  --bg: rgb(15 39 66 / 0.04); --accent: #0e7490; --grid: rgb(15 39 66 / 0.08); --good: #15803d; --warn: #b45309;
   color: var(--fg);
-  background: rgb(12 18 32 / 0.78);
-  -webkit-backdrop-filter: blur(18px) saturate(1.3);
-  backdrop-filter: blur(18px) saturate(1.3);
-  border: 1px solid rgb(103 232 249 / 0.3);
-  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.25), 0 0 28px rgb(34 211 238 / 0.14), 0 24px 60px rgb(0 0 0 / 0.5);
+  background: rgb(255 255 255 / 0.86);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+  backdrop-filter: blur(18px) saturate(1.2);
+  border: 1px solid rgb(255 255 255 / 0.8);
+  box-shadow: 0 0 0 1px rgb(15 39 66 / 0.06), 0 18px 48px rgb(15 39 66 / 0.22);
   transition: left 0.38s cubic-bezier(.2,.8,.2,1), bottom 0.38s cubic-bezier(.2,.8,.2,1), width 0.38s cubic-bezier(.2,.8,.2,1),
     height 0.38s cubic-bezier(.2,.8,.2,1), border-radius 0.38s;
 }
+/* The panels were written for dark glass (white tints). On light glass the same classes become navy tints. */
+.dpi-glass .border-white\/10, .dpi-glass .divide-white\/10 > * + * { border-color: rgb(15 39 66 / 0.12); }
+.dpi-glass .border-white\/20 { border-color: rgb(15 39 66 / 0.2); }
+.dpi-glass .bg-white\/10, .dpi-glass .bg-white\/\[0\.06\], .dpi-glass .bg-white\/\[0\.04\], .dpi-glass .bg-white\/\[0\.07\] { background-color: rgb(15 39 66 / 0.06); }
+.dpi-glass .bg-white\/15, .dpi-glass .bg-white\/40 { background-color: rgb(15 39 66 / 0.1); }
+.dpi-glass .hover\:bg-white\/20:hover, .dpi-glass .hover\:bg-white\/25:hover, .dpi-glass .hover\:bg-white\/10:hover { background-color: rgb(15 39 66 / 0.12); }
+.dpi-glass .ring-white\/10 { --tw-ring-color: rgb(15 39 66 / 0.1); }
+.dpi-glass .text-cyan-200 { color: #0e7490; }
+.dpi-glass .border-cyan-300, .dpi-glass .border-cyan-300\/80 { border-color: #06b6d4; }
+.dpi-glass .bg-cyan-300\/\[0\.08\], .dpi-glass .bg-cyan-300\/15, .dpi-glass .bg-cyan-300\/20 { background-color: rgb(6 182 212 / 0.12); }
+.dpi-glass .hover\:bg-cyan-300\/25:hover { background-color: rgb(6 182 212 / 0.2); }
+.dpi-glass .ring-cyan-300\/50, .dpi-glass .ring-cyan-300\/60 { --tw-ring-color: rgb(6 182 212 / 0.5); }
 .dpi-glass.is-dragging { transition: none; }
 .dpi-glass a.link { color: var(--accent); }
 .dpi-fade { transition: opacity 0.25s ease; }
-.dpi-backdrop { background: rgb(2 6 23 / 0.38); -webkit-backdrop-filter: blur(1.5px); backdrop-filter: blur(1.5px); animation: dpi-in 0.3s ease; }
+.dpi-backdrop { background: rgb(15 39 66 / 0.28); -webkit-backdrop-filter: blur(1.5px); backdrop-filter: blur(1.5px); animation: dpi-in 0.3s ease; }
 @keyframes dpi-in { from { opacity: 0; } to { opacity: 1; } }
 
 /* Location mode on the map: pins and distance labels (components/BuildingMap.tsx). Colour always comes with an icon and text. */
