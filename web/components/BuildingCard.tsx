@@ -12,6 +12,7 @@ import { DISCLAIMER, SOURCES } from "@/lib/sources";
 import DataBadge from "./DataBadge";
 import FacilityChips from "./FacilityChips";
 import NearbyPanel from "./NearbyPanel";
+import SaveMenu from "./SaveMenu";
 import SourceNote from "./SourceNote";
 
 type Feature = MapBuildingProps & { lng: number; lat: number };
@@ -75,7 +76,8 @@ export default function BuildingCard({ slug, view, currency, features, onClose, 
 
   useEffect(() => {
     let live = true;
-    setTab("overview");
+    const t = new URLSearchParams(window.location.search).get("tab");
+    setTab(TABS.some(([id]) => id === t) ? (t as Tab) : "overview");
     setData(null);
     setState("loading");
     fetchCard(slug).then((d) => { if (live) { setData(d); setState("ok"); onFacilities(d.facilities); } }).catch(() => { if (live) setState("error"); });
@@ -101,8 +103,15 @@ export default function BuildingCard({ slug, view, currency, features, onClose, 
   const sheet: Sheet = view === "card" ? "compact" : full ? "full" : "expanded";
   const showPanel = view === "panel";
 
+  // The tab is kept in the URL, so a shared link opens the same view: building, panel, tab, colour layer and compare list.
+  const chooseTab = (id: Tab) => {
+    setTab(id);
+    const sp = new URLSearchParams(window.location.search);
+    if (id === "overview") sp.delete("tab"); else sp.set("tab", id);
+    window.history.replaceState(null, "", `/map?${sp.toString()}`);
+  };
   const share = useCallback(async () => {
-    const url = `${window.location.origin}/map?building=${encodeURIComponent(slug)}`;
+    const url = window.location.href;
     try {
       if (navigator.share && !desktop) await navigator.share({ title: data?.name ?? feature?.name ?? "Building", url });
       else { await navigator.clipboard.writeText(url); setShared("Link copied"); }
@@ -187,6 +196,7 @@ export default function BuildingCard({ slug, view, currency, features, onClose, 
         <button type="button" onClick={() => onView("panel")} className="min-w-0 flex-1 rounded-xl bg-cyan-300 px-3 py-2.5 text-sm font-semibold text-slate-900 hover:bg-cyan-200">
           Explore building
         </button>
+        <SaveMenu slug={slug} name={name} />
         <button type="button" onClick={() => onCompare(slug)} aria-pressed={compared.includes(slug)} className="shrink-0 rounded-xl bg-white/10 px-3 py-2.5 text-sm font-medium hover:bg-white/20">
           {compared.includes(slug) ? "✓ Comparing" : "+ Compare"}
         </button>
@@ -204,6 +214,7 @@ export default function BuildingCard({ slug, view, currency, features, onClose, 
             {data?.floors ? ` · ${data.floors} floors` : ""}{data?.units ? ` · ${count(data.units)} units` : ""}
           </p>
         </div>
+        <SaveMenu slug={slug} name={name} down />
         <button type="button" onClick={share} className="shrink-0 rounded-full bg-white/10 px-3 py-1.5 text-xs hover:bg-white/20">{shared || "Share"}</button>
         <Link href={`/building/${encodeURIComponent(slug)}`} className="hidden shrink-0 rounded-full bg-cyan-300 px-3 py-1.5 text-xs font-semibold text-slate-900 hover:bg-cyan-200 sm:inline-block">Open full page</Link>
         {desktop && <button type="button" onClick={() => onView("card")} title="Back to the small card (Esc)" className="shrink-0 rounded-full bg-white/10 px-3 py-1.5 text-xs hover:bg-white/20">Shrink</button>}
@@ -212,7 +223,7 @@ export default function BuildingCard({ slug, view, currency, features, onClose, 
       </div>
       <div role="tablist" aria-label="Building sections" className="flex gap-1 overflow-x-auto border-b border-white/10 px-3 py-1.5 md:px-4">
         {TABS.map(([id, label]) => (
-          <button key={id} role="tab" aria-selected={tab === id} type="button" onClick={() => setTab(id)}
+          <button key={id} role="tab" aria-selected={tab === id} type="button" onClick={() => chooseTab(id)}
             className={`shrink-0 rounded-full px-3 py-1.5 text-[13px] ${tab === id ? "bg-cyan-300 font-semibold text-slate-900" : "text-[var(--fg)] hover:bg-white/10"}`}>
             {label}
           </button>

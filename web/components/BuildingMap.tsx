@@ -13,6 +13,7 @@ import {
 import { DUBAI_PITCH, LAUNCH_BOUNDS, MAP_ATTRIBUTION, webglAvailable } from "@/lib/mapStyle";
 import { DEFAULT_THEME, THEMES, parseTheme, type ThemeId } from "@/lib/mapThemes";
 import BuildingCard from "./BuildingCard";
+import ForYouPanel from "./ForYouPanel";
 import CompareTray, { MAX_COMPARE } from "./CompareTray";
 import { FACILITIES, iconSvg, km, nearbyLines, type FacilityId, type NearestFacility } from "@/lib/facilities";
 import MapControls from "./MapControls";
@@ -122,8 +123,11 @@ function mapUrl(slug: string | null, view?: string | null): string {
   const sp = new URLSearchParams();
   if (slug) sp.set("building", slug);
   if (slug && view) sp.set("view", view);
-  const c = new URLSearchParams(window.location.search).get("compare");
+  const cur = new URLSearchParams(window.location.search);
+  const c = cur.get("compare");
   if (c) sp.set("compare", c);
+  const m = cur.get("m");
+  if (m) sp.set("m", m);
   const q = sp.toString();
   return `/map${q ? `?${q}` : ""}`;
 }
@@ -158,6 +162,7 @@ export default function BuildingMap({
   const [hiddenKinds, setHiddenKinds] = useState<FacilityId[]>([]);
   const [facilities, setFacilities] = useState<NearestFacility[]>([]);
   const [compare, setCompare] = useState<string[]>([]);
+  const [forYou, setForYou] = useState(false);
 
   // Everything the map event handlers need, current without re-binding them.
   const live = useRef({ settings, currency, theme, selected, hover: null as string | null, baseKey: null as string | null, restored: false });
@@ -206,7 +211,10 @@ export default function BuildingMap({
       return;
     }
     const savedTheme = parseTheme(load(STORE.theme));
-    setSettings(parseSettings(load(STORE.settings)));
+    // A shared link can carry the colour layer (?m=yield); it wins over the saved choice.
+    const shared = cardMode ? new URLSearchParams(window.location.search).get("m") : null;
+    const base = parseSettings(load(STORE.settings));
+    setSettings(shared && shared in METRICS ? { ...base, metric: shared as MapSettings["metric"] } : base);
     setTheme(savedTheme);
     setReady(true);
     live.current.theme = savedTheme;
@@ -692,12 +700,21 @@ export default function BuildingMap({
           onShow={(slug) => select(slug)}
         />
       )}
+      {cardMode && forYou && (
+        <ForYouPanel features={raw?.features.map((f) => f.properties) ?? []} currency={currency} periodEnd={raw?.meta?.periodEnd ?? null} onPick={(slug) => select(slug)} onClose={() => setForYou(false)} />
+      )}
       {cardMode && legend && (
         <div role="group" aria-label="Colour the map by" className={`absolute inset-x-0 bottom-9 z-10 flex justify-center px-2 ${selected ? "max-md:hidden" : ""} ${compare.length ? "md:bottom-20" : ""}`}>
           <div className="pointer-events-auto flex max-w-full gap-1 overflow-x-auto rounded-full border border-[var(--border)] bg-[var(--panel)]/95 p-1 text-xs shadow-md backdrop-blur">
+            <button type="button" onClick={() => setForYou(true)} className="shrink-0 rounded-full bg-cyan-300 px-3 py-1.5 font-semibold text-slate-900 hover:bg-cyan-200">★ For you</button>
             {(["psf", "yield", "sales", "change"] as const).map((id) => (
               <button key={id} type="button" aria-pressed={settings.metric === id} title={id === "change" ? "Median price per sq ft against the 12 months before. Needs enough sales in both years." : METRICS[id].title}
-                onClick={() => changeSettings({ ...settings, metric: id })}
+                onClick={() => {
+                  changeSettings({ ...settings, metric: id });
+                  const sp = new URLSearchParams(window.location.search);
+                  if (id === "psf") sp.delete("m"); else sp.set("m", id);
+                  window.history.replaceState(null, "", `/map${sp.toString() ? `?${sp}` : ""}`);
+                }}
                 className={`shrink-0 rounded-full px-3 py-1.5 font-medium ${settings.metric === id ? "bg-[var(--accent)] text-white" : "hover:bg-[var(--grid)]"}`}>
                 {METRICS[id].label}
               </button>
