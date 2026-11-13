@@ -51,6 +51,13 @@ export default function MapWelcome() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, never]);
 
+  // The notice is a one-off hint: it fades after a few seconds so it never keeps covering the map.
+  useEffect(() => {
+    if (!note) return;
+    const id = setTimeout(() => setNote(null), 7000);
+    return () => clearTimeout(id);
+  }, [note]);
+
   function close() { write(never ? "local" : "session"); setOpen(false); }
   function choose(set: Record<string, string>, message: string) {
     apply(set);
@@ -68,7 +75,7 @@ export default function MapWelcome() {
   return (
     <>
       {note && !open && (
-        <div role="status" className="dpi-enter absolute inset-x-3 top-3 z-20 mx-auto max-md:start-14 flex max-w-md items-start gap-2 rounded-xl border border-[#0f2742]/10 bg-white/90 px-3.5 py-2.5 text-[13px] leading-snug text-[#0f2742] shadow-lg backdrop-blur md:top-4">
+        <div role="status" className="dpi-enter absolute inset-x-3 top-3 z-20 mx-auto max-md:start-14 [html[data-building-selected]_&]:max-md:hidden flex max-w-md items-start gap-2 rounded-xl border border-[#0f2742]/10 bg-white/90 px-3.5 py-2.5 text-[13px] leading-snug text-[#0f2742] shadow-lg backdrop-blur md:top-4">
           <span className="min-w-0 flex-1">{note}</span>
           <button type="button" onClick={() => setNote(null)} aria-label={t("Close")} className="grid h-6 w-6 shrink-0 place-items-center rounded-full hover:bg-black/5">✕</button>
         </div>
