@@ -599,14 +599,14 @@ export default function BuildingMap({
     // Glow round the selected building's footprint: a wide soft line under a crisp one.
     if (!map.getSource("dpi-selected")) {
       map.addSource("dpi-selected", { type: "geojson", data: EMPTY });
-      map.addLayer({ id: "dpi-selected-glow", type: "line", source: "dpi-selected", layout: { "line-join": "round" }, paint: { "line-color": CYAN, "line-width": 14, "line-blur": 10, "line-opacity": 0.75 } });
+      map.addLayer({ id: "dpi-selected-glow", type: "line", source: "dpi-selected", layout: { "line-join": "round" }, paint: { "line-color": CYAN, "line-width": 9, "line-blur": 5, "line-opacity": 0.4 } });
       map.addLayer({ id: "dpi-selected-line", type: "line", source: "dpi-selected", layout: { "line-join": "round" }, paint: { "line-color": "#ecfeff", "line-width": 2.5, "line-opacity": 0.95 } });
     }
 
-    // Location mode: neon straight lines to the nearest places, coloured by kind. Compared buildings get an amber outline.
+    // Location mode: restrained straight lines to the nearest places, coloured by kind. Compared buildings get an amber outline.
     if (!map.getSource("dpi-nearby")) {
       map.addSource("dpi-nearby", { type: "geojson", data: EMPTY });
-      map.addLayer({ id: "dpi-nearby-glow", type: "line", source: "dpi-nearby", layout: { "line-cap": "round" }, paint: { "line-color": ["get", "colour"], "line-width": 9, "line-blur": 6, "line-opacity": 0.7 } });
+      map.addLayer({ id: "dpi-nearby-glow", type: "line", source: "dpi-nearby", layout: { "line-cap": "round" }, paint: { "line-color": ["get", "colour"], "line-width": 6, "line-blur": 3, "line-opacity": 0.22 } });
       map.addLayer({ id: "dpi-nearby-line", type: "line", source: "dpi-nearby", layout: { "line-cap": "round" }, paint: { "line-color": ["get", "colour"], "line-width": ["case", ["==", ["get", "straight"], 1], 1.6, 3] } });
     }
     if (!map.getSource("dpi-compare")) {
