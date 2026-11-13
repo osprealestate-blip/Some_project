@@ -7,7 +7,7 @@ export type Confidence = { level: "good" | "limited" | "low"; label: string; det
 
 export function dataConfidence(saleCount: number | null | undefined, t: T = makeT("en")): Confidence {
   const n = saleCount ?? 0;
-  if (n >= GOOD_COMPS) return { level: "good", label: t("Good"), detail: t("{n} sales in 12 months", { n }) };
+  if (n >= GOOD_COMPS) return { level: "good", label: t("Strong"), detail: t("{n} sales in 12 months", { n }) };
   if (n >= MIN_COMPS) return { level: "limited", label: t("Limited"), detail: t("{n} sales in 12 months, so treat figures as a rough guide", { n }) };
   return { level: "low", label: t("Low"), detail: n === 0 ? t("no counted sales in 12 months") : t(n === 1 ? "only {n} sale in 12 months, too few for a reliable median" : "only {n} sales in 12 months, too few for a reliable median", { n }) };
 }
