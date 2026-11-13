@@ -24,6 +24,7 @@ import { FACILITIES, iconSvg, km, type FacilityId, type NearestFacility } from "
 import { useLang, useT } from "./LangProvider";
 import type { T } from "@/lib/i18n";
 import { tLegend } from "@/lib/i18n";
+import MapSidebar from "./MapSidebar";
 import { filterLabel, filterParam, parseFilter } from "@/lib/mapFilter";
 import { fetchRoute } from "@/lib/routeClient";
 import { labelPoint, routeLines, type RouteMap } from "@/lib/routeLines";
@@ -188,6 +189,7 @@ export default function BuildingMap({
     if (!f) { setMapFilter(null); return; }
     const key = filterParam(f);
     document.documentElement.setAttribute("data-map-started", ""); // a search replaces the start card
+    if (f.type === "under") return; // worked out here from the loaded buildings, see the next effect
     setMapFilter({ key, label: tRef.current("Searching…"), slugs: null, state: "loading" });
     let live = true;
     fetch(`/api/map-filter?f=${encodeURIComponent(key)}`)
@@ -196,13 +198,44 @@ export default function BuildingMap({
       .catch(() => { if (live) setMapFilter({ key, label: tRef.current("Search failed"), slugs: null, state: "error" }); });
     return () => { live = false; };
   }, [filterRaw]);
+  useEffect(() => {
+    const f = parseFilter(filterRaw);
+    if (!f || f.type !== "under") return;
+    const key = filterParam(f);
+    if (!raw) { setMapFilter({ key, label: tRef.current("Searching…"), slugs: null, state: "loading" }); return; }
+    const max = Number(f.value);
+    const slugs = raw.features.filter((x) => x.properties.price != null && x.properties.price <= max).map((x) => x.properties.slug);
+    setMapFilter({ key, label: filterLabel(f, tRef.current), slugs, state: "ok" });
+  }, [filterRaw, raw]);
   const clearFilter = useCallback(() => {
     const sp = new URLSearchParams(window.location.search);
     sp.delete("f");
     window.history.replaceState(null, "", `/map${sp.toString() ? `?${sp}` : ""}`);
   }, []);
   const filterSlugs = mapFilter?.state === "ok" && mapFilter.slugs && mapFilter.slugs.length ? mapFilter.slugs : null;
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!cardMode || !map || !raw) { setPopular([]); return; }
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const only = filterSlugs ? new Set(filterSlugs) : null;
+    const update = () => {
+      timer = null;
+      if (map.getZoom() < 12.5) { setPopular((p) => (p.length ? [] : p)); return; }
+      const b = map.getBounds();
+      const list = raw.features.map((f) => f.properties)
+        .filter((p) => (!only || only.has(p.slug)) && p.sales > 0 && b.contains([p.lng, p.lat]))
+        .sort((a, c) => c.sales - a.sales).slice(0, 5);
+      setPopular((prev) => (prev.length === list.length && prev.every((p, i) => p.slug === list[i].slug) ? prev : list));
+    };
+    const later = () => { if (timer) clearTimeout(timer); timer = setTimeout(update, 250); };
+    map.on("moveend", later);
+    later();
+    return () => { map.off("moveend", later); if (timer) clearTimeout(timer); };
+  }, [cardMode, raw, filterSlugs, styleGen]);
 
+  // "Popular buildings in this area": the busiest buildings inside the visible map, so the map is useful without knowing Dubai.
+  const [popular, setPopular] = useState<Props3[]>([]);
+  const [popularOpen, setPopularOpen] = useState(true);
   const [compare, setCompare] = useState<string[]>([]);
   const [forYou, setForYou] = useState(false);
   const [thinned, setThinned] = useState(false); // zoomed out far enough that only busy buildings are drawn
@@ -832,8 +865,29 @@ export default function BuildingMap({
           onShow={(slug) => select(slug)}
         />
       )}
+      {cardMode && <MapSidebar compareCount={compare.length} />}
+      {cardMode && popular.length > 0 && !selected && (
+        <section aria-label={t("Popular buildings in this area")} className="absolute bottom-28 start-3 z-10 hidden w-72 rounded-2xl border border-white/70 bg-white/90 p-3 text-[#0f2742] shadow-xl backdrop-blur-xl md:block [html[data-welcome-open]_&]:hidden [html[data-sidebar-open]_&]:hidden">
+          <button type="button" onClick={() => setPopularOpen((o) => !o)} aria-expanded={popularOpen} className="flex w-full items-center justify-between text-start text-[13px] font-semibold">
+            {t("Popular buildings in this area")}<span aria-hidden className="text-xs">{popularOpen ? "▾" : "▸"}</span>
+          </button>
+          {popularOpen && (
+            <ul className="mt-2 space-y-1">
+              {popular.map((p) => (
+                <li key={p.slug}>
+                  <button type="button" onClick={() => select(p.slug)} className="flex w-full items-baseline justify-between gap-2 rounded-lg px-2 py-1.5 text-start text-[13px] hover:bg-cyan-50">
+                    <span className="min-w-0 truncate font-medium">{p.name}</span>
+                    <span className="shrink-0 text-xs text-[#0f2742]/65">{t("{n} sales", { n: p.sales })}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="mt-1.5 text-[11px] text-[#0f2742]/55">{t("Ranked by sales in the last 12 months. Source: Dubai Land Department.")}</p>
+        </section>
+      )}
       {cardMode && mapFilter && (
-        <div role="status" className="absolute start-1/2 top-3 z-20 flex max-w-[calc(100%-1.5rem)] -translate-x-1/2 items-center gap-2 rounded-full border border-cyan-300/60 bg-slate-900/90 py-1.5 ps-4 pe-1.5 text-xs text-white shadow-lg backdrop-blur rtl:translate-x-1/2 md:top-4">
+        <div role="status" className="absolute start-1/2 top-3 z-20 flex max-w-[calc(100%-1.5rem)] -translate-x-1/2 items-center gap-2 rounded-full border border-cyan-300/60 bg-slate-900/90 py-1.5 ps-4 pe-1.5 text-xs text-white shadow-lg backdrop-blur rtl:translate-x-1/2 max-md:start-14 max-md:max-w-[calc(100%-4rem)] max-md:translate-x-0 max-md:rtl:translate-x-0 md:top-4">
           <span className="min-w-0 truncate font-semibold">{mapFilter.state === "ok" ? filterLabel(parseFilter(mapFilter.key)!, t, mapFilter.label) : mapFilter.label}</span>
           {mapFilter.state === "ok" && <span className="shrink-0 text-slate-300">{filterSlugs ? t(filterSlugs.length === 1 ? "{n} building" : "{n} buildings", { n: filterSlugs.length }) : t("no buildings found")}</span>}
           <button type="button" onClick={clearFilter} className="shrink-0 rounded-full bg-white/15 px-3 py-1 font-semibold hover:bg-white/25">{t("Clear")}</button>

@@ -68,15 +68,15 @@ export default function MapWelcome() {
   return (
     <>
       {note && !open && (
-        <div role="status" className="dpi-enter absolute inset-x-3 top-3 z-20 mx-auto flex max-w-md items-start gap-2 rounded-xl border border-[#0f2742]/10 bg-white/90 px-3.5 py-2.5 text-[13px] leading-snug text-[#0f2742] shadow-lg backdrop-blur md:top-4">
+        <div role="status" className="dpi-enter absolute inset-x-3 top-3 z-20 mx-auto max-md:start-14 flex max-w-md items-start gap-2 rounded-xl border border-[#0f2742]/10 bg-white/90 px-3.5 py-2.5 text-[13px] leading-snug text-[#0f2742] shadow-lg backdrop-blur md:top-4">
           <span className="min-w-0 flex-1">{note}</span>
           <button type="button" onClick={() => setNote(null)} aria-label={t("Close")} className="grid h-6 w-6 shrink-0 place-items-center rounded-full hover:bg-black/5">✕</button>
         </div>
       )}
       {!open && (
         <button type="button" onClick={() => { setView("home"); setNote(null); setOpen(true); }} aria-label={t("Open the guide")}
-          className="absolute start-3 top-3 z-20 flex h-9 items-center gap-1.5 rounded-full border border-[#0f2742]/10 bg-white/90 px-3 text-[13px] font-semibold text-[#0f2742] shadow backdrop-blur hover:bg-white md:top-4 [html[data-building-selected]_&]:hidden">
-          <span aria-hidden className="grid h-5 w-5 place-items-center rounded-full bg-cyan-400 text-xs font-bold text-white">?</span>{t("Guide")}
+          className="absolute start-3 top-3 z-20 flex h-9 items-center gap-1.5 rounded-full border border-[#0f2742]/10 bg-white/90 px-2 text-[13px] md:px-3 font-semibold text-[#0f2742] shadow backdrop-blur hover:bg-white md:top-4 [html[data-building-selected]_&]:hidden">
+          <span aria-hidden className="grid h-5 w-5 place-items-center rounded-full bg-cyan-400 text-xs font-bold text-white">?</span><span className="max-md:sr-only">{t("Guide")}</span>
         </button>
       )}
       {open && (

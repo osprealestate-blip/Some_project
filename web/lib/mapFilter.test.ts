@@ -6,9 +6,10 @@ describe("parseFilter", () => {
     expect(parseFilter("near:metro")).toEqual({ type: "near", value: "metro" });
     expect(parseFilter("dev:Emaar Properties")).toEqual({ type: "dev", value: "Emaar Properties" });
     expect(parseFilter("area:392")).toEqual({ type: "area", value: "392" });
+    expect(parseFilter("under:1500000")).toEqual({ type: "under", value: "1500000" });
   });
   it("rejects anything else", () => {
-    for (const bad of [null, "", "near:airport", "area:abc", "x:1", "near", "dev:"]) expect(parseFilter(bad)).toBeNull();
+    for (const bad of [null, "", "near:airport", "area:abc", "x:1", "near", "dev:", "under:abc", "under:12"]) expect(parseFilter(bad)).toBeNull();
   });
   it("round trips", () => expect(filterParam({ type: "near", value: "park" })).toBe("near:park"));
 });
