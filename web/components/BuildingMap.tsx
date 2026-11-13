@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import maplibregl, { type ExpressionSpecification, type FilterSpecification, type MapLayerMouseEvent } from "maplibre-gl";
 import { DEFAULT_CURRENCY, type Currency } from "@/config/currency";
 import { LAUNCH_CODES } from "@/lib/communities";
@@ -12,7 +12,7 @@ import {
 } from "@/lib/mapMetrics";
 import { DUBAI_PITCH, LAUNCH_BOUNDS, MAP_ATTRIBUTION, webglAvailable } from "@/lib/mapStyle";
 import { DEFAULT_THEME, THEMES, parseTheme, type ThemeId } from "@/lib/mapThemes";
-import { PANEL_ATTR } from "./BuildingPanel";
+import BuildingCard from "./BuildingCard";
 import MapControls from "./MapControls";
 
 type Props = {
@@ -22,6 +22,9 @@ type Props = {
   currency?: Currency;
   /** "full": colour, scale and theme settings with the legend. "legend": the legend only (small maps). */
   controls?: "full" | "legend";
+  /** The main map: a click selects the building and opens the card over the map (URL: ?building=slug). Other maps
+   *  open the full building page instead. */
+  cardMode?: boolean;
 };
 
 type Props3 = MapBuildingProps & { lng: number; lat: number; height: number };
@@ -29,6 +32,9 @@ type Feature = { type: "Feature"; geometry: GeoJSON.Geometry; properties: Props3
 type Collection = { type: "FeatureCollection"; features: Feature[]; meta?: { periodEnd?: string | null } };
 
 const STORE = { settings: "dpi.map.settings", theme: "dpi.map.theme" };
+const CAMERA_KEY = "dpi.map.camera"; // this tab only: where the map was, so Back to map returns there
+const SELECTED_ATTR = "data-building-selected";
+const CYAN = "#22d3ee";
 const DPI_LAYERS = ["dpi-3d", "dpi-3d-approx", "dpi-columns"];
 const DPI_SOURCES = ["dpi-footprints", "dpi-columns"];
 const COLUMN_HALF_M = 55; // zoomed-out stand-in for each building: a 110 m square column
@@ -54,11 +60,6 @@ function save(key: string, value: string) {
   } catch {
     /* private mode: the choice lasts for this visit only */
   }
-}
-
-function slugFromPath(path: string | null): string | null {
-  const m = path ? /^\/building\/([^/?#]+)/.exec(path) : null;
-  return m ? decodeURIComponent(m[1]) : null;
 }
 
 /** The hover / tap card. Built with DOM nodes, never innerHTML: names are data. */
@@ -114,14 +115,24 @@ function card(p: Props3, s: MapSettings, currency: Currency, onOpen: (() => void
   return el;
 }
 
+function readCamera(): { c: [number, number]; z: number; p: number; b: number } | null {
+  try {
+    const v = JSON.parse(window.sessionStorage.getItem(CAMERA_KEY) ?? "null");
+    return v && Array.isArray(v.c) && v.c.length === 2 && [v.z, v.p, v.b].every((n: unknown) => typeof n === "number") ? v : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function BuildingMap({
-  focus = null, bounds = null, className = "h-full w-full", currency = DEFAULT_CURRENCY, controls = "full",
+  focus = null, bounds = null, className = "h-full w-full", currency = DEFAULT_CURRENCY, controls = "full", cardMode = false,
 }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const router = useRouter();
-  const pathname = usePathname();
-  const selected = slugFromPath(pathname);
+  const params = useSearchParams();
+  const selected = cardMode ? params.get("building") : null;
+  const view: "card" | "panel" = params.get("view") === "panel" ? "panel" : "card";
 
   const [noWebgl, setNoWebgl] = useState(false);
   const [raw, setRaw] = useState<Collection | null>(null);
@@ -132,7 +143,7 @@ export default function BuildingMap({
   const [styleGen, setStyleGen] = useState(0); // bumps each time a style finishes loading
 
   // Everything the map event handlers need, current without re-binding them.
-  const live = useRef({ settings, currency, theme, selected, hover: null as string | null, baseKey: null as string | null });
+  const live = useRef({ settings, currency, theme, selected, hover: null as string | null, baseKey: null as string | null, restored: false });
   live.current.settings = settings;
   live.current.currency = currency;
   live.current.theme = theme;
@@ -140,12 +151,35 @@ export default function BuildingMap({
 
   const coloured = useMemo(() => (raw ? colourise(raw.features, settings) : null), [raw, settings]);
 
-  const open = useCallback((slug: string) => {
-    const url = `/building/${encodeURIComponent(slug)}`;
-    // While a panel is open, swap it so Close (browser Back) returns to the map, not to the previous building.
-    if (document.documentElement.hasAttribute(PANEL_ATTR)) router.replace(url, { scroll: false });
-    else router.push(url, { scroll: false });
-  }, [router]);
+  // Other maps (building and community pages): a click goes to the full building page.
+  const open = useCallback((slug: string) => router.push(`/building/${encodeURIComponent(slug)}`), [router]);
+
+  // The main map keeps the visitor on the map. The selection lives in the URL (?building=slug, &view=panel), so a
+  // shared link opens the card, and the browser Back button steps back: panel, then card, then the page before.
+  const panelPushed = useRef(false);
+  const select = useCallback((slug: string, keepView = false) => {
+    const sp = new URLSearchParams(window.location.search);
+    const had = sp.has("building");
+    const v = keepView ? sp.get("view") : null;
+    const url = `/map?building=${encodeURIComponent(slug)}${v === "panel" ? "&view=panel" : ""}`;
+    if (had) window.history.replaceState(null, "", url);
+    else window.history.pushState(null, "", url);
+  }, []);
+  const setView = useCallback((v: "card" | "panel") => {
+    const slug = new URLSearchParams(window.location.search).get("building");
+    if (!slug) return;
+    if (v === "panel") {
+      panelPushed.current = true;
+      window.history.pushState(null, "", `/map?building=${encodeURIComponent(slug)}&view=panel`);
+    } else if (panelPushed.current) {
+      panelPushed.current = false;
+      window.history.back();
+    } else window.history.replaceState(null, "", `/map?building=${encodeURIComponent(slug)}`);
+  }, []);
+  const closeCard = useCallback(() => {
+    panelPushed.current = false;
+    window.history.replaceState(null, "", "/map");
+  }, []);
 
   // 1. Read saved choices, then create the map.
   useEffect(() => {
@@ -161,11 +195,15 @@ export default function BuildingMap({
     live.current.theme = savedTheme;
 
     // The Illustrated theme opens on its own tilted coast view, unless this map was given a place to show.
-    const illustratedStart = savedTheme === "illustrated" && !focus && !bounds;
+    const saved = cardMode && !focus && !bounds ? readCamera() : null;
+    live.current.restored = !!saved;
+    const illustratedStart = savedTheme === "illustrated" && !focus && !bounds && !saved;
     const map = new maplibregl.Map({
       container: container.current,
       style: THEMES[savedTheme].styleUrl,
-      ...(illustratedStart
+      ...(saved
+        ? { center: saved.c, zoom: saved.z, pitch: saved.p, bearing: saved.b }
+        : illustratedStart
         ? illustratedCamera(container.current.clientWidth)
         : focus
           ? { center: [focus.lng, focus.lat] as [number, number], zoom: 15.5, pitch: DUBAI_PITCH }
@@ -176,6 +214,12 @@ export default function BuildingMap({
     map.addControl(new maplibregl.AttributionControl({ compact: true, customAttribution: MAP_ATTRIBUTION }));
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "bottom-right");
     map.on("style.load", () => setStyleGen((g) => g + 1));
+    if (cardMode) {
+      map.on("moveend", () => {
+        const c = map.getCenter();
+        try { window.sessionStorage.setItem(CAMERA_KEY, JSON.stringify({ c: [c.lng, c.lat], z: map.getZoom(), p: map.getPitch(), b: map.getBearing() })); } catch { /* the view is just not remembered */ }
+      });
+    }
 
     // Hover and tap. Touch screens have no hover: a tap shows the card with a "View details" button.
     const canHover = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
@@ -230,7 +274,7 @@ export default function BuildingMap({
         map.getCanvas().style.cursor = "pointer"; // a priced building: it opens a page
         if (live.current.hover !== p.slug) {
           setHover(p.slug);
-          show(p, false);
+          if (p.slug === live.current.selected) popup.remove(); else show(p, false);
         }
         return;
       }
@@ -262,7 +306,10 @@ export default function BuildingMap({
         }
         return;
       }
-      if (canHover) open(p.slug);
+      if (cardMode) {
+        popup.remove();
+        select(p.slug, true);
+      } else if (canHover) open(p.slug);
       else {
         setHover(p.slug);
         show(p, true);
@@ -374,7 +421,8 @@ export default function BuildingMap({
       map.addSource("dpi-footprints", { type: "geojson", data: EMPTY, promoteId: "slug" });
       map.addSource("dpi-columns", { type: "geojson", data: EMPTY, promoteId: "slug" });
       const active: ExpressionSpecification = ["any", ["boolean", ["feature-state", "hover"], false], ["boolean", ["feature-state", "selected"], false]];
-      const colour: ExpressionSpecification = ["case", active, ["get", "_tint"], ["get", "_color"]];
+      // The selected building turns cyan, whatever the colour scheme, so it is the one thing that cannot be missed.
+      const colour: ExpressionSpecification = ["case", ["boolean", ["feature-state", "selected"], false], CYAN, active, ["get", "_tint"], ["get", "_color"]];
       // 4 m above the grey basemap tower: closer than that, the two roofs flicker as red and grey stripes.
       // The hovered or selected building grows 20% taller (and at least 25 m) so it stands out from its neighbours.
       const height: ExpressionSpecification = ["case", active, ["+", ["*", ["get", "height"], 1.2], 25], ["+", ["get", "height"], 4]];
@@ -409,6 +457,13 @@ export default function BuildingMap({
           "fill-extrusion-vertical-gradient": true,
         },
       });
+    }
+
+    // Glow round the selected building's footprint: a wide soft line under a crisp one.
+    if (!map.getSource("dpi-selected")) {
+      map.addSource("dpi-selected", { type: "geojson", data: EMPTY });
+      map.addLayer({ id: "dpi-selected-glow", type: "line", source: "dpi-selected", layout: { "line-join": "round" }, paint: { "line-color": CYAN, "line-width": 14, "line-blur": 10, "line-opacity": 0.75 } });
+      map.addLayer({ id: "dpi-selected-line", type: "line", source: "dpi-selected", layout: { "line-join": "round" }, paint: { "line-color": "#ecfeff", "line-width": 2.5, "line-opacity": 0.95 } });
     }
 
     // Illustrated recolours the basemap and the grey city only; the coloured data buildings above stay as they are.
@@ -451,6 +506,28 @@ export default function BuildingMap({
     live.current.hover = null;
   }, [selected, coloured, styleGen]);
 
+  // The selected building: glow outline, the page flag the phone layout reads, and the camera move.
+  useEffect(() => {
+    if (!cardMode) return;
+    document.documentElement.toggleAttribute(SELECTED_ATTR, !!selected);
+    return () => document.documentElement.removeAttribute(SELECTED_ATTR);
+  }, [cardMode, selected]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!cardMode || !map || !styleGen) return;
+    const src = map.getSource("dpi-selected") as maplibregl.GeoJSONSource | undefined;
+    const f = selected && raw ? raw.features.find((x) => x.properties.slug === selected) : null;
+    if (src) src.setData(f ? { type: "FeatureCollection", features: [{ type: "Feature", geometry: f.geometry, properties: {} }] } : EMPTY);
+    if (!selected) live.current.restored = false;
+    const wide = window.matchMedia("(min-width: 768px)").matches;
+    const padding = !f ? { left: 0, bottom: 0, top: 0, right: 0 } : wide ? { left: 420, bottom: 0, top: 0, right: 0 } : { left: 0, bottom: Math.round(window.innerHeight * 0.45), top: 0, right: 0 };
+    // Returning from the full page: the saved camera already shows the building, so do not move it again.
+    if (f && live.current.restored) { live.current.restored = false; map.easeTo({ padding, duration: 0 }); return; }
+    if (f) map.easeTo({ center: [f.properties.lng, f.properties.lat], zoom: Math.max(map.getZoom(), 15.8), padding, duration: 750 });
+    else map.easeTo({ padding, duration: 400 });
+  }, [cardMode, selected, raw, styleGen]);
+
   const changeSettings = (next: MapSettings) => {
     setSettings(next);
     setHidden([]);
@@ -473,6 +550,7 @@ export default function BuildingMap({
     <div className="relative h-full w-full" data-map-theme={theme}>
       <div ref={container} className={className} aria-label="Map of Dubai buildings" />
       {legend && (
+        <div className={selected ? "contents max-sm:hidden" : "contents"}>
         <MapControls
           compact={controls === "legend"}
           settings={settings}
@@ -484,6 +562,18 @@ export default function BuildingMap({
           onSettings={changeSettings}
           onTheme={changeTheme}
           onToggleClass={(cls) => setHidden((h) => (h.includes(cls) ? h.filter((c) => c !== cls) : [...h, cls]))}
+        />
+        </div>
+      )}
+      {cardMode && selected && (
+        <BuildingCard
+          slug={selected}
+          view={view}
+          currency={currency}
+          features={raw?.features.map((f) => f.properties) ?? []}
+          onClose={closeCard}
+          onView={setView}
+          onSelect={(slug) => select(slug, true)}
         />
       )}
     </div>
