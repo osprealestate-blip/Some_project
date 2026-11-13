@@ -5,6 +5,7 @@ import {
   type Place, type RecentSale, type Summary,
 } from "./queries";
 import { change, median } from "./stats";
+import { routingConfig } from "./routing";
 import { buildingVerdict, type Verdict } from "./verdict";
 
 export type CardData = {
@@ -28,6 +29,8 @@ export type CardData = {
   places: Place[];
   sales: RecentSale[];
   siblings: { slug: string; name_en: string }[];
+  /** True only when the owner has switched on a routing service. Walk and Drive minutes are hidden otherwise. */
+  routing: boolean;
 };
 
 export async function buildingCard(slug: string): Promise<CardData | null> {
@@ -57,5 +60,6 @@ export async function buildingCard(slug: string): Promise<CardData | null> {
       sales: all?.sale_count_12m ?? 0, rentCount: all?.rent_count_12m ?? 0,
     },
     rows, verdict, benchmark: { psf: cAll?.sale_median_psf_12m ?? null, yield: cAll?.gross_yield ?? null }, facilities, places, sales, siblings,
+    routing: routingConfig().enabled,
   };
 }

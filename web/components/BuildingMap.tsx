@@ -20,7 +20,10 @@ import { MAP_COMPARE_MAX as MAX_COMPARE } from "@/lib/mapCompare";
 const ForYouPanel = dynamic(() => import("./ForYouPanel"));
 const CompareTray = dynamic(() => import("./CompareTray"));
 const BuildingCard = dynamic(() => import("./BuildingCard"));
-import { FACILITIES, iconSvg, km, nearbyLines, type FacilityId, type NearestFacility } from "@/lib/facilities";
+import { FACILITIES, iconSvg, km, type FacilityId, type NearestFacility } from "@/lib/facilities";
+import { fetchRoute } from "@/lib/routeClient";
+import { labelPoint, routeLines, type RouteMap } from "@/lib/routeLines";
+import { minutesLabel, type RouteMode } from "@/lib/routing";
 import MapControls from "./MapControls";
 
 type Props = {
@@ -169,6 +172,8 @@ export default function BuildingMap({
   const [nearby, setNearby] = useState(false); // location mode: lines to the nearest places
   const [hiddenKinds, setHiddenKinds] = useState<FacilityId[]>([]);
   const [facilities, setFacilities] = useState<NearestFacility[]>([]);
+  const [routeMode, setRouteMode] = useState<"line" | RouteMode>("line"); // straight line, or real walking / driving routes
+  const [routes, setRoutes] = useState<RouteMap>({});
   const [compare, setCompare] = useState<string[]>([]);
   const [forYou, setForYou] = useState(false);
   const [thinned, setThinned] = useState(false); // zoomed out far enough that only busy buildings are drawn
@@ -514,7 +519,7 @@ export default function BuildingMap({
     if (!map.getSource("dpi-nearby")) {
       map.addSource("dpi-nearby", { type: "geojson", data: EMPTY });
       map.addLayer({ id: "dpi-nearby-glow", type: "line", source: "dpi-nearby", layout: { "line-cap": "round" }, paint: { "line-color": ["get", "colour"], "line-width": 9, "line-blur": 6, "line-opacity": 0.7 } });
-      map.addLayer({ id: "dpi-nearby-line", type: "line", source: "dpi-nearby", layout: { "line-cap": "round" }, paint: { "line-color": ["get", "colour"], "line-width": 2.2 } });
+      map.addLayer({ id: "dpi-nearby-line", type: "line", source: "dpi-nearby", layout: { "line-cap": "round" }, paint: { "line-color": ["get", "colour"], "line-width": ["case", ["==", ["get", "straight"], 1], 1.6, 3] } });
     }
     if (!map.getSource("dpi-compare")) {
       map.addSource("dpi-compare", { type: "geojson", data: EMPTY });
@@ -612,7 +617,18 @@ export default function BuildingMap({
   }, [cardMode, compare, raw, styleGen]);
 
   // Location mode. Leaving the building, or pressing Reset, clears the lines.
-  useEffect(() => { setNearby(false); setHiddenKinds([]); setFacilities([]); }, [selected]);
+  useEffect(() => { setNearby(false); setHiddenKinds([]); setFacilities([]); setRouteMode("line"); setRoutes({}); }, [selected]);
+  // Real routes: asked for only when Walk or Drive is chosen. A kind with no route keeps its straight line and shows no minutes.
+  useEffect(() => {
+    setRoutes({});
+    const from = selected ? raw?.features.find((x) => x.properties.slug === selected)?.properties : null;
+    if (!nearby || routeMode === "line" || !from || !facilities.length) return;
+    let live = true;
+    for (const f of facilities) {
+      fetchRoute(routeMode, [from.lng, from.lat], [f.lng, f.lat]).then((r) => { if (live) setRoutes((m) => ({ ...m, [f.id]: r })); });
+    }
+    return () => { live = false; };
+  }, [nearby, routeMode, facilities, selected, raw]);
   const wasNearby = useRef(false);
   useEffect(() => {
     const map = mapRef.current;
@@ -620,7 +636,7 @@ export default function BuildingMap({
     const src = map.getSource("dpi-nearby") as maplibregl.GeoJSONSource | undefined;
     const from = selected ? raw?.features.find((x) => x.properties.slug === selected)?.properties : null;
     const markers: maplibregl.Marker[] = [];
-    if (src) src.setData(nearby && from ? nearbyLines({ lng: from.lng, lat: from.lat }, facilities, hiddenKinds) : EMPTY);
+    if (src) src.setData(nearby && from ? routeLines({ lng: from.lng, lat: from.lat }, facilities, hiddenKinds, routes, routeMode !== "line") : EMPTY);
     if (nearby && from) {
       const visible = facilities.filter((f) => !hiddenKinds.includes(f.id));
       for (const f of visible) {
@@ -630,11 +646,13 @@ export default function BuildingMap({
         pin.type = "button";
         pin.className = "dpi-pin";
         pin.style.setProperty("--c", kind.colour);
-        pin.setAttribute("aria-label", `${kind.label}: ${f.name}, ${km(f.distanceM)} straight-line${f.approx ? ", approximate position" : ""}`);
+        const r = routeMode === "line" ? null : routes[f.id];
+        const timing = r ? `${minutesLabel(r.minutes, routeMode as RouteMode)}, ${km(r.distanceM)} by ${routeMode === "walk" ? "foot" : "road"}` : null;
+        pin.setAttribute("aria-label", `${kind.label}: ${f.name}, ${timing ? `${timing}; ` : ""}${km(f.distanceM)} straight-line${f.approx ? ", approximate position" : ""}`);
         pin.innerHTML = iconSvg(f.id, 15);
         const tip = document.createElement("span");
         tip.className = "dpi-pin-tip";
-        tip.textContent = `${f.name} · ${f.approx ? "≈ " : ""}${km(f.distanceM)} straight-line`;
+        tip.textContent = `${f.name} · ${timing ? `${timing} · ` : ""}${f.approx ? "≈ " : ""}${km(f.distanceM)} straight-line`;
         pin.append(tip);
         pin.addEventListener("click", (e) => { e.stopPropagation(); pin.classList.toggle("is-open"); });
         markers.push(new maplibregl.Marker({ element: pin }).setLngLat([f.lng, f.lat]).addTo(map));
@@ -642,8 +660,8 @@ export default function BuildingMap({
         const lab = document.createElement("div");
         lab.className = "dpi-dist";
         lab.style.setProperty("--c", kind.colour);
-        lab.textContent = `${kind.label} ${f.approx ? "≈ " : ""}${km(f.distanceM)}`;
-        markers.push(new maplibregl.Marker({ element: lab }).setLngLat([(from.lng + f.lng) / 2, (from.lat + f.lat) / 2]).addTo(map));
+        lab.textContent = r ? `${kind.label} ${minutesLabel(r.minutes, routeMode as RouteMode)} · ${km(r.distanceM)}` : routeMode !== "line" && routes[f.id] === null ? `${kind.label} no route · ${f.approx ? "≈ " : ""}${km(f.distanceM)} straight` : `${kind.label} ${f.approx ? "≈ " : ""}${km(f.distanceM)}${routeMode !== "line" ? " straight" : ""}`;
+        markers.push(new maplibregl.Marker({ element: lab }).setLngLat(labelPoint(from, f, r)).addTo(map));
       }
       if (!wasNearby.current && visible.length) {
         const b = new maplibregl.LngLatBounds([from.lng, from.lat], [from.lng, from.lat]);
@@ -654,7 +672,7 @@ export default function BuildingMap({
     }
     wasNearby.current = nearby;
     return () => markers.forEach((m) => m.remove());
-  }, [cardMode, nearby, facilities, hiddenKinds, selected, raw, styleGen]);
+  }, [cardMode, nearby, facilities, hiddenKinds, selected, raw, styleGen, routes, routeMode]);
 
   const changeSettings = (next: MapSettings) => {
     setSettings(next);
@@ -704,7 +722,10 @@ export default function BuildingMap({
           onSelect={(slug) => select(slug, true)}
           nearby={nearby}
           hiddenKinds={hiddenKinds}
-          onNearby={(on) => { setNearby(on); if (!on) setHiddenKinds([]); }}
+          onNearby={(on) => { setNearby(on); if (!on) { setHiddenKinds([]); setRouteMode("line"); } }}
+          routeMode={routeMode}
+          routes={routes}
+          onRouteMode={setRouteMode}
           onToggleKind={(id) => setHiddenKinds((h) => (h.includes(id) ? h.filter((x) => x !== id) : [...h, id]))}
           onFacilities={setFacilities}
           compared={compare}

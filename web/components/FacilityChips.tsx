@@ -1,3 +1,5 @@
+import type { RouteMap } from "@/lib/routeLines";
+import { minutesLabel, type RouteMode } from "@/lib/routing";
 import { FACILITIES, ICON_PATHS, km, type FacilityId, type NearestFacility } from "@/lib/facilities";
 
 /** Small line icons, one per facility kind. Colour always comes with an icon and a label, never colour alone. */
@@ -9,11 +11,13 @@ type Props = {
   facilities: NearestFacility[]; showNames?: boolean; className?: string;
   /** When set, each chip is a button that shows or hides that kind's line on the map. */
   onToggle?: (id: FacilityId) => void; hidden?: FacilityId[];
+  /** Real routes, when Walk or Drive is chosen. Minutes show only for a kind with a route; the straight-line km stays beside them. */
+  routes?: RouteMap; mode?: "line" | RouteMode;
 };
 
 /** The nearest metro, hospital, school, mall and park as chips: icon, label and straight-line km.
  *  Neon lines on the map (a later step) will reuse these colours and icons. */
-export default function FacilityChips({ facilities, showNames = false, className = "", onToggle, hidden = [] }: Props) {
+export default function FacilityChips({ facilities, showNames = false, className = "", onToggle, hidden = [], routes, mode = "line" }: Props) {
   return (
     <ul className={`grid gap-1.5 ${showNames ? "sm:grid-cols-2" : "grid-cols-2"} ${className}`}>
       {FACILITIES.map((f) => {
@@ -29,6 +33,11 @@ export default function FacilityChips({ facilities, showNames = false, className
               <span className="block truncate text-[13px] font-semibold tabular-nums text-[var(--fg)]">
                 {hit ? `${hit.approx ? "≈ " : ""}${km(hit.distanceM)}` : "–"}
               </span>
+              {hit && mode !== "line" && (
+                <span className="block truncate text-[11px] font-medium" style={{ color: f.colour }}>
+                  {routes?.[f.id] ? `${minutesLabel(routes[f.id]!.minutes, mode)}` : routes?.[f.id] === null ? "no route found" : "finding route…"}
+                </span>
+              )}
               {showNames && hit && <span className="block truncate text-[11px] text-[var(--muted)]">{hit.name}</span>}
             </span>
           </>
