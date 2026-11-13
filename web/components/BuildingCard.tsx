@@ -169,7 +169,8 @@ export default function BuildingCard({ slug, view, currency, features, onClose, 
   const style: React.CSSProperties = desktop
     ? showPanel
       ? { insetInlineStart: "max(16px, calc(50vw - 460px))", bottom: "calc((100dvh - min(700px, 100dvh - 7rem)) / 2)", width: "min(920px, calc(100vw - 32px))", height: "min(700px, calc(100dvh - 7rem))", borderRadius: 20 }
-      : { insetInlineStart: 16, bottom: 16, width: 392, height: "min(500px, calc(100dvh - 6rem))", borderRadius: 20 }
+      // Anchored beside the selected building: BuildingMap keeps --card-x / --card-y in step with the map as it moves.
+      : { left: "var(--card-x, 16px)", top: "var(--card-y, calc(100dvh - min(500px, 100dvh - 6rem) - 16px))", width: 392, height: "min(500px, calc(100dvh - 6rem))", borderRadius: 16 }
     : {
         insetInlineStart: 0, bottom: 0, width: "100%", borderRadius: "20px 20px 0 0",
         height: `calc(${sheet === "full" ? "100dvh" : sheet === "expanded" ? "74dvh" : "min(60dvh, 470px)"} - ${drag ?? 0}px)`,
@@ -427,7 +428,7 @@ export default function BuildingCard({ slug, view, currency, features, onClose, 
         role="dialog"
         aria-modal={showPanel && desktop}
         aria-labelledby={showPanel ? "building-panel-title" : "building-card-title"}
-        className={`dpi-glass dpi-enter fixed z-40 overflow-hidden ${drag !== null ? "is-dragging" : ""}`}
+        className={`dpi-glass dpi-enter fixed z-40 overflow-hidden ${drag !== null ? "is-dragging" : ""} ${desktop && !showPanel ? "is-anchored" : ""}`}
         style={style}
         onKeyDown={(e) => {
           // The desktop panel is modal: keep Tab inside it.

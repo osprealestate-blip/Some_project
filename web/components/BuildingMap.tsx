@@ -692,6 +692,48 @@ export default function BuildingMap({
     else map.easeTo({ padding, duration: 400 });
   }, [cardMode, selected, raw, styleGen]);
 
+  // The desktop card stays attached to the selected building: on every map move its position is written to two CSS
+  // variables the card reads, and a thin leader line joins the two. The card sits beside the building (never over it)
+  // and is kept inside the window. Phones keep the bottom sheet.
+  const leaderRef = useRef<SVGSVGElement>(null);
+  useEffect(() => {
+    const map = mapRef.current;
+    const root = document.documentElement;
+    const clear = () => { root.style.removeProperty("--card-x"); root.style.removeProperty("--card-y"); if (leaderRef.current) leaderRef.current.style.display = "none"; };
+    const f = selected && raw ? raw.features.find((x) => x.properties.slug === selected)?.properties : null;
+    if (!cardMode || !map || !f || view !== "card") { clear(); return; }
+    const place = () => {
+      if (!window.matchMedia("(min-width: 768px)").matches) { clear(); return; }
+      const box = map.getContainer().getBoundingClientRect();
+      const p = map.project([f.lng, f.lat]);
+      // Aim at about the middle of the tower: its height in pixels at this zoom and tilt.
+      const mpp = (78271.517 * Math.cos((f.lat * Math.PI) / 180)) / 2 ** map.getZoom();
+      const rise = Math.min(260, ((f.height || 0) / mpp) * Math.sin((map.getPitch() * Math.PI) / 180));
+      const bx = box.left + p.x, by = box.top + p.y - rise / 2;
+      const W = 392, H = Math.min(500, window.innerHeight - 96), GAP = 64;
+      const minX = 76, maxX = window.innerWidth - W - 16;
+      let x = bx - GAP - W; // to the left of the building by default
+      if (x < minX) x = bx + GAP <= maxX ? bx + GAP : minX;
+      x = Math.max(minX, Math.min(maxX, x));
+      const y = Math.max(72, Math.min(window.innerHeight - H - 16, by - H / 2));
+      root.style.setProperty("--card-x", `${Math.round(x)}px`);
+      root.style.setProperty("--card-y", `${Math.round(y)}px`);
+      const svg = leaderRef.current;
+      if (svg) {
+        const overlap = bx > x - 8 && bx < x + W + 8 && by > y && by < y + H;
+        svg.style.display = overlap ? "none" : "block";
+        const ex = bx < x ? x : x + W, ey = Math.max(y + 24, Math.min(y + H - 24, by));
+        const line = svg.querySelector("line"), dot = svg.querySelector("circle");
+        line?.setAttribute("x1", String(bx)); line?.setAttribute("y1", String(by)); line?.setAttribute("x2", String(ex)); line?.setAttribute("y2", String(ey));
+        dot?.setAttribute("cx", String(bx)); dot?.setAttribute("cy", String(by));
+      }
+    };
+    place();
+    map.on("move", place);
+    window.addEventListener("resize", place);
+    return () => { map.off("move", place); window.removeEventListener("resize", place); clear(); };
+  }, [cardMode, selected, raw, view, styleGen]);
+
   // Compare list: kept in the URL (?compare=a,b,c) so it survives a reload and can be shared.
   useEffect(() => {
     if (!cardMode) return;
@@ -832,6 +874,12 @@ export default function BuildingMap({
           onToggleClass={(cls) => setHidden((h) => (h.includes(cls) ? h.filter((c) => c !== cls) : [...h, cls]))}
         />
         </div>
+      )}
+      {cardMode && selected && (
+        <svg ref={leaderRef} aria-hidden className="pointer-events-none fixed inset-0 z-[39] h-full w-full" style={{ display: "none" }}>
+          <line stroke="#0891b2" strokeWidth={1.5} strokeDasharray="1 5" strokeLinecap="round" />
+          <circle r={4} fill="#fff" stroke="#0891b2" strokeWidth={2} />
+        </svg>
       )}
       {cardMode && selected && (
         <BuildingCard
