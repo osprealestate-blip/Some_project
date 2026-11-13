@@ -38,9 +38,9 @@ type Props = {
   onNearby: (on: boolean) => void;
   onToggleKind: (id: FacilityId) => void;
   onFacilities: (list: NearestFacility[]) => void;
-  routeMode: "line" | RouteMode;
+  routeMode: RouteMode;
   routes: RouteMap;
-  onRouteMode: (m: "line" | RouteMode) => void;
+  onRouteMode: (m: RouteMode) => void;
   compared: string[];
   onCompare: (slug: string) => void;
 };
@@ -216,7 +216,7 @@ export default function BuildingCard({ slug, view, currency, features, onClose, 
       )}
       <div>
         <div className="mb-1 flex items-center justify-between gap-2">
-          <span className="text-[11px] font-medium uppercase tracking-wide text-[var(--muted)]">{routeMode === "line" ? t("Nearest, straight-line") : t("Nearest · km straight-line, time by route")}</span>
+          <span className="text-[11px] font-medium uppercase tracking-wide text-[var(--muted)]">{data?.routing ? t("Nearest · km straight-line, time by route") : t("Nearest, straight-line")}</span>
           {data && data.facilities.length > 0 && (
             <button type="button" onClick={() => onNearby(!nearby)} aria-pressed={nearby}
               className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${nearby ? "bg-white/15 text-[var(--fg)] hover:bg-white/25" : "bg-cyan-300/15 text-cyan-200 ring-1 ring-cyan-300/50 hover:bg-cyan-300/25"}`}>
@@ -226,16 +226,17 @@ export default function BuildingCard({ slug, view, currency, features, onClose, 
         </div>
         {nearby && data?.routing && (
           <div role="group" aria-label={t("Show distances as")} className="mb-1.5 flex gap-1 rounded-full bg-white/[0.07] p-0.5 text-[11px]">
-            {([["line", t("Straight line")], ...ROUTE_MODES.map((m) => [m.id, t(m.label)])] as ["line" | RouteMode, string][]).map(([id, label]) => (
+            {(ROUTE_MODES.map((m) => [m.id, t(m.label)]) as [RouteMode, string][]).map(([id, label]) => (
               <button key={id} type="button" aria-pressed={routeMode === id} onClick={() => onRouteMode(id)}
                 className={`flex-1 rounded-full px-2 py-1 font-semibold ${routeMode === id ? "bg-cyan-300 text-slate-900" : "text-[var(--muted)] hover:text-[var(--fg)]"}`}>{label}</button>
             ))}
           </div>
         )}
-        {data ? <FacilityChips facilities={data.facilities} onToggle={nearby ? onToggleKind : undefined} hidden={hiddenKinds} routes={routes} mode={routeMode} /> : <div className="h-[108px] animate-pulse rounded-lg bg-white/[0.06]" />}
+        {nearby && data && !data.routing && <p role="note" className="mb-1.5 text-[11px] text-[var(--muted)]">{t("Travel times unavailable. Distances are straight-line.")}</p>}
+        {data ? <FacilityChips facilities={data.facilities} onToggle={nearby ? onToggleKind : undefined} hidden={hiddenKinds} routes={routes} mode={data.routing ? routeMode : "line"} /> : <div className="h-[108px] animate-pulse rounded-lg bg-white/[0.06]" />}
       </div>
       <p className="mt-auto text-[10.5px] leading-snug text-[var(--muted)]">
-        {t("Source: DLD sales and rents")}{periodEnd ? `, ${t("data to {date}", { date: day(periodEnd) })}` : ""}; {t("places from OpenStreetMap, KHDA, DHA.")}{routeMode !== "line" && ` ${t("Walk and drive times are estimates from OpenStreetMap routing, without traffic or waiting.")}`} {t(DISCLAIMER)}
+        {t("Source: DLD sales and rents")}{periodEnd ? `, ${t("data to {date}", { date: day(periodEnd) })}` : ""}; {t("places from OpenStreetMap, KHDA, DHA.")}{data?.routing && ` ${t("Walk and drive times are estimates from OpenStreetMap routing, without traffic or waiting.")}`} {t(DISCLAIMER)}
       </p>
       <div className="flex gap-2">
         <button type="button" onClick={() => onView("panel")} className="min-w-0 flex-1 rounded-xl bg-cyan-300 px-3 py-2.5 text-sm font-semibold text-slate-900 hover:bg-cyan-200">

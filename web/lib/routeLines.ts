@@ -4,20 +4,15 @@ import type { RouteResult } from "./routing";
 /** Per-kind route state: a route, null when it failed, or missing while still loading. */
 export type RouteMap = Partial<Record<FacilityId, RouteResult | null>>;
 
-/** Lines for the map. A kind with a real route is drawn along the route; any other kind keeps its straight line,
- *  marked `straight: 1` (when `thinFallback`, i.e. in a route mode) so the map can draw it thinner. Straight lines are never given minutes. */
-export function routeLines(from: { lng: number; lat: number }, list: NearestFacility[], hidden: FacilityId[], routes: RouteMap, thinFallback = false): GeoJSON.FeatureCollection {
+/** Lines for the map: only a kind with a real route gets a line, drawn along the route. There are no straight lines. */
+export function routeLines(list: NearestFacility[], hidden: FacilityId[], routes: RouteMap): GeoJSON.FeatureCollection {
   return {
     type: "FeatureCollection",
-    features: list.filter((f) => !hidden.includes(f.id)).map((f) => {
-      const r = routes[f.id];
-      const colour = FACILITIES.find((x) => x.id === f.id)!.colour;
-      return {
-        type: "Feature" as const,
-        geometry: { type: "LineString" as const, coordinates: r ? r.coords : [[from.lng, from.lat], [f.lng, f.lat]] },
-        properties: { id: f.id, colour, straight: !r && thinFallback ? 1 : 0 },
-      };
-    }),
+    features: list.filter((f) => !hidden.includes(f.id) && routes[f.id]).map((f) => ({
+      type: "Feature" as const,
+      geometry: { type: "LineString" as const, coordinates: routes[f.id]!.coords },
+      properties: { id: f.id, colour: FACILITIES.find((x) => x.id === f.id)!.colour },
+    })),
   };
 }
 

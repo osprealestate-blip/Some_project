@@ -180,7 +180,7 @@ export default function BuildingMap({
   const [nearby, setNearby] = useState(false); // location mode: lines to the nearest places
   const [hiddenKinds, setHiddenKinds] = useState<FacilityId[]>([]);
   const [facilities, setFacilities] = useState<NearestFacility[]>([]);
-  const [routeMode, setRouteMode] = useState<"line" | RouteMode>("line"); // straight line, or real walking / driving routes
+  const [routeMode, setRouteMode] = useState<RouteMode>("drive"); // real driving (default) or walking routes
   const [routes, setRoutes] = useState<RouteMap>({});
   // Map search: ?f=near:metro | dev:Name | area:392 limits the map to the buildings that match.
   const filterRaw = cardMode ? params.get("f") : null;
@@ -607,7 +607,7 @@ export default function BuildingMap({
     if (!map.getSource("dpi-nearby")) {
       map.addSource("dpi-nearby", { type: "geojson", data: EMPTY });
       map.addLayer({ id: "dpi-nearby-glow", type: "line", source: "dpi-nearby", layout: { "line-cap": "round" }, paint: { "line-color": ["get", "colour"], "line-width": 6, "line-blur": 3, "line-opacity": 0.22 } });
-      map.addLayer({ id: "dpi-nearby-line", type: "line", source: "dpi-nearby", layout: { "line-cap": "round" }, paint: { "line-color": ["get", "colour"], "line-width": ["case", ["==", ["get", "straight"], 1], 1.6, 3] } });
+      map.addLayer({ id: "dpi-nearby-line", type: "line", source: "dpi-nearby", layout: { "line-cap": "round" }, paint: { "line-color": ["get", "colour"], "line-width": 3 } });
     }
     if (!map.getSource("dpi-compare")) {
       map.addSource("dpi-compare", { type: "geojson", data: EMPTY });
@@ -719,12 +719,12 @@ export default function BuildingMap({
   }, [cardMode, compare, raw, styleGen]);
 
   // Location mode. Leaving the building, or pressing Reset, clears the lines.
-  useEffect(() => { setNearby(false); setHiddenKinds([]); setFacilities([]); setRouteMode("line"); setRoutes({}); }, [selected]);
-  // Real routes: asked for only when Walk or Drive is chosen. A kind with no route keeps its straight line and shows no minutes.
+  useEffect(() => { setNearby(false); setHiddenKinds([]); setFacilities([]); setRouteMode("drive"); setRoutes({}); }, [selected]);
+  // Real routes for the chosen mode. A kind with no route (or routing switched off) gets no line and no minutes.
   useEffect(() => {
     setRoutes({});
     const from = selected ? raw?.features.find((x) => x.properties.slug === selected)?.properties : null;
-    if (!nearby || routeMode === "line" || !from || !facilities.length) return;
+    if (!nearby || !from || !facilities.length) return;
     let live = true;
     for (const f of facilities) {
       fetchRoute(routeMode, [from.lng, from.lat], [f.lng, f.lat]).then((r) => { if (live) setRoutes((m) => ({ ...m, [f.id]: r })); });
@@ -739,7 +739,7 @@ export default function BuildingMap({
     const src = map.getSource("dpi-nearby") as maplibregl.GeoJSONSource | undefined;
     const from = selected ? raw?.features.find((x) => x.properties.slug === selected)?.properties : null;
     const markers: maplibregl.Marker[] = [];
-    if (src) src.setData(nearby && from ? routeLines({ lng: from.lng, lat: from.lat }, facilities, hiddenKinds, routes, routeMode !== "line") : EMPTY);
+    if (src) src.setData(nearby && from ? routeLines(facilities, hiddenKinds, routes) : EMPTY);
     if (nearby && from) {
       const visible = facilities.filter((f) => !hiddenKinds.includes(f.id));
       for (const f of visible) {
@@ -749,11 +749,11 @@ export default function BuildingMap({
         pin.type = "button";
         pin.className = "dpi-pin";
         pin.style.setProperty("--c", kind.colour);
-        const r = routeMode === "line" ? null : routes[f.id];
+        const r = routes[f.id];
         const tt = tRef.current;
         const kmu = (m: number) => km(m, tt("km"));
         const kindLabel = tt(kind.label);
-        const timing = r ? tt(routeMode === "walk" ? "{time}, {d} by foot" : "{time}, {d} by road", { time: minutesLabel(r.minutes, routeMode as RouteMode, tt), d: kmu(r.distanceM) }) : null;
+        const timing = r ? tt(routeMode === "walk" ? "{time}, {d} by foot" : "{time}, {d} by road", { time: minutesLabel(r.minutes, routeMode, tt), d: kmu(r.distanceM) }) : null;
         const straight = tt("{d} straight-line", { d: `${f.approx ? "≈ " : ""}${kmu(f.distanceM)}` });
         pin.setAttribute("aria-label", `${kindLabel}: ${f.name}, ${timing ? `${timing}; ` : ""}${straight}${f.approx ? `, ${tt("approximate position")}` : ""}`);
         pin.innerHTML = iconSvg(f.id, 15);
@@ -763,15 +763,13 @@ export default function BuildingMap({
         pin.append(tip);
         pin.addEventListener("click", (e) => { e.stopPropagation(); pin.classList.toggle("is-open"); });
         markers.push(new maplibregl.Marker({ element: pin }).setLngLat([f.lng, f.lat]).addTo(map));
-        // Floating label halfway along the line: the kind and the straight-line distance.
+        // Floating label at the pin for a kind without a route, halfway along the route otherwise: the kind and the real time.
         const lab = document.createElement("div");
         lab.className = "dpi-dist";
         lab.style.setProperty("--c", kind.colour);
-        const dist = `${f.approx ? "≈ " : ""}${kmu(f.distanceM)}`;
-        lab.textContent = r ? `${kindLabel} ${minutesLabel(r.minutes, routeMode as RouteMode, tt)} · ${kmu(r.distanceM)}`
-          : routeMode !== "line" && routes[f.id] === null ? tt("{kind} no route · {d} straight", { kind: kindLabel, d: dist })
-          : routeMode !== "line" ? tt("{kind} {d} straight", { kind: kindLabel, d: dist })
-          : `${kindLabel} ${dist}`;
+        lab.textContent = r ? `${kindLabel} ${minutesLabel(r.minutes, routeMode, tt)} · ${kmu(r.distanceM)}`
+          : routes[f.id] === null ? tt("{kind} · travel time unavailable", { kind: kindLabel })
+          : kindLabel;
         markers.push(new maplibregl.Marker({ element: lab }).setLngLat(labelPoint(from, f, r)).addTo(map));
       }
       if (!wasNearby.current && visible.length) {
@@ -846,7 +844,7 @@ export default function BuildingMap({
           onSelect={(slug) => select(slug, true)}
           nearby={nearby}
           hiddenKinds={hiddenKinds}
-          onNearby={(on) => { setNearby(on); if (!on) { setHiddenKinds([]); setRouteMode("line"); } }}
+          onNearby={(on) => { setNearby(on); if (!on) { setHiddenKinds([]); setRouteMode("drive"); } }}
           routeMode={routeMode}
           routes={routes}
           onRouteMode={setRouteMode}
