@@ -72,7 +72,7 @@ function Tile({ label, value, note }: { label: string; value: string; note?: str
   );
 }
 
-export default function BuildingCard({ slug, view, currency, features, onClose, onView, onSelect, nearby, hiddenKinds, onNearby, onToggleKind, onFacilities, routeMode, routes, onRouteMode, compared, onCompare }: Props) {
+export default function BuildingCard({ slug, view, currency, features, onClose: onCloseCard, onView, onSelect, nearby, hiddenKinds, onNearby, onToggleKind, onFacilities, routeMode, routes, onRouteMode, compared, onCompare }: Props) {
   const desktop = useDesktop();
   const t = useT();
   const lang = useLang();
@@ -81,6 +81,13 @@ export default function BuildingCard({ slug, view, currency, features, onClose, 
   const [state, setState] = useState<"loading" | "ok" | "error">("loading");
   const [tab, setTab] = useState<Tab>("overview");
   const [full, setFull] = useState(false); // phone only: the sheet at full height
+  // With route lines on the map, closing minimizes the card to a slim bar so the routes stay visible.
+  const [minimized, setMinimized] = useState(false);
+  useEffect(() => { setMinimized(false); }, [slug]);
+  useEffect(() => { if (!nearby) setMinimized(false); }, [nearby]);
+  const onClose = useCallback(() => {
+    if (nearby && !minimized) { setMinimized(true); onView("card"); } else onCloseCard();
+  }, [nearby, minimized, onView, onCloseCard]);
   const [drag, setDrag] = useState<number | null>(null);
   const [shared, setShared] = useState("");
   const [series, setSeries] = useState<SeriesData | null>(null);
@@ -420,6 +427,24 @@ export default function BuildingCard({ slug, view, currency, features, onClose, 
       </div>
     </div>
   );
+
+  if (minimized) {
+    return (
+      <div role="region" aria-label={t("Building card minimized")}
+        className="dpi-glass fixed z-40 flex items-center gap-2 px-3 py-2"
+        style={{ insetInlineStart: 12, insetInlineEnd: desktop ? "auto" : 12, bottom: 12, maxWidth: desktop ? 420 : undefined, borderRadius: 16 }}>
+        <button type="button" onClick={() => setMinimized(false)} aria-label={t("Show building details")}
+          className="min-w-0 flex-1 text-start">
+          <span className="block truncate text-sm font-semibold">{name}</span>
+          <span className="block truncate text-[11px] text-[var(--muted)]">{t("Routes on map")} · {t("Tap to expand")}</span>
+        </button>
+        <button type="button" onClick={() => setMinimized(false)} aria-label={t("Expand")} title={t("Expand")}
+          className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/10 text-base hover:bg-white/20">▴</button>
+        <button type="button" onClick={onCloseCard} aria-label={t("Close building card")} title={t("Close and clear routes")}
+          className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/10 text-base hover:bg-white/20">✕</button>
+      </div>
+    );
+  }
 
   return (
     <>
