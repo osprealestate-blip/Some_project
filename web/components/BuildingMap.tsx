@@ -13,6 +13,8 @@ import {
 import { DUBAI_PITCH, LAUNCH_BOUNDS, MAP_ATTRIBUTION, webglAvailable } from "@/lib/mapStyle";
 import { DEFAULT_THEME, THEMES, parseTheme, type ThemeId } from "@/lib/mapThemes";
 import BuildingCard from "./BuildingCard";
+import CompareTray, { MAX_COMPARE } from "./CompareTray";
+import { FACILITIES, iconSvg, km, nearbyLines, type FacilityId, type NearestFacility } from "@/lib/facilities";
 import MapControls from "./MapControls";
 
 type Props = {
@@ -115,6 +117,17 @@ function card(p: Props3, s: MapSettings, currency: Currency, onOpen: (() => void
   return el;
 }
 
+/** The map page's URL for a selection, keeping the compare list. Browser only. */
+function mapUrl(slug: string | null, view?: string | null): string {
+  const sp = new URLSearchParams();
+  if (slug) sp.set("building", slug);
+  if (slug && view) sp.set("view", view);
+  const c = new URLSearchParams(window.location.search).get("compare");
+  if (c) sp.set("compare", c);
+  const q = sp.toString();
+  return `/map${q ? `?${q}` : ""}`;
+}
+
 function readCamera(): { c: [number, number]; z: number; p: number; b: number } | null {
   try {
     const v = JSON.parse(window.sessionStorage.getItem(CAMERA_KEY) ?? "null");
@@ -141,6 +154,10 @@ export default function BuildingMap({
   const [hidden, setHidden] = useState<number[]>([]);
   const [ready, setReady] = useState(false); // settings read from the browser
   const [styleGen, setStyleGen] = useState(0); // bumps each time a style finishes loading
+  const [nearby, setNearby] = useState(false); // location mode: lines to the nearest places
+  const [hiddenKinds, setHiddenKinds] = useState<FacilityId[]>([]);
+  const [facilities, setFacilities] = useState<NearestFacility[]>([]);
+  const [compare, setCompare] = useState<string[]>([]);
 
   // Everything the map event handlers need, current without re-binding them.
   const live = useRef({ settings, currency, theme, selected, hover: null as string | null, baseKey: null as string | null, restored: false });
@@ -161,7 +178,7 @@ export default function BuildingMap({
     const sp = new URLSearchParams(window.location.search);
     const had = sp.has("building");
     const v = keepView ? sp.get("view") : null;
-    const url = `/map?building=${encodeURIComponent(slug)}${v === "panel" ? "&view=panel" : ""}`;
+    const url = mapUrl(slug, v);
     if (had) window.history.replaceState(null, "", url);
     else window.history.pushState(null, "", url);
   }, []);
@@ -170,15 +187,15 @@ export default function BuildingMap({
     if (!slug) return;
     if (v === "panel") {
       panelPushed.current = true;
-      window.history.pushState(null, "", `/map?building=${encodeURIComponent(slug)}&view=panel`);
+      window.history.pushState(null, "", mapUrl(slug, "panel"));
     } else if (panelPushed.current) {
       panelPushed.current = false;
       window.history.back();
-    } else window.history.replaceState(null, "", `/map?building=${encodeURIComponent(slug)}`);
+    } else window.history.replaceState(null, "", mapUrl(slug));
   }, []);
   const closeCard = useCallback(() => {
     panelPushed.current = false;
-    window.history.replaceState(null, "", "/map");
+    window.history.replaceState(null, "", mapUrl(null));
   }, []);
 
   // 1. Read saved choices, then create the map.
@@ -466,6 +483,17 @@ export default function BuildingMap({
       map.addLayer({ id: "dpi-selected-line", type: "line", source: "dpi-selected", layout: { "line-join": "round" }, paint: { "line-color": "#ecfeff", "line-width": 2.5, "line-opacity": 0.95 } });
     }
 
+    // Location mode: neon straight lines to the nearest places, coloured by kind. Compared buildings get an amber outline.
+    if (!map.getSource("dpi-nearby")) {
+      map.addSource("dpi-nearby", { type: "geojson", data: EMPTY });
+      map.addLayer({ id: "dpi-nearby-glow", type: "line", source: "dpi-nearby", layout: { "line-cap": "round" }, paint: { "line-color": ["get", "colour"], "line-width": 9, "line-blur": 6, "line-opacity": 0.7 } });
+      map.addLayer({ id: "dpi-nearby-line", type: "line", source: "dpi-nearby", layout: { "line-cap": "round" }, paint: { "line-color": ["get", "colour"], "line-width": 2.2 } });
+    }
+    if (!map.getSource("dpi-compare")) {
+      map.addSource("dpi-compare", { type: "geojson", data: EMPTY });
+      map.addLayer({ id: "dpi-compare-line", type: "line", source: "dpi-compare", paint: { "line-color": "#fbbf24", "line-width": 3, "line-opacity": 0.95 } });
+    }
+
     // Illustrated recolours the basemap and the grey city only; the coloured data buildings above stay as they are.
     if (live.current.theme === "illustrated") applyIllustratedOverrides(map);
   }, [styleGen]);
@@ -528,6 +556,77 @@ export default function BuildingMap({
     else map.easeTo({ padding, duration: 400 });
   }, [cardMode, selected, raw, styleGen]);
 
+  // Compare list: kept in the URL (?compare=a,b,c) so it survives a reload and can be shared.
+  useEffect(() => {
+    if (!cardMode) return;
+    const c = (new URLSearchParams(window.location.search).get("compare") ?? "").split(",").filter(Boolean).slice(0, MAX_COMPARE);
+    setCompare(c);
+  }, [cardMode]);
+  const writeCompare = useCallback((list: string[]) => {
+    setCompare(list);
+    const sp = new URLSearchParams(window.location.search);
+    if (list.length) sp.set("compare", list.join(",")); else sp.delete("compare");
+    const q = sp.toString();
+    window.history.replaceState(null, "", `/map${q ? `?${q}` : ""}`);
+  }, []);
+  const toggleCompare = useCallback((slug: string) => {
+    writeCompare(compare.includes(slug) ? compare.filter((x) => x !== slug) : compare.length >= MAX_COMPARE ? [...compare.slice(1), slug] : [...compare, slug]);
+  }, [compare, writeCompare]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!cardMode || !map || !styleGen) return;
+    const src = map.getSource("dpi-compare") as maplibregl.GeoJSONSource | undefined;
+    if (!src) return;
+    const feats = compare.map((slug) => raw?.features.find((x) => x.properties.slug === slug)).filter((x): x is Feature => !!x);
+    src.setData({ type: "FeatureCollection", features: feats.map((f) => ({ type: "Feature", geometry: f.geometry, properties: {} })) });
+  }, [cardMode, compare, raw, styleGen]);
+
+  // Location mode. Leaving the building, or pressing Reset, clears the lines.
+  useEffect(() => { setNearby(false); setHiddenKinds([]); setFacilities([]); }, [selected]);
+  const wasNearby = useRef(false);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!cardMode || !map || !styleGen) return;
+    const src = map.getSource("dpi-nearby") as maplibregl.GeoJSONSource | undefined;
+    const from = selected ? raw?.features.find((x) => x.properties.slug === selected)?.properties : null;
+    const markers: maplibregl.Marker[] = [];
+    if (src) src.setData(nearby && from ? nearbyLines({ lng: from.lng, lat: from.lat }, facilities, hiddenKinds) : EMPTY);
+    if (nearby && from) {
+      const visible = facilities.filter((f) => !hiddenKinds.includes(f.id));
+      for (const f of visible) {
+        const kind = FACILITIES.find((k) => k.id === f.id)!;
+        // Pin at the place: icon in the kind's colour. Click it for the name.
+        const pin = document.createElement("button");
+        pin.type = "button";
+        pin.className = "dpi-pin";
+        pin.style.setProperty("--c", kind.colour);
+        pin.setAttribute("aria-label", `${kind.label}: ${f.name}, ${km(f.distanceM)} straight-line${f.approx ? ", approximate position" : ""}`);
+        pin.innerHTML = iconSvg(f.id, 15);
+        const tip = document.createElement("span");
+        tip.className = "dpi-pin-tip";
+        tip.textContent = `${f.name} · ${f.approx ? "≈ " : ""}${km(f.distanceM)} straight-line`;
+        pin.append(tip);
+        pin.addEventListener("click", (e) => { e.stopPropagation(); pin.classList.toggle("is-open"); });
+        markers.push(new maplibregl.Marker({ element: pin }).setLngLat([f.lng, f.lat]).addTo(map));
+        // Floating label halfway along the line: the kind and the straight-line distance.
+        const lab = document.createElement("div");
+        lab.className = "dpi-dist";
+        lab.style.setProperty("--c", kind.colour);
+        lab.textContent = `${kind.label} ${f.approx ? "≈ " : ""}${km(f.distanceM)}`;
+        markers.push(new maplibregl.Marker({ element: lab }).setLngLat([(from.lng + f.lng) / 2, (from.lat + f.lat) / 2]).addTo(map));
+      }
+      if (!wasNearby.current && visible.length) {
+        const b = new maplibregl.LngLatBounds([from.lng, from.lat], [from.lng, from.lat]);
+        visible.forEach((f) => b.extend([f.lng, f.lat]));
+        const wide = window.matchMedia("(min-width: 768px)").matches;
+        map.fitBounds(b, { padding: wide ? { top: 90, bottom: 60, left: 440, right: 60 } : { top: 90, bottom: Math.round(window.innerHeight * 0.55), left: 40, right: 40 }, maxZoom: 15.5, duration: 900 });
+      }
+    }
+    wasNearby.current = nearby;
+    return () => markers.forEach((m) => m.remove());
+  }, [cardMode, nearby, facilities, hiddenKinds, selected, raw, styleGen]);
+
   const changeSettings = (next: MapSettings) => {
     setSettings(next);
     setHidden([]);
@@ -574,7 +673,37 @@ export default function BuildingMap({
           onClose={closeCard}
           onView={setView}
           onSelect={(slug) => select(slug, true)}
+          nearby={nearby}
+          hiddenKinds={hiddenKinds}
+          onNearby={(on) => { setNearby(on); if (!on) setHiddenKinds([]); }}
+          onToggleKind={(id) => setHiddenKinds((h) => (h.includes(id) ? h.filter((x) => x !== id) : [...h, id]))}
+          onFacilities={setFacilities}
+          compared={compare}
+          onCompare={toggleCompare}
         />
+      )}
+      {cardMode && (
+        <CompareTray
+          slugs={compare}
+          names={Object.fromEntries((raw?.features ?? []).map((f) => [f.properties.slug, f.properties.name]))}
+          currency={currency}
+          onRemove={(slug) => writeCompare(compare.filter((x) => x !== slug))}
+          onClear={() => writeCompare([])}
+          onShow={(slug) => select(slug)}
+        />
+      )}
+      {cardMode && legend && (
+        <div role="group" aria-label="Colour the map by" className={`absolute inset-x-0 bottom-9 z-10 flex justify-center px-2 ${selected ? "max-md:hidden" : ""} ${compare.length ? "md:bottom-20" : ""}`}>
+          <div className="pointer-events-auto flex max-w-full gap-1 overflow-x-auto rounded-full border border-[var(--border)] bg-[var(--panel)]/95 p-1 text-xs shadow-md backdrop-blur">
+            {(["psf", "yield", "sales", "change"] as const).map((id) => (
+              <button key={id} type="button" aria-pressed={settings.metric === id} title={id === "change" ? "Median price per sq ft against the 12 months before. Needs enough sales in both years." : METRICS[id].title}
+                onClick={() => changeSettings({ ...settings, metric: id })}
+                className={`shrink-0 rounded-full px-3 py-1.5 font-medium ${settings.metric === id ? "bg-[var(--accent)] text-white" : "hover:bg-[var(--grid)]"}`}>
+                {METRICS[id].label}
+              </button>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );

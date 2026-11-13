@@ -107,3 +107,19 @@ html:not([data-view="advanced"]) .adv-only { display: none; }
 .dpi-backdrop { background: rgb(2 6 23 / 0.38); -webkit-backdrop-filter: blur(1.5px); backdrop-filter: blur(1.5px); animation: dpi-in 0.3s ease; }
 @keyframes dpi-in { from { opacity: 0; } to { opacity: 1; } }
 html[data-building-selected] .map-intro { display: none; }
+
+/* Location mode on the map: pins and distance labels (components/BuildingMap.tsx). Colour always comes with an icon and text. */
+.dpi-pin {
+  position: relative; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 999px; cursor: pointer;
+  color: var(--c); background: rgb(12 18 32 / 0.92); border: 2px solid var(--c); box-shadow: 0 0 14px var(--c);
+}
+.dpi-pin-tip {
+  display: none; position: absolute; bottom: 36px; left: 50%; transform: translateX(-50%); white-space: nowrap; z-index: 5;
+  background: rgb(12 18 32 / 0.95); color: #e8edf3; border: 1px solid var(--c); border-radius: 8px; padding: 4px 8px; font-size: 12px; font-weight: 600;
+}
+.dpi-pin.is-open .dpi-pin-tip, .dpi-pin:focus-visible .dpi-pin-tip { display: block; }
+.dpi-dist {
+  pointer-events: none; white-space: nowrap; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
+  color: #fff; background: rgb(12 18 32 / 0.88); border: 1px solid var(--c); box-shadow: 0 0 10px var(--c);
+}
+@media (max-width: 767px) { html[data-compare-active] .map-intro { display: none; } }
