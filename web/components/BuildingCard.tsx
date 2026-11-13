@@ -436,7 +436,7 @@ export default function BuildingCard({ slug, view, currency, features, onClose: 
         <button type="button" onClick={() => setMinimized(false)} aria-label={t("Show building details")}
           className="min-w-0 flex-1 text-start">
           <span className="block truncate text-sm font-semibold">{name}</span>
-          <span className="block truncate text-[11px] text-[var(--muted)]">{t("Routes on map")} · {t("Tap to expand")}</span>
+          <span className="block truncate text-[11px] text-[var(--muted)]">{t("Still open")} · {t("Routes on map")} · {t("Tap to expand")}</span>
         </button>
         <button type="button" onClick={() => setMinimized(false)} aria-label={t("Expand")} title={t("Expand")}
           className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/10 text-base hover:bg-white/20">▴</button>
