@@ -1,18 +1,29 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { FACILITIES, type FacilityId } from "@/lib/facilities";
+import { facilityIntent, NEAR_RADIUS_M } from "@/lib/mapFilter";
 import { useEffect, useId, useRef, useState } from "react";
 
-type Hit = { kind: "building" | "community"; slug: string; name: string; community: string | null };
+type Hit = { kind: "building" | "community" | "developer" | "facility"; slug: string; name: string; community: string | null };
+const A_WORD: Record<FacilityId, string> = { metro: "a metro station", hospital: "a hospital", school: "a school", mall: "a mall", park: "a park" };
+const KIND_LABEL: Record<Hit["kind"], string> = { building: "", community: "Area", developer: "Developer", facility: "Map search" };
 
 /** `mapMode`: on the map page a building result opens its card on the map instead of leaving for its page. */
-export default function SearchBox({ autoFocus = false, placeholder = "Search a building or area", mapMode = false }: { autoFocus?: boolean; placeholder?: string; mapMode?: boolean }) {
+export default function SearchBox({ autoFocus = false, placeholder = "Search a building or area", mapMode: mapModeProp = false }: { autoFocus?: boolean; placeholder?: string; mapMode?: boolean }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const mapMode = mapModeProp || pathname === "/map"; // on the map, results act on the map and never leave it
   const [q, setQ] = useState("");
-  const [hits, setHits] = useState<Hit[]>([]);
+  const [found, setHits] = useState<Hit[]>([]);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
   const listId = useId();
+  // "near a metro" style searches: suggestions made here, no request needed.
+  const intents: Hit[] = facilityIntent(q).map((id) => ({
+    kind: "facility", slug: id, name: `Buildings within ${NEAR_RADIUS_M[id] / 1000} km of ${A_WORD[id]}`, community: FACILITIES.find((f) => f.id === id)!.label,
+  }));
+  const hits = [...intents, ...found];
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -35,7 +46,21 @@ export default function SearchBox({ autoFocus = false, placeholder = "Search a b
     return () => ctrl.abort();
   }, [q]);
 
-  const href = (h: Hit) => (h.kind === "building" ? (mapMode ? `/map?building=${encodeURIComponent(h.slug)}` : `/building/${h.slug}`) : `/community/${h.slug}`);
+  // On the map, keep the colour layer and compare list while the search changes what is shown.
+  const mapHref = (set: Record<string, string>) => {
+    const sp = new URLSearchParams();
+    if (pathname === "/map") {
+      const cur = new URLSearchParams(window.location.search);
+      for (const k of ["m", "compare", "f"]) if (cur.get(k)) sp.set(k, cur.get(k)!);
+    }
+    for (const [k, v] of Object.entries(set)) sp.set(k, v);
+    return `/map?${sp}`;
+  };
+  const href = (h: Hit) =>
+    h.kind === "building" ? (mapMode ? mapHref({ building: h.slug }) : `/building/${h.slug}`)
+    : h.kind === "facility" ? mapHref({ f: `near:${h.slug}` })
+    : h.kind === "developer" ? mapHref({ f: `dev:${h.slug}` })
+    : mapMode ? mapHref({ f: `area:${h.slug}` }) : `/community/${h.slug}`;
   const go = (h: Hit) => {
     setOpen(false);
     setQ("");
@@ -77,8 +102,8 @@ export default function SearchBox({ autoFocus = false, placeholder = "Search a b
                 onClick={() => go(h)}
                 className={`flex w-full items-baseline justify-between gap-2 px-3 py-1.5 text-start ${i === active ? "bg-[var(--bg)]" : ""} hover:bg-[var(--bg)]`}
               >
-                <span className="truncate">{h.name}</span>
-                <span className="shrink-0 text-xs text-[var(--muted)]">{h.kind === "community" ? "Area" : h.community}</span>
+                <span className="min-w-0 break-words">{h.name}</span>
+                <span className="shrink-0 text-xs text-[var(--muted)]">{h.kind === "building" ? h.community : h.kind === "facility" ? KIND_LABEL.facility : KIND_LABEL[h.kind]}</span>
               </button>
             </li>
           ))}
