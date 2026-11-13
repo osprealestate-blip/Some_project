@@ -21,6 +21,7 @@ const ForYouPanel = dynamic(() => import("./ForYouPanel"));
 const CompareTray = dynamic(() => import("./CompareTray"));
 const BuildingCard = dynamic(() => import("./BuildingCard"));
 import { FACILITIES, iconSvg, km, type FacilityId, type NearestFacility } from "@/lib/facilities";
+import { filterParam, parseFilter } from "@/lib/mapFilter";
 import { fetchRoute } from "@/lib/routeClient";
 import { labelPoint, routeLines, type RouteMap } from "@/lib/routeLines";
 import { minutesLabel, type RouteMode } from "@/lib/routing";
@@ -139,6 +140,8 @@ function mapUrl(slug: string | null, view?: string | null): string {
   if (c) sp.set("compare", c);
   const m = cur.get("m");
   if (m) sp.set("m", m);
+  const f = cur.get("f");
+  if (f) sp.set("f", f);
   const q = sp.toString();
   return `/map${q ? `?${q}` : ""}`;
 }
@@ -174,6 +177,29 @@ export default function BuildingMap({
   const [facilities, setFacilities] = useState<NearestFacility[]>([]);
   const [routeMode, setRouteMode] = useState<"line" | RouteMode>("line"); // straight line, or real walking / driving routes
   const [routes, setRoutes] = useState<RouteMap>({});
+  // Map search: ?f=near:metro | dev:Name | area:392 limits the map to the buildings that match.
+  const filterRaw = cardMode ? params.get("f") : null;
+  const [mapFilter, setMapFilter] = useState<{ key: string; label: string; slugs: string[] | null; state: "loading" | "ok" | "error" } | null>(null);
+  useEffect(() => {
+    const f = parseFilter(filterRaw);
+    if (!f) { setMapFilter(null); return; }
+    const key = filterParam(f);
+    document.documentElement.setAttribute("data-map-started", ""); // a search replaces the start card
+    setMapFilter({ key, label: "Searching…", slugs: null, state: "loading" });
+    let live = true;
+    fetch(`/api/map-filter?f=${encodeURIComponent(key)}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("filter"))))
+      .then((d: { label: string; slugs: string[] }) => { if (live) setMapFilter({ key, label: d.label, slugs: d.slugs, state: "ok" }); })
+      .catch(() => { if (live) setMapFilter({ key, label: "Search failed", slugs: null, state: "error" }); });
+    return () => { live = false; };
+  }, [filterRaw]);
+  const clearFilter = useCallback(() => {
+    const sp = new URLSearchParams(window.location.search);
+    sp.delete("f");
+    window.history.replaceState(null, "", `/map${sp.toString() ? `?${sp}` : ""}`);
+  }, []);
+  const filterSlugs = mapFilter?.state === "ok" && mapFilter.slugs && mapFilter.slugs.length ? mapFilter.slugs : null;
+
   const [compare, setCompare] = useState<string[]>([]);
   const [forYou, setForYou] = useState(false);
   const [thinned, setThinned] = useState(false); // zoomed out far enough that only busy buildings are drawn
@@ -547,7 +573,8 @@ export default function BuildingMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !styleGen) return;
-    const show: ExpressionSpecification = ["!", ["in", ["get", "_cls"], ["literal", hidden]]];
+    const notHidden: ExpressionSpecification = ["!", ["in", ["get", "_cls"], ["literal", hidden]]];
+    const show: ExpressionSpecification = filterSlugs ? ["all", notHidden, ["in", ["get", "slug"], ["literal", filterSlugs]]] : notHidden;
     for (const id of DPI_LAYERS) {
       if (!map.getLayer(id)) continue;
       const base: FilterSpecification | null = id === "dpi-columns" ? [">=", ["get", "sales"], BUSY_SALES]
@@ -555,7 +582,20 @@ export default function BuildingMap({
         : ["==", ["get", "approx"], id === "dpi-3d-approx"];
       map.setFilter(id, (base ? ["all", base, show] : show) as FilterSpecification);
     }
-  }, [hidden, styleGen]);
+    // Zoom to the matches the first time a search is applied.
+    if (filterSlugs && raw && lastFit.current !== mapFilter?.key) {
+      lastFit.current = mapFilter?.key ?? null;
+      const set = new Set(filterSlugs);
+      const pts = raw.features.filter((f) => set.has(f.properties.slug));
+      if (pts.length) {
+        const b = new maplibregl.LngLatBounds();
+        pts.forEach((f) => b.extend([f.properties.lng, f.properties.lat]));
+        const wide = window.matchMedia("(min-width: 768px)").matches;
+        map.fitBounds(b, { padding: wide ? 80 : { top: 110, bottom: 90, left: 30, right: 30 }, maxZoom: 15, duration: 900 });
+      }
+    }
+    if (!filterSlugs && !mapFilter) lastFit.current = null;
+  }, [hidden, styleGen, filterSlugs, mapFilter?.key, raw]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -630,6 +670,7 @@ export default function BuildingMap({
     return () => { live = false; };
   }, [nearby, routeMode, facilities, selected, raw]);
   const wasNearby = useRef(false);
+  const lastFit = useRef<string | null>(null);
   useEffect(() => {
     const map = mapRef.current;
     if (!cardMode || !map || !styleGen) return;
@@ -673,6 +714,19 @@ export default function BuildingMap({
     wasNearby.current = nearby;
     return () => markers.forEach((m) => m.remove());
   }, [cardMode, nearby, facilities, hiddenKinds, selected, raw, styleGen, routes, routeMode]);
+
+  // ?m= changes after the map opened (a start choice) switch the colour layer too.
+  const metricParam = cardMode ? params.get("m") : null;
+  useEffect(() => {
+    if (!metricParam || !(metricParam in METRICS)) return;
+    setSettings((cur) => {
+      if (cur.metric === metricParam) return cur;
+      const next = { ...cur, metric: metricParam as MapSettings["metric"] };
+      save(STORE.settings, JSON.stringify(next));
+      return next;
+    });
+    setHidden([]);
+  }, [metricParam]);
 
   const changeSettings = (next: MapSettings) => {
     setSettings(next);
@@ -741,6 +795,13 @@ export default function BuildingMap({
           onClear={() => writeCompare([])}
           onShow={(slug) => select(slug)}
         />
+      )}
+      {cardMode && mapFilter && (
+        <div role="status" className="absolute start-1/2 top-3 z-20 flex max-w-[calc(100%-1.5rem)] -translate-x-1/2 items-center gap-2 rounded-full border border-cyan-300/60 bg-slate-900/90 py-1.5 ps-4 pe-1.5 text-xs text-white shadow-lg backdrop-blur rtl:translate-x-1/2 md:top-4">
+          <span className="min-w-0 truncate font-semibold">{mapFilter.label}</span>
+          {mapFilter.state === "ok" && <span className="shrink-0 text-slate-300">{filterSlugs ? `${filterSlugs.length} building${filterSlugs.length === 1 ? "" : "s"}` : "no buildings found"}</span>}
+          <button type="button" onClick={clearFilter} className="shrink-0 rounded-full bg-white/15 px-3 py-1 font-semibold hover:bg-white/25">Clear</button>
+        </div>
       )}
       {cardMode && forYou && (
         <ForYouPanel features={raw?.features.map((f) => f.properties) ?? []} currency={currency} periodEnd={raw?.meta?.periodEnd ?? null} onPick={(slug) => select(slug)} onClose={() => setForYou(false)} />

@@ -279,7 +279,7 @@ export async function siblingBuildings(b: Building): Promise<{ slug: string; nam
 
 // ---------- search & map ----------
 
-export type SearchHit = { kind: "building" | "community"; slug: string; name: string; community: string | null; psf: number | null };
+export type SearchHit = { kind: "building" | "community" | "developer"; slug: string; name: string; community: string | null; psf: number | null };
 
 export async function search(q: string, limit = 12): Promise<SearchHit[]> {
   const term = q.trim().toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
@@ -304,7 +304,56 @@ export async function search(q: string, limit = 12): Promise<SearchHit[]> {
       order by score desc, s.sale_count_12m desc nulls last limit $3`,
     [term, MIN_CONFIDENCE, limit],
   );
-  return [...communities, ...buildings.map(({ score: _score, ...h }) => h)];
+  // Developers, from the DLD Projects data. Skipped quietly where that column is not loaded yet.
+  let developers: SearchHit[] = [];
+  try {
+    developers = await query<SearchHit>(
+      `select 'developer' as kind, developer_name as slug, developer_name as name, null::text as community, null::float8 as psf
+         from projects where developer_name is not null and lower(developer_name) like '%' || $1 || '%'
+        group by developer_name order by count(*) desc limit 3`,
+      [term],
+    );
+  } catch { /* column missing */ }
+  return [...communities, ...developers, ...buildings.map(({ score: _score, ...h }) => h)];
+}
+
+/** A group of buildings for the map filter: the slugs, and for "near" the straight-line distance to that kind of place. */
+export type MapGroup = { slugs: string[]; distances?: Record<string, number> };
+
+const NEAR_KINDS: Record<string, [string, string | null]> = { metro: ["transit", "metro"], hospital: ["health", "hospital"], school: ["school", null], mall: ["lifestyle", "mall"], park: ["lifestyle", "park"] };
+
+/** Buildings whose nearest place of this kind is within `radiusM` metres, straight-line. */
+export async function buildingsNear(kind: string, radiusM: number): Promise<MapGroup> {
+  const k = NEAR_KINDS[kind];
+  if (!k) return { slugs: [] };
+  const rows = await query<{ slug: string; d: number }>(
+    `select b.slug, n.d from buildings b
+       cross join lateral (
+         select ST_Distance(o.geom::geography, ST_PointOnSurface(b.geom)::geography) as d
+           from pois o where o.active and o.category = $1 and ($2::text is null or o.subcategory = $2)
+          order by o.geom <-> ST_PointOnSurface(b.geom) limit 1) n
+      where b.geom is not null and b.match_confidence >= $3 and n.d <= $4`,
+    [k[0], k[1], MIN_CONFIDENCE, radiusM],
+  );
+  return { slugs: rows.map((r) => r.slug), distances: Object.fromEntries(rows.map((r) => [r.slug, Math.round(r.d)])) };
+}
+
+export async function buildingsByDeveloper(name: string): Promise<MapGroup> {
+  const rows = await query<{ slug: string }>(
+    `select distinct b.slug from buildings b join projects p on p.id = b.project_id
+      where b.geom is not null and b.match_confidence >= $2 and lower(p.developer_name) = lower($1)`,
+    [name, MIN_CONFIDENCE],
+  );
+  return { slugs: rows.map((r) => r.slug) };
+}
+
+export async function buildingsInCommunity(dm: string): Promise<{ name: string; slugs: string[] } | null> {
+  const rows = await query<{ slug: string; name: string }>(
+    `select b.slug, coalesce(c.name_common, c.name_official) as name from buildings b join communities c on c.id = b.community_id
+      where c.dm_code = $1 and b.geom is not null and b.match_confidence >= $2`,
+    [dm, MIN_CONFIDENCE],
+  );
+  return rows.length ? { name: rows[0].name, slugs: rows.map((r) => r.slug) } : null;
 }
 
 export type MapFeature = {
