@@ -27,7 +27,7 @@ const QUESTIONS: { label: string; set: Record<string, string>; clear?: string[] 
   { label: "Where have prices risen?", set: { m: "change" }, clear: ["f"] },
 ];
 
-const MAX_COMPARE_LABEL = 3;
+const MAX_COMPARE_LABEL = 4;
 
 function go(set: Record<string, string>, clear: string[] = []) {
   const sp = new URLSearchParams(window.location.search);

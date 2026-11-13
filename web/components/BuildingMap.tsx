@@ -14,6 +14,7 @@ import { DUBAI_PITCH, LAUNCH_BOUNDS, MAP_ATTRIBUTION, webglAvailable } from "@/l
 import { DEFAULT_THEME, THEMES, parseTheme, type ThemeId } from "@/lib/mapThemes";
 import dynamic from "next/dynamic";
 import { fetchCard } from "@/lib/cardClient";
+import MapFilterMenu from "./MapFilterMenu";
 import { MAP_COMPARE_MAX as MAX_COMPARE } from "@/lib/mapCompare";
 
 // The card, panel, compare table and For you list load when first used, not with the map.
@@ -917,6 +918,7 @@ export default function BuildingMap({
                 {t(METRICS[id].label)}
               </button>
             ))}
+            <MapFilterMenu />
           </div>
         </div>
       )}
