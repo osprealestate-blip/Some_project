@@ -14,7 +14,7 @@ export function fetchCard(slug: string): Promise<CardData> {
   return p;
 }
 
-export type SeriesData = { sales: { period: string; value: number | null; count: number }[]; rents: { period: string; value: number | null; count: number }[]; rentLevel: string | null };
+export type SeriesData = { sales: { period: string; value: number | null; count: number }[]; rents: { period: string; value: number | null; count: number }[]; rentLevel: string | null; histogram: { from: number; to: number; count: number }[] | null; histogramCount: number };
 const seriesCache = new Map<string, Promise<SeriesData>>();
 
 /** Charts load only when a chart tab is opened, so the card itself stays light. */

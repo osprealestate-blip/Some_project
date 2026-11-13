@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { hasDatabase } from "@/lib/db";
-import { buildingBySlug, buildingSeries } from "@/lib/queries";
+import { buildingBySlug, buildingSeries, recentPsf } from "@/lib/queries";
+import { histogram } from "@/lib/stats";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +12,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
   try {
     const b = await buildingBySlug(slug);
     if (!b) return NextResponse.json({ error: "not_found" }, { status: 404 });
-    return NextResponse.json(await buildingSeries(b), { headers: { "Cache-Control": "public, max-age=600" } });
+    const [series, psf] = await Promise.all([buildingSeries(b), recentPsf(b.id)]);
+    return NextResponse.json({ ...series, histogram: histogram(psf), histogramCount: psf.length }, { headers: { "Cache-Control": "public, max-age=600" } });
   } catch {
     return NextResponse.json({ error: "failed" }, { status: 500 });
   }

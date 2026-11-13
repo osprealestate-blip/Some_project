@@ -240,6 +240,18 @@ export async function nearbyPlaces(b: Building, radius = 2000, perKind = 3): Pro
 
 /** The nearest metro station, hospital, school, mall and park to a point, however far (straight-line, metres).
  *  School positions from KHDA are rounded to about 1 km: `approx` says so. */
+/** Price per sq ft of each counted sale in the 12 months to the newest sale (for a histogram). Market fields only. */
+export async function recentPsf(buildingId: number, limit = 600): Promise<number[]> {
+  const rows = await query<{ p: number }>(
+    `select price_psf::float8 as p from transactions
+      where building_id = $1 and excluded is null and property_type = any($2) and price_psf is not null
+        and txn_date > (select max(txn_date) from transactions) - interval '12 months'
+      order by txn_date desc limit $3`,
+    [buildingId, SALE_TYPES, limit],
+  );
+  return rows.map((r) => r.p);
+}
+
 export async function nearestFacilities(lng: number, lat: number): Promise<NearestFacility[]> {
   const rows = await query<{ id: FacilityId; name: string; distance_m: number; lng: number; lat: number; attributes: Record<string, string> | null }>(
     `with pt as (select ST_SetSRID(ST_MakePoint($1, $2), 4326) as g)

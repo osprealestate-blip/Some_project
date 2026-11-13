@@ -11,6 +11,7 @@ import type { MapBuildingProps } from "@/lib/mapMetrics";
 import { DISCLAIMER, SOURCES } from "@/lib/sources";
 import CompareBars from "./CompareBars";
 import DataBadge from "./DataBadge";
+import Histogram from "./Histogram";
 import LineChart from "./LineChart";
 import FacilityChips from "./FacilityChips";
 import NearbyPanel from "./NearbyPanel";
@@ -290,6 +291,22 @@ export default function BuildingCard({ slug, view, currency, features, onClose, 
               {series ? <LineChart title="Median sale price per sq ft, by quarter" points={series.sales} unit="psf" countLabel="sales" currency={currency} />
                 : seriesFailed ? <p className="text-[var(--muted)]">The chart could not be loaded.</p> : <div className="h-40 animate-pulse rounded bg-white/[0.06]" role="status" aria-label="Loading chart" />}
             </div>
+            {(() => {
+              const mix = data.rows.filter((r) => r.rooms >= 0 && r.sale_count_12m > 0);
+              const total = mix.reduce((n, r) => n + r.sale_count_12m, 0);
+              return total > 0 ? (
+                <div className="mt-4">
+                  <div className="mb-1 text-sm font-semibold">Sales by bedroom type, 12 months</div>
+                  <ul className="space-y-1">{mix.map((r) => (
+                    <li key={r.rooms} className="flex items-center gap-2 text-xs">
+                      <span className="w-14 shrink-0 text-[var(--muted)]">{roomsLabel(r.rooms)}</span>
+                      <span className="h-2.5 flex-1 rounded-full bg-[var(--grid)]"><span className="block h-full rounded-full bg-[var(--accent)]" style={{ width: `${(r.sale_count_12m / total) * 100}%` }} /></span>
+                      <span className="w-20 shrink-0 text-end tabular-nums">{r.sale_count_12m} · {Math.round((r.sale_count_12m / total) * 100)}%</span>
+                    </li>))}</ul>
+                </div>
+              ) : null;
+            })()}
+            {series?.histogram && <div className="mt-4 rounded-lg border border-white/10 bg-white/[0.04] p-3"><Histogram bins={series.histogram} currency={currency} title={`Price per sq ft of ${series.histogramCount} sales, 12 months`} /></div>}
             <p className="mt-1 text-xs text-[var(--muted)]">Rows with fewer than 3 deals show no median; quarters with fewer than 3 sales are left blank in the chart.</p>
             <SourceNote source={SOURCES.dldSales} date={data.periodEnd} />
           </div>
