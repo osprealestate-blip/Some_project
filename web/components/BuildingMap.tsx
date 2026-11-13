@@ -21,7 +21,10 @@ const ForYouPanel = dynamic(() => import("./ForYouPanel"));
 const CompareTray = dynamic(() => import("./CompareTray"));
 const BuildingCard = dynamic(() => import("./BuildingCard"));
 import { FACILITIES, iconSvg, km, type FacilityId, type NearestFacility } from "@/lib/facilities";
-import { filterParam, parseFilter } from "@/lib/mapFilter";
+import { useLang, useT } from "./LangProvider";
+import type { T } from "@/lib/i18n";
+import { tLegend } from "@/lib/i18n";
+import { filterLabel, filterParam, parseFilter } from "@/lib/mapFilter";
 import { fetchRoute } from "@/lib/routeClient";
 import { labelPoint, routeLines, type RouteMap } from "@/lib/routeLines";
 import { minutesLabel, type RouteMode } from "@/lib/routing";
@@ -78,7 +81,7 @@ function save(key: string, value: string) {
 }
 
 /** The hover / tap card. Built with DOM nodes, never innerHTML: names are data. */
-function card(p: Props3, s: MapSettings, currency: Currency, onOpen: (() => void) | null): HTMLElement {
+function card(p: Props3, s: MapSettings, currency: Currency, onOpen: (() => void) | null, t: T): HTMLElement {
   const el = document.createElement("div");
   el.className = "dpi-card";
   const title = document.createElement("div");
@@ -92,11 +95,11 @@ function card(p: Props3, s: MapSettings, currency: Currency, onOpen: (() => void
     el.append(sub);
   }
   const rows: [keyof typeof METRICS, string, string][] = [
-    ["psf", "Price per sq ft", formatPsf(p.psf, currency)],
-    ["yield", "Gross yield (est.)", pct(p.yield)],
-    ["rent", p.rentLevel === "project" ? "Rent (whole project)" : p.rentLevel === "estimated" ? "Rent (estimated)" : "Median rent", p.rent == null ? "–" : `${formatShortPrice(p.rent, currency)}/yr`],
-    ["change", "12-month change", pct(p.change, 1, true)],
-    ["sales", "Sales, 12 months", String(p.sales ?? 0)],
+    ["psf", t("Price per sq ft"), formatPsf(p.psf, currency)],
+    ["yield", t("Gross yield (est.)"), pct(p.yield)],
+    ["rent", p.rentLevel === "project" ? t("Rent (whole project)") : p.rentLevel === "estimated" ? t("Rent (estimated)") : t("Median rent"), p.rent == null ? "–" : `${formatShortPrice(p.rent, currency)}/yr`],
+    ["change", t("12-month change"), pct(p.change, 1, true)],
+    ["sales", t("Sales, 12 months"), String(p.sales ?? 0)],
   ];
   const dl = document.createElement("dl");
   for (const [id, label, value] of rows) {
@@ -112,19 +115,19 @@ function card(p: Props3, s: MapSettings, currency: Currency, onOpen: (() => void
   el.append(dl);
   const foot = document.createElement("div");
   foot.className = "dpi-card-foot";
-  foot.textContent = p.approx ? "Approximate position · DLD, 12 months" : "DLD, 12 months";
+  foot.textContent = p.approx ? t("Approximate position · DLD, 12 months") : t("DLD, 12 months");
   el.append(foot);
   if (onOpen) {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "dpi-card-open";
-    btn.textContent = "View details";
+    btn.textContent = t("View details");
     btn.addEventListener("click", onOpen);
     el.append(btn);
   } else {
     const hint = document.createElement("div");
     hint.className = "dpi-card-hint";
-    hint.textContent = "Click for details";
+    hint.textContent = t("Click for details");
     el.append(hint);
   }
   return el;
@@ -185,12 +188,12 @@ export default function BuildingMap({
     if (!f) { setMapFilter(null); return; }
     const key = filterParam(f);
     document.documentElement.setAttribute("data-map-started", ""); // a search replaces the start card
-    setMapFilter({ key, label: "Searching…", slugs: null, state: "loading" });
+    setMapFilter({ key, label: tRef.current("Searching…"), slugs: null, state: "loading" });
     let live = true;
     fetch(`/api/map-filter?f=${encodeURIComponent(key)}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error("filter"))))
       .then((d: { label: string; slugs: string[] }) => { if (live) setMapFilter({ key, label: d.label, slugs: d.slugs, state: "ok" }); })
-      .catch(() => { if (live) setMapFilter({ key, label: "Search failed", slugs: null, state: "error" }); });
+      .catch(() => { if (live) setMapFilter({ key, label: tRef.current("Search failed"), slugs: null, state: "error" }); });
     return () => { live = false; };
   }, [filterRaw]);
   const clearFilter = useCallback(() => {
@@ -205,6 +208,10 @@ export default function BuildingMap({
   const [thinned, setThinned] = useState(false); // zoomed out far enough that only busy buildings are drawn
 
   // Everything the map event handlers need, current without re-binding them.
+  const t = useT();
+  const lang = useLang();
+  const tRef = useRef(t);
+  tRef.current = t;
   const live = useRef({ settings, currency, theme, selected, hover: null as string | null, baseKey: null as string | null, restored: false });
   live.current.settings = settings;
   live.current.currency = currency;
@@ -308,7 +315,7 @@ export default function BuildingMap({
     const featureAt = (e: MapLayerMouseEvent) => e.features?.[0]?.properties as Props3 | undefined;
     const show = (p: Props3, withButton: boolean) => {
       const { settings: s, currency: c } = live.current;
-      popup.setLngLat([p.lng, p.lat]).setDOMContent(card(p, s, c, withButton ? () => open(p.slug) : null)).addTo(map);
+      popup.setLngLat([p.lng, p.lat]).setDOMContent(card(p, s, c, withButton ? () => open(p.slug) : null, tRef.current)).addTo(map);
     };
     // One handler for the whole map (not one per layer). Our priced buildings sit in three overlapping layers (3D,
     // approximate, zoomed-out columns); per-layer enter/leave events fired against each other as the pointer moved,
@@ -346,7 +353,7 @@ export default function BuildingMap({
           setHover(p.slug);
           if (p.slug === live.current.selected) popup.remove(); else show(p, false);
           // Light preview: fetch the card's figures while the pointer rests on a building, so the click opens it at once.
-          if (cardMode) { const slug = p.slug; if (prefetchTimer) clearTimeout(prefetchTimer); prefetchTimer = setTimeout(() => { fetchCard(slug).catch(() => {}); }, 200); }
+          if (cardMode) { const slug = p.slug; if (prefetchTimer) clearTimeout(prefetchTimer); prefetchTimer = setTimeout(() => { fetchCard(slug, lang).catch(() => {}); }, 200); }
         }
         return;
       }
@@ -688,12 +695,16 @@ export default function BuildingMap({
         pin.className = "dpi-pin";
         pin.style.setProperty("--c", kind.colour);
         const r = routeMode === "line" ? null : routes[f.id];
-        const timing = r ? `${minutesLabel(r.minutes, routeMode as RouteMode)}, ${km(r.distanceM)} by ${routeMode === "walk" ? "foot" : "road"}` : null;
-        pin.setAttribute("aria-label", `${kind.label}: ${f.name}, ${timing ? `${timing}; ` : ""}${km(f.distanceM)} straight-line${f.approx ? ", approximate position" : ""}`);
+        const tt = tRef.current;
+        const kmu = (m: number) => km(m, tt("km"));
+        const kindLabel = tt(kind.label);
+        const timing = r ? tt(routeMode === "walk" ? "{time}, {d} by foot" : "{time}, {d} by road", { time: minutesLabel(r.minutes, routeMode as RouteMode, tt), d: kmu(r.distanceM) }) : null;
+        const straight = tt("{d} straight-line", { d: `${f.approx ? "≈ " : ""}${kmu(f.distanceM)}` });
+        pin.setAttribute("aria-label", `${kindLabel}: ${f.name}, ${timing ? `${timing}; ` : ""}${straight}${f.approx ? `, ${tt("approximate position")}` : ""}`);
         pin.innerHTML = iconSvg(f.id, 15);
         const tip = document.createElement("span");
         tip.className = "dpi-pin-tip";
-        tip.textContent = `${f.name} · ${timing ? `${timing} · ` : ""}${f.approx ? "≈ " : ""}${km(f.distanceM)} straight-line`;
+        tip.textContent = `${f.name} · ${timing ? `${timing} · ` : ""}${straight}`;
         pin.append(tip);
         pin.addEventListener("click", (e) => { e.stopPropagation(); pin.classList.toggle("is-open"); });
         markers.push(new maplibregl.Marker({ element: pin }).setLngLat([f.lng, f.lat]).addTo(map));
@@ -701,7 +712,11 @@ export default function BuildingMap({
         const lab = document.createElement("div");
         lab.className = "dpi-dist";
         lab.style.setProperty("--c", kind.colour);
-        lab.textContent = r ? `${kind.label} ${minutesLabel(r.minutes, routeMode as RouteMode)} · ${km(r.distanceM)}` : routeMode !== "line" && routes[f.id] === null ? `${kind.label} no route · ${f.approx ? "≈ " : ""}${km(f.distanceM)} straight` : `${kind.label} ${f.approx ? "≈ " : ""}${km(f.distanceM)}${routeMode !== "line" ? " straight" : ""}`;
+        const dist = `${f.approx ? "≈ " : ""}${kmu(f.distanceM)}`;
+        lab.textContent = r ? `${kindLabel} ${minutesLabel(r.minutes, routeMode as RouteMode, tt)} · ${kmu(r.distanceM)}`
+          : routeMode !== "line" && routes[f.id] === null ? tt("{kind} no route · {d} straight", { kind: kindLabel, d: dist })
+          : routeMode !== "line" ? tt("{kind} {d} straight", { kind: kindLabel, d: dist })
+          : `${kindLabel} ${dist}`;
         markers.push(new maplibregl.Marker({ element: lab }).setLngLat(labelPoint(from, f, r)).addTo(map));
       }
       if (!wasNearby.current && visible.length) {
@@ -713,7 +728,7 @@ export default function BuildingMap({
     }
     wasNearby.current = nearby;
     return () => markers.forEach((m) => m.remove());
-  }, [cardMode, nearby, facilities, hiddenKinds, selected, raw, styleGen, routes, routeMode]);
+  }, [cardMode, nearby, facilities, hiddenKinds, selected, raw, styleGen, routes, routeMode, lang]);
 
   // ?m= changes after the map opened (a start choice) switch the colour layer too.
   const metricParam = cardMode ? params.get("m") : null;
@@ -748,7 +763,7 @@ export default function BuildingMap({
   const legend = coloured ? legendItems(settings.metric, coloured.breaks, settings.palette, coloured.values, currency) : null;
   return (
     <div className="relative h-full w-full" data-map-theme={theme}>
-      <div ref={container} className={className} aria-label="Map of Dubai buildings" />
+      <div ref={container} className={className} aria-label={t("Map of Dubai buildings")} />
       {legend && (
         <div className={selected ? "contents max-sm:hidden" : "contents"}>
         <MapControls
@@ -798,9 +813,9 @@ export default function BuildingMap({
       )}
       {cardMode && mapFilter && (
         <div role="status" className="absolute start-1/2 top-3 z-20 flex max-w-[calc(100%-1.5rem)] -translate-x-1/2 items-center gap-2 rounded-full border border-cyan-300/60 bg-slate-900/90 py-1.5 ps-4 pe-1.5 text-xs text-white shadow-lg backdrop-blur rtl:translate-x-1/2 md:top-4">
-          <span className="min-w-0 truncate font-semibold">{mapFilter.label}</span>
-          {mapFilter.state === "ok" && <span className="shrink-0 text-slate-300">{filterSlugs ? `${filterSlugs.length} building${filterSlugs.length === 1 ? "" : "s"}` : "no buildings found"}</span>}
-          <button type="button" onClick={clearFilter} className="shrink-0 rounded-full bg-white/15 px-3 py-1 font-semibold hover:bg-white/25">Clear</button>
+          <span className="min-w-0 truncate font-semibold">{mapFilter.state === "ok" ? filterLabel(parseFilter(mapFilter.key)!, t, mapFilter.label) : mapFilter.label}</span>
+          {mapFilter.state === "ok" && <span className="shrink-0 text-slate-300">{filterSlugs ? t(filterSlugs.length === 1 ? "{n} building" : "{n} buildings", { n: filterSlugs.length }) : t("no buildings found")}</span>}
+          <button type="button" onClick={clearFilter} className="shrink-0 rounded-full bg-white/15 px-3 py-1 font-semibold hover:bg-white/25">{t("Clear")}</button>
         </div>
       )}
       {cardMode && forYou && (
@@ -808,15 +823,15 @@ export default function BuildingMap({
       )}
       {cardMode && thinned && !selected && (
         <p role="status" className="pointer-events-none absolute inset-x-0 bottom-[4.75rem] z-10 flex justify-center px-2 md:bottom-[4.5rem]">
-          <span className="rounded-full bg-[var(--panel)]/95 px-3 py-1 text-xs text-[var(--muted)] shadow-md backdrop-blur">Showing the busiest buildings (10+ sales). Zoom in to see all.</span>
+          <span className="rounded-full bg-[var(--panel)]/95 px-3 py-1 text-xs text-[var(--muted)] shadow-md backdrop-blur">{t("Showing the busiest buildings (10+ sales). Zoom in to see all.")}</span>
         </p>
       )}
       {cardMode && legend && (
-        <div role="group" aria-label="Colour the map by" className={`absolute inset-x-0 bottom-9 z-10 flex justify-center px-2 ${selected ? "max-md:hidden" : ""} ${compare.length ? "md:bottom-20" : ""}`}>
+        <div role="group" aria-label={t("Colour the map by")} className={`absolute inset-x-0 bottom-9 z-10 flex justify-center px-2 ${selected ? "max-md:hidden" : ""} ${compare.length ? "md:bottom-20" : ""}`}>
           <div className="pointer-events-auto flex max-w-full gap-1 overflow-x-auto rounded-full border border-[var(--border)] bg-[var(--panel)]/95 p-1 text-xs shadow-md backdrop-blur">
-            <button type="button" onClick={() => setForYou(true)} className="shrink-0 rounded-full bg-cyan-300 px-3 py-1.5 font-semibold text-slate-900 hover:bg-cyan-200">★ For you</button>
+            <button type="button" onClick={() => setForYou(true)} className="shrink-0 rounded-full bg-cyan-300 px-3 py-1.5 font-semibold text-slate-900 hover:bg-cyan-200">{t("★ For you")}</button>
             {(["psf", "yield", "sales", "change"] as const).map((id) => (
-              <button key={id} type="button" aria-pressed={settings.metric === id} title={id === "change" ? "Median price per sq ft against the 12 months before. Needs enough sales in both years." : METRICS[id].title}
+              <button key={id} type="button" aria-pressed={settings.metric === id} title={id === "change" ? t("Median price per sq ft against the 12 months before. Needs enough sales in both years.") : t(METRICS[id].title)}
                 onClick={() => {
                   changeSettings({ ...settings, metric: id });
                   const sp = new URLSearchParams(window.location.search);
@@ -824,7 +839,7 @@ export default function BuildingMap({
                   window.history.replaceState(null, "", `/map${sp.toString() ? `?${sp}` : ""}`);
                 }}
                 className={`shrink-0 rounded-full px-3 py-1.5 font-medium ${settings.metric === id ? "bg-[var(--accent)] text-white" : "hover:bg-[var(--grid)]"}`}>
-                {METRICS[id].label}
+                {t(METRICS[id].label)}
               </button>
             ))}
           </div>

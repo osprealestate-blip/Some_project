@@ -1,15 +1,17 @@
 "use client";
 import type { CardData } from "./cardData";
+import type { Lang } from "./i18n";
 
 const cache = new Map<string, Promise<CardData>>();
 
 /** One fetch per building per visit, shared by the card, the panel and the compare table. */
-export function fetchCard(slug: string): Promise<CardData> {
-  let p = cache.get(slug);
+export function fetchCard(slug: string, lang: Lang = "en"): Promise<CardData> {
+  const key = `${lang}:${slug}`;
+  let p = cache.get(key);
   if (!p) {
-    p = fetch(`/api/building-card/${encodeURIComponent(slug)}`).then((r) => (r.ok ? (r.json() as Promise<CardData>) : Promise.reject(new Error("card"))));
-    p.catch(() => cache.delete(slug));
-    cache.set(slug, p);
+    p = fetch(`/api/building-card/${encodeURIComponent(slug)}${lang === "en" ? "" : `?lang=${lang}`}`).then((r) => (r.ok ? (r.json() as Promise<CardData>) : Promise.reject(new Error("card"))));
+    p.catch(() => cache.delete(key));
+    cache.set(key, p);
   }
   return p;
 }

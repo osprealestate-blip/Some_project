@@ -5,6 +5,7 @@ import {
   type Place, type RecentSale, type Summary,
 } from "./queries";
 import { change, median } from "./stats";
+import { makeT, type Lang } from "./i18n";
 import { routingConfig } from "./routing";
 import { buildingVerdict, type Verdict } from "./verdict";
 
@@ -33,7 +34,7 @@ export type CardData = {
   routing: boolean;
 };
 
-export async function buildingCard(slug: string): Promise<CardData | null> {
+export async function buildingCard(slug: string, lang: Lang = "en"): Promise<CardData | null> {
   const b = await buildingBySlug(slug);
   if (!b) return null;
   const placed = b.lng != null && b.lat != null;
@@ -49,7 +50,7 @@ export async function buildingCard(slug: string): Promise<CardData | null> {
   const verdict = buildingVerdict({
     psf: all?.sale_median_psf_12m ?? null, yield: bYield, sales: all?.sale_count_12m ?? 0,
     communityName: b.community, communityPsf: cAll?.sale_median_psf_12m ?? null, communityYield: cAll?.gross_yield ?? null,
-  });
+  }, makeT(lang));
   return {
     slug: b.slug, name: b.name_en, community: b.community, dmCode: b.dm_code, project: b.project, floors: b.floors, units: b.unit_count,
     lng: b.lng, lat: b.lat, approx: !!b.geom_source && ["plot", "project", "site"].includes(b.geom_source),

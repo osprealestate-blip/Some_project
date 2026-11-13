@@ -1,17 +1,18 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { FACILITIES, type FacilityId } from "@/lib/facilities";
-import { facilityIntent, NEAR_RADIUS_M } from "@/lib/mapFilter";
+import { useT } from "./LangProvider";
+import { FACILITIES } from "@/lib/facilities";
+import { A_PLACE, facilityIntent, NEAR_RADIUS_M } from "@/lib/mapFilter";
 import { useEffect, useId, useRef, useState } from "react";
 
 type Hit = { kind: "building" | "community" | "developer" | "facility"; slug: string; name: string; community: string | null };
-const A_WORD: Record<FacilityId, string> = { metro: "a metro station", hospital: "a hospital", school: "a school", mall: "a mall", park: "a park" };
 const KIND_LABEL: Record<Hit["kind"], string> = { building: "", community: "Area", developer: "Developer", facility: "Map search" };
 
 /** `mapMode`: on the map page a building result opens its card on the map instead of leaving for its page. */
 export default function SearchBox({ autoFocus = false, placeholder = "Search a building or area", mapMode: mapModeProp = false }: { autoFocus?: boolean; placeholder?: string; mapMode?: boolean }) {
   const router = useRouter();
+  const t = useT();
   const pathname = usePathname();
   const mapMode = mapModeProp || pathname === "/map"; // on the map, results act on the map and never leave it
   const [q, setQ] = useState("");
@@ -21,7 +22,7 @@ export default function SearchBox({ autoFocus = false, placeholder = "Search a b
   const listId = useId();
   // "near a metro" style searches: suggestions made here, no request needed.
   const intents: Hit[] = facilityIntent(q).map((id) => ({
-    kind: "facility", slug: id, name: `Buildings within ${NEAR_RADIUS_M[id] / 1000} km of ${A_WORD[id]}`, community: FACILITIES.find((f) => f.id === id)!.label,
+    kind: "facility", slug: id, name: t("Buildings within {km} km of {place}", { km: NEAR_RADIUS_M[id] / 1000, place: t(A_PLACE[id]) }), community: t(FACILITIES.find((f) => f.id === id)!.label),
   }));
   const hits = [...intents, ...found];
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -74,7 +75,7 @@ export default function SearchBox({ autoFocus = false, placeholder = "Search a b
         role="combobox"
         aria-expanded={open && hits.length > 0}
         aria-controls={listId}
-        aria-label="Search buildings and areas"
+        aria-label={t("Search buildings and areas")}
         autoFocus={autoFocus}
         value={q}
         placeholder={placeholder}
@@ -103,7 +104,7 @@ export default function SearchBox({ autoFocus = false, placeholder = "Search a b
                 className={`flex w-full items-baseline justify-between gap-2 px-3 py-1.5 text-start ${i === active ? "bg-[var(--bg)]" : ""} hover:bg-[var(--bg)]`}
               >
                 <span className="min-w-0 break-words">{h.name}</span>
-                <span className="shrink-0 text-xs text-[var(--muted)]">{h.kind === "building" ? h.community : h.kind === "facility" ? KIND_LABEL.facility : KIND_LABEL[h.kind]}</span>
+                <span className="shrink-0 text-xs text-[var(--muted)]">{h.kind === "building" ? h.community : t(KIND_LABEL[h.kind])}</span>
               </button>
             </li>
           ))}

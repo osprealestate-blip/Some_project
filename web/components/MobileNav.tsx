@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import NavLinks from "./NavLinks";
+import { useT } from "./LangProvider";
 import { INTENT_NAV, MAIN_NAV } from "@/lib/nav";
 
 const rowCls = "flex min-h-12 items-center rounded-lg px-3 text-base";
@@ -11,6 +12,7 @@ const rowCls = "flex min-h-12 items-center rounded-lg px-3 text-base";
 export default function MobileNav({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
+  const t = useT();
   const button = useRef<HTMLButtonElement>(null);
   const sheet = useRef<HTMLDivElement>(null);
 
@@ -39,22 +41,22 @@ export default function MobileNav({ children }: { children: React.ReactNode }) {
         className="flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-lg border border-[var(--border)] px-3 text-sm font-medium focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
       >
         <span aria-hidden>{open ? "✕" : "☰"}</span>
-        <span>{open ? "Close" : "Menu"}</span>
+        <span>{open ? t("Close") : t("Menu")}</span>
       </button>
       {open && (
         <div
           id="mobile-menu"
           ref={sheet}
           role="dialog"
-          aria-label="Menu"
+          aria-label={t("Menu")}
           className="fixed inset-x-0 bottom-0 top-[var(--header-h,3.5rem)] z-30 overflow-y-auto overscroll-contain border-t border-[var(--border)] bg-[var(--panel)] px-4 pb-8 pt-4"
         >
           <div className="space-y-3">{children}</div>
-          <nav aria-label="Main (menu)" className="mt-4">
+          <nav aria-label={t("Main menu")} className="mt-4">
             <NavLinks items={MAIN_NAV} linkClassName={rowCls} className="space-y-1" />
           </nav>
-          <nav aria-label="What do you want to do" className="mt-6 border-t border-[var(--border)] pt-4">
-            <p className="px-3 text-xs font-medium uppercase tracking-wide text-[var(--muted)]">What do you want to do?</p>
+          <nav aria-label={t("What do you want to do?")} className="mt-6 border-t border-[var(--border)] pt-4">
+            <p className="px-3 text-xs font-medium uppercase tracking-wide text-[var(--muted)]">{t("What do you want to do?")}</p>
             <NavLinks items={INTENT_NAV} linkClassName={rowCls} className="mt-1 space-y-1" />
           </nav>
         </div>

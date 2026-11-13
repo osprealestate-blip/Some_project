@@ -1,7 +1,9 @@
 /** Two plain bars for one figure: this building against the median of its community. No colour judgement: a longer bar
  *  is only a bigger number, and the text says it in words as well. */
-export default function CompareBars({ label, building, community, communityName, format }: {
-  label: string; building: number | null; community: number | null; communityName: string; format: (n: number) => string;
+import { makeT, type T } from "@/lib/i18n";
+
+export default function CompareBars({ label, building, community, communityName, format, t = makeT("en") }: {
+  label: string; building: number | null; community: number | null; communityName: string; format: (n: number) => string; t?: T;
 }) {
   if (building == null || community == null) return null;
   const max = Math.max(building, community) || 1;
@@ -13,10 +15,10 @@ export default function CompareBars({ label, building, community, communityName,
     </div>
   );
   return (
-    <div role="img" aria-label={`${label}: this building ${format(building)}, ${communityName} median ${format(community)}`} className="space-y-1">
-      <div className="text-[11px] font-medium uppercase tracking-wide text-[var(--muted)]">{label}</div>
-      {row("This building", building, "var(--accent)")}
-      {row(`${communityName} median`, community, "var(--muted)")}
+    <div role="img" aria-label={t("{label}: this building {a}, {name} median {b}", { label: t(label), a: format(building), name: communityName, b: format(community) })} className="space-y-1">
+      <div className="text-[11px] font-medium uppercase tracking-wide text-[var(--muted)]">{t(label)}</div>
+      {row(t("This building"), building, "var(--accent)")}
+      {row(t("{name} median", { name: communityName }), community, "var(--muted)")}
     </div>
   );
 }

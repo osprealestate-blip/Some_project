@@ -1,4 +1,5 @@
 import { FACILITIES, type FacilityId } from "./facilities";
+import { makeT, type T } from "./i18n";
 
 /** A filter on the map, kept in the URL as ?f=near:metro, ?f=dev:Emaar or ?f=area:392 so a link shares it. */
 export type MapFilter = { type: "near"; value: FacilityId } | { type: "dev"; value: string } | { type: "area"; value: string };
@@ -20,11 +21,13 @@ export function parseFilter(raw: string | null): MapFilter | null {
 
 export const filterParam = (f: MapFilter) => `${f.type}:${f.value}`;
 
-const WORD: Record<FacilityId, string> = { metro: "a metro station", hospital: "a hospital", school: "a school", mall: "a mall", park: "a park" };
-export function nearLabel(kind: FacilityId): string {
-  const km = NEAR_RADIUS_M[kind] / 1000;
-  return `Within ${km} km of ${WORD[kind]} (straight-line)`;
+export const A_PLACE: Record<FacilityId, string> = { metro: "a metro station", hospital: "a hospital", school: "a school", mall: "a mall", park: "a park" };
+export function filterLabel(f: MapFilter, t: T = makeT("en"), area?: string): string {
+  if (f.type === "near") return t("Within {km} km of {place} (straight-line)", { km: NEAR_RADIUS_M[f.value] / 1000, place: t(A_PLACE[f.value]) });
+  if (f.type === "dev") return t("Developer: {name}", { name: f.value });
+  return area ?? t("Area");
 }
+export const nearLabel = (kind: FacilityId) => filterLabel({ type: "near", value: kind });
 
 const WORDS: [FacilityId, string[]][] = [
   ["metro", ["metro", "station", "train", "subway"]], ["hospital", ["hospital", "clinic", "medical"]], ["school", ["school", "nursery"]],

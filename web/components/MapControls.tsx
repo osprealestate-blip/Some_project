@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useT } from "./LangProvider";
+import { tLegend, tList } from "@/lib/i18n";
 import type { Currency } from "@/config/currency";
 import { day } from "@/lib/format";
 import {
@@ -32,6 +34,7 @@ const gradient = (colors: readonly string[]) => `linear-gradient(90deg, ${colors
 
 /** Legend and map settings: what colours the buildings, the colour scale, and the basemap theme. */
 export default function MapControls(p: Props) {
+  const t = useT();
   const { settings: s, currency } = p;
   const def = METRICS[s.metric];
   const [open, setOpen] = useState(true);
@@ -59,13 +62,13 @@ export default function MapControls(p: Props) {
 
   const metricSelect = (
     <label className="flex min-w-0 flex-1 items-center gap-2">
-      <span className="shrink-0 text-[var(--muted)]">Colour by</span>
+      <span className="shrink-0 text-[var(--muted)]">{t("Colour by")}</span>
       <select
         value={s.metric}
         onChange={(e) => setMetric(e.target.value as MetricId)}
         className="min-w-0 flex-1 rounded border border-[var(--border)] bg-[var(--bg)] px-1.5 py-1 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
       >
-        {METRIC_IDS.map((id) => <option key={id} value={id}>{METRICS[id].label}</option>)}
+        {METRIC_IDS.map((id) => <option key={id} value={id}>{t(METRICS[id].label)}</option>)}
       </select>
     </label>
   );
@@ -79,7 +82,7 @@ export default function MapControls(p: Props) {
         aria-expanded="false"
       >
         <span className="inline-block h-2.5 w-12 rounded-full" style={{ background: gradient(p.legend.filter((l) => l.cls >= 0).map((l) => l.color)) }} />
-        <span className="font-medium">{def.label}</span>
+        <span className="font-medium">{t(def.label)}</span>
         <span aria-hidden className="inline-block sm:rotate-180">▴</span>
       </button>
     );
@@ -94,20 +97,20 @@ export default function MapControls(p: Props) {
             type="button"
             onClick={() => setTuning((t) => !t)}
             aria-expanded={tuning}
-            title="Colours, scale and map theme"
+            title={t("Colours, scale and map theme")}
             className={`rounded border px-1.5 py-1 ${tuning ? "border-[var(--accent)] text-[var(--accent)]" : "border-[var(--border)]"}`}
           >
-            <span aria-hidden>⚙</span><span className="sr-only">Map settings</span>
+            <span aria-hidden>⚙</span><span className="sr-only">{t("Map settings")}</span>
           </button>
         )}
-        <button type="button" onClick={() => setOpen(false)} title="Hide legend" className="rounded border border-[var(--border)] px-1.5 py-1" aria-expanded="true">
-          <span aria-hidden className="inline-block sm:rotate-180">▾</span><span className="sr-only">Hide legend</span>
+        <button type="button" onClick={() => setOpen(false)} title={t("Hide legend")} className="rounded border border-[var(--border)] px-1.5 py-1" aria-expanded="true">
+          <span aria-hidden className="inline-block sm:rotate-180">▾</span><span className="sr-only">{t("Hide legend")}</span>
         </button>
       </div>
 
       <div className="overflow-y-auto px-2.5 py-2">
-        <div className="mb-1 font-medium">{def.title}</div>
-        <ul className="space-y-0.5" aria-label="Legend: click a row to show or hide those buildings">
+        <div className="mb-1 font-medium">{t(def.title)}</div>
+        <ul className="space-y-0.5" aria-label={t("Legend: click a row to show or hide those buildings")}>
           {p.legend.map((l) => {
             const off = p.hidden.includes(l.cls);
             return (
@@ -119,7 +122,7 @@ export default function MapControls(p: Props) {
                   className={`flex w-full items-center gap-2 rounded px-1 py-0.5 text-start hover:bg-[var(--grid)] ${off ? "opacity-40" : ""}`}
                 >
                   <span className="inline-block h-3 w-3 shrink-0 rounded-sm ring-1 ring-black/10" style={{ background: l.color }} />
-                  <span className={`flex-1 tabular-nums ${off ? "line-through" : ""}`}>{l.label}</span>
+                  <span className={`flex-1 tabular-nums ${off ? "line-through" : ""}`}>{tLegend(t, l.label)}</span>
                   <span className="tabular-nums text-[var(--muted)]">{l.count}</span>
                 </button>
               </li>
@@ -127,15 +130,15 @@ export default function MapControls(p: Props) {
           })}
         </ul>
         <p className="mt-1.5 text-[11px] leading-snug text-[var(--muted)]">
-          Click a row to hide or show it. Grey: too few deals for a figure.{" "}
-          Source: {def.source}{p.periodEnd ? `, data to ${day(p.periodEnd)}` : ""}.
-          {def.estimate && <> <strong className="font-medium">{DISCLAIMER}</strong></>}
+          {t("Click a row to hide or show it. Grey: too few deals for a figure.")}{" "}
+          {t("Source")}: {tList(t, def.source)}{p.periodEnd ? `, ${t("data to {date}", { date: day(p.periodEnd) })}` : ""}.
+          {def.estimate && <> <strong className="font-medium">{t(DISCLAIMER)}</strong></>}
         </p>
 
         {tuning && !p.compact && (
           <div className="mt-3 space-y-3 border-t border-[var(--border)] pt-3">
             <fieldset>
-              <legend className="mb-1 font-medium">Colours</legend>
+              <legend className="mb-1 font-medium">{t("Colours")}</legend>
               <div className="grid grid-cols-3 gap-1.5">
                 {PALETTE_IDS.map((id) => (
                   <button
@@ -143,23 +146,23 @@ export default function MapControls(p: Props) {
                     type="button"
                     onClick={() => p.onSettings({ ...s, palette: id })}
                     aria-pressed={s.palette === id}
-                    title={PALETTES[id].label}
+                    title={t(PALETTES[id].label)}
                     className={`rounded border p-1 ${s.palette === id ? "border-[var(--accent)] ring-1 ring-[var(--accent)]" : "border-[var(--border)]"}`}
                   >
                     <span className="block h-3 rounded-sm" style={{ background: gradient(PALETTES[id].colors) }} />
-                    <span className="sr-only">{PALETTES[id].label}</span>
+                    <span className="sr-only">{t(PALETTES[id].label)}</span>
                   </button>
                 ))}
               </div>
             </fieldset>
 
             <fieldset>
-              <legend className="mb-1 font-medium">Scale</legend>
+              <legend className="mb-1 font-medium">{t("Scale")}</legend>
               <div className="space-y-1">
                 {SCALES.map((sc) => (
                   <label key={sc.id} className="flex cursor-pointer items-start gap-2">
                     <input type="radio" name="dpi-scale" checked={s.mode === sc.id} onChange={() => setMode(sc.id)} className="mt-0.5" />
-                    <span><span className="font-medium">{sc.label}</span> <span className="text-[var(--muted)]">{sc.hint}</span></span>
+                    <span><span className="font-medium">{t(sc.label)}</span> <span className="text-[var(--muted)]">{t(sc.hint)}</span></span>
                   </label>
                 ))}
               </div>
@@ -167,24 +170,24 @@ export default function MapControls(p: Props) {
                 <div className="mt-2 flex items-center gap-1.5">
                   <input
                     key={`min-${s.metric}-${currency}`}
-                    type="number" inputMode="decimal" aria-label="Low value" defaultValue={toDisplay(s.min)}
+                    type="number" inputMode="decimal" aria-label={t("Low value")} defaultValue={toDisplay(s.min)}
                     onBlur={(e) => setBound("min", e.target.value)} onKeyDown={(e) => e.key === "Enter" && setBound("min", (e.target as HTMLInputElement).value)}
                     className="w-20 rounded border border-[var(--border)] bg-[var(--bg)] px-1.5 py-1 tabular-nums"
                   />
-                  <span>to</span>
+                  <span>{t("to")}</span>
                   <input
                     key={`max-${s.metric}-${currency}`}
-                    type="number" inputMode="decimal" aria-label="High value" defaultValue={toDisplay(s.max)}
+                    type="number" inputMode="decimal" aria-label={t("High value")} defaultValue={toDisplay(s.max)}
                     onBlur={(e) => setBound("max", e.target.value)} onKeyDown={(e) => e.key === "Enter" && setBound("max", (e.target as HTMLInputElement).value)}
                     className="w-20 rounded border border-[var(--border)] bg-[var(--bg)] px-1.5 py-1 tabular-nums"
                   />
-                  <span className="text-[var(--muted)]">{def.unit(currency)}</span>
+                  <span className="text-[var(--muted)]">{t(def.unit(currency))}</span>
                 </div>
               )}
             </fieldset>
 
             <fieldset>
-              <legend className="mb-1 font-medium">Map theme</legend>
+              <legend className="mb-1 font-medium">{t("Map theme")}</legend>
               <div className="grid grid-cols-3 gap-1.5">
                 {THEME_IDS.map((id) => (
                   <button
@@ -195,7 +198,7 @@ export default function MapControls(p: Props) {
                     className={`flex flex-col items-center gap-1 rounded border p-1 ${p.theme === id ? "border-[var(--accent)] ring-1 ring-[var(--accent)]" : "border-[var(--border)]"}`}
                   >
                     <span className="block h-6 w-full rounded-sm ring-1 ring-black/10" style={{ background: `linear-gradient(135deg, ${THEMES[id].baseBuilding} 0 50%, ${THEMES[id].swatchLand ?? (THEMES[id].dark ? "#14171b" : "#f4f2ee")} 50% 100%)` }} />
-                    <span className="text-[11px]">{THEMES[id].label}</span>
+                    <span className="text-[11px]">{t(THEMES[id].label)}</span>
                   </button>
                 ))}
               </div>
@@ -206,7 +209,7 @@ export default function MapControls(p: Props) {
               onClick={() => { p.onSettings(DEFAULT_SETTINGS); p.onTheme(DEFAULT_THEME); }}
               className="link text-[11px]"
             >
-              Reset to defaults
+              {t("Reset to defaults")}
             </button>
           </div>
         )}

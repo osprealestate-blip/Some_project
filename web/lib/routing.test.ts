@@ -40,7 +40,7 @@ describe("labels and keys", () => {
   it("labels the mode", () => {
     expect(minutesLabel(8, "walk")).toBe("8 min walk");
     expect(minutesLabel(12, "drive")).toBe("12 min drive");
-    expect(minutesLabel(95, "walk")).toBe("1 h 35 min walk");
+    expect(minutesLabel(95, "walk")).toBe("1 h 35 min walk"); expect(minutesLabel(120, "drive")).toBe("2 h drive");
   });
   it("builds an OSRM url with lng,lat order", () => {
     expect(routeUrl("https://x.example", [55.1, 25.1], [55.2, 25.2])).toContain("/route/v1/driving/55.10000,25.10000;55.20000,25.20000?");

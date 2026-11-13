@@ -4,6 +4,9 @@ import "./globals.css";
 import SiteHeader from "@/components/SiteHeader";
 import SiteFooter from "@/components/SiteFooter";
 import { siteUrl } from "@/lib/site";
+import { LangPage, LangProvider } from "@/components/LangProvider";
+import { dirOf, makeT } from "@/lib/i18n";
+import { getServerLang } from "@/lib/lang";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl()),
@@ -15,15 +18,18 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = { width: "device-width", initialScale: 1 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  // dir is set per locale later; the layout already uses logical (start/end) spacing so Arabic can follow.
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const lang = await getServerLang();
+  const t = makeT(lang);
   return (
-    <html lang="en" dir="ltr">
+    <html lang={lang} dir={dirOf(lang)}>
       <body className="flex min-h-dvh flex-col antialiased">
-        <a href="#main" className="skip-link">Skip to content</a>
-        <SiteHeader />
-        <div id="main" tabIndex={-1} className="flex-1 outline-none">{children}</div>
-        <SiteFooter />
+        <LangProvider lang={lang}>
+          <a href="#main" className="skip-link">{t("Skip to content")}</a>
+          <SiteHeader />
+          <div id="main" tabIndex={-1} className="flex-1 outline-none"><LangPage>{children}</LangPage></div>
+          <SiteFooter />
+        </LangProvider>
       </body>
     </html>
   );
