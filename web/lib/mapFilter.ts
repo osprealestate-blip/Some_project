@@ -2,7 +2,7 @@ import { FACILITIES, type FacilityId } from "./facilities";
 import { makeT, type T } from "./i18n";
 
 /** A filter on the map, kept in the URL as ?f=near:metro, ?f=dev:Emaar or ?f=area:392 so a link shares it. */
-export type MapFilter = { type: "near"; value: FacilityId } | { type: "dev"; value: string } | { type: "area"; value: string };
+export type MapFilter = { type: "near"; value: FacilityId } | { type: "dev"; value: string } | { type: "area"; value: string } | { type: "under"; value: string };
 
 /** Straight-line radius for "near a ...". Short for things you walk to, longer for a hospital or a school. */
 export const NEAR_RADIUS_M: Record<FacilityId, number> = { metro: 800, hospital: 2000, school: 1500, mall: 1500, park: 800 };
@@ -16,6 +16,7 @@ export function parseFilter(raw: string | null): MapFilter | null {
   if (type === "near") return FACILITIES.some((f) => f.id === value) ? { type, value: value as FacilityId } : null;
   if (type === "dev") return { type, value };
   if (type === "area") return /^\d{1,4}$/.test(value) ? { type, value } : null;
+  if (type === "under") return /^\d{5,9}$/.test(value) ? { type, value } : null; // median sale price ceiling in AED
   return null;
 }
 
@@ -25,6 +26,7 @@ export const A_PLACE: Record<FacilityId, string> = { metro: "a metro station", h
 export function filterLabel(f: MapFilter, t: T = makeT("en"), area?: string): string {
   if (f.type === "near") return t("Within {km} km of {place} (straight-line)", { km: NEAR_RADIUS_M[f.value] / 1000, place: t(A_PLACE[f.value]) });
   if (f.type === "dev") return t("Developer: {name}", { name: f.value });
+  if (f.type === "under") { const v = Number(f.value); return t("Median sale price under AED {n}", { n: v >= 1e6 ? `${+(v / 1e6).toFixed(2)}M` : `${Math.round(v / 1000)}K` }); }
   return area ?? t("Area");
 }
 export const nearLabel = (kind: FacilityId) => filterLabel({ type: "near", value: kind });
