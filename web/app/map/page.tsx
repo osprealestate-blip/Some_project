@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 import BuildingMap from "@/components/BuildingMap";
-import MapStart from "@/components/MapStart";
-import MapTour from "@/components/MapTour";
-import SearchBox from "@/components/SearchBox";
+import MapWelcome from "@/components/MapWelcome";
 import { getServerCurrency } from "@/lib/currency";
 import { getT } from "@/lib/lang";
 import { hasDatabase } from "@/lib/db";
@@ -35,15 +33,8 @@ export default async function MapPage() {
   return (
     <main className="relative h-[calc(100dvh-3.5rem-1px)] min-h-[420px] w-full md:h-[calc(100dvh-4rem-1px)]">
       <BuildingMap currency={currency} cardMode />
-      <MapTour />
-      <div className="map-intro pointer-events-none absolute inset-x-4 top-4 flex justify-center">
-        <div className="pointer-events-auto w-full max-w-md rounded-lg border border-[var(--border)] bg-[var(--panel)]/95 p-4 shadow-sm">
-          <h1 className="text-lg font-semibold">{t("Explore the map")}</h1>
-          <p className="mt-1 text-sm text-[var(--muted)]">{t("Tap a building to see its numbers. Prices, rents and yields from official Dubai Land Department data.")}</p>
-          <div className="mt-3"><SearchBox mapMode placeholder={t("Try “Princess Tower”, “JVC” or “near a metro”")} autoFocus={false} /></div>
-          <MapStart />
-        </div>
-      </div>
+      <h1 className="sr-only">{t("Explore the map")}</h1>
+      <MapWelcome />
     </main>
   );
 }
