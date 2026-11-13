@@ -233,7 +233,7 @@ export default function BuildingCard({ slug, view, currency, features, onClose, 
           </div>
         )}
         {nearby && data && !data.routing && <p role="note" className="mb-1.5 text-[11px] text-[var(--muted)]">{t("Travel times unavailable. Distances are straight-line.")}</p>}
-        {data ? <FacilityChips facilities={data.facilities} onToggle={nearby ? onToggleKind : undefined} hidden={hiddenKinds} routes={routes} mode={data.routing ? routeMode : "line"} /> : <div className="h-[108px] animate-pulse rounded-lg bg-white/[0.06]" />}
+        {data ? <FacilityChips facilities={data.facilities} onToggle={nearby ? onToggleKind : undefined} hidden={hiddenKinds} routes={routes} mode={nearby && data.routing ? routeMode : "line"} /> : <div className="h-[108px] animate-pulse rounded-lg bg-white/[0.06]" />}
       </div>
       <p className="mt-auto text-[10.5px] leading-snug text-[var(--muted)]">
         {t("Source: DLD sales and rents")}{periodEnd ? `, ${t("data to {date}", { date: day(periodEnd) })}` : ""}; {t("places from OpenStreetMap, KHDA, DHA.")}{data?.routing && ` ${t("Walk and drive times are estimates from OpenStreetMap routing, without traffic or waiting.")}`} {t(DISCLAIMER)}
