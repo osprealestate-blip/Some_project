@@ -22,6 +22,8 @@ export type CardData = {
   summary: { psf: number | null; price: number | null; rent: number | null; rentLevel: string | null; yield: number | null; change: number | null; sales: number; rentCount: number };
   rows: Summary[];
   verdict: Verdict | null;
+  /** The community's own 12-month medians, for the bars next to this building's figures. */
+  benchmark: { psf: number | null; yield: number | null };
   facilities: NearestFacility[];
   places: Place[];
   sales: RecentSale[];
@@ -54,6 +56,6 @@ export async function buildingCard(slug: string): Promise<CardData | null> {
       rentLevel: all?.rent_level ?? null, yield: bYield, change: change(all?.sale_median_psf_12m, all?.sale_median_psf_prev_12m),
       sales: all?.sale_count_12m ?? 0, rentCount: all?.rent_count_12m ?? 0,
     },
-    rows, verdict, facilities, places, sales, siblings,
+    rows, verdict, benchmark: { psf: cAll?.sale_median_psf_12m ?? null, yield: cAll?.gross_yield ?? null }, facilities, places, sales, siblings,
   };
 }
