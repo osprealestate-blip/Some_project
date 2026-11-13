@@ -20,3 +20,10 @@ mode (walk, drive) and a time of day. We do not invent minutes.
 ## Not planned (no data, would be invented)
 Building photos or 3D house models, per-floor or per-unit highlighting, Walk/Transit/Bike Score (trademarked), flood and fire
 risk, days on market, price cuts, population by radius, "request a tour" or agent contact.
+
+## Status (built behind a flag)
+Built in the Phase 5 PR. Off unless `ROUTING_ENABLED=1`, `ROUTING_FOOT_URL` and `ROUTING_CAR_URL` (https, OSRM-compatible) are set.
+- `/api/route-line` returns one route between two Dubai points: rate limited per IP and for the whole site, cached for a week in
+  memory and by the CDN, 4 s timeout. A failed route returns null and the map shows no minutes for that place.
+- Provider needs: the public FOSSGIS servers need no key but are for light use; for a launch with real traffic, self-host OSRM
+  (free, runs on a small VM) or use a paid provider. Driving minutes are free-flow, without traffic.

@@ -6,6 +6,8 @@ import type { Currency } from "@/config/currency";
 import type { CardData } from "@/lib/cardData";
 import { fetchCard, fetchSeries, type SeriesData } from "@/lib/cardClient";
 import type { FacilityId, NearestFacility } from "@/lib/facilities";
+import type { RouteMap } from "@/lib/routeLines";
+import { ROUTE_MODES, type RouteMode } from "@/lib/routing";
 import { count, day, formatMoney, formatPsf, formatShortPrice, pct, roomsLabel, sqft } from "@/lib/format";
 import type { MapBuildingProps } from "@/lib/mapMetrics";
 import { DISCLAIMER, SOURCES } from "@/lib/sources";
@@ -34,6 +36,9 @@ type Props = {
   onNearby: (on: boolean) => void;
   onToggleKind: (id: FacilityId) => void;
   onFacilities: (list: NearestFacility[]) => void;
+  routeMode: "line" | RouteMode;
+  routes: RouteMap;
+  onRouteMode: (m: "line" | RouteMode) => void;
   compared: string[];
   onCompare: (slug: string) => void;
 };
@@ -64,7 +69,7 @@ function Tile({ label, value, note }: { label: string; value: string; note?: str
   );
 }
 
-export default function BuildingCard({ slug, view, currency, features, onClose, onView, onSelect, nearby, hiddenKinds, onNearby, onToggleKind, onFacilities, compared, onCompare }: Props) {
+export default function BuildingCard({ slug, view, currency, features, onClose, onView, onSelect, nearby, hiddenKinds, onNearby, onToggleKind, onFacilities, routeMode, routes, onRouteMode, compared, onCompare }: Props) {
   const desktop = useDesktop();
   const feature = useMemo(() => features.find((f) => f.slug === slug) ?? null, [features, slug]);
   const [data, setData] = useState<CardData | null>(null);
@@ -191,7 +196,7 @@ export default function BuildingCard({ slug, view, currency, features, onClose, 
       </div>
       <div>
         <div className="mb-1 flex items-center justify-between gap-2">
-          <span className="text-[11px] font-medium uppercase tracking-wide text-[var(--muted)]">Nearest, straight-line</span>
+          <span className="text-[11px] font-medium uppercase tracking-wide text-[var(--muted)]">{routeMode === "line" ? "Nearest, straight-line" : "Nearest · km straight-line, time by route"}</span>
           {data && data.facilities.length > 0 && (
             <button type="button" onClick={() => onNearby(!nearby)} aria-pressed={nearby}
               className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${nearby ? "bg-white/15 text-[var(--fg)] hover:bg-white/25" : "bg-cyan-300/15 text-cyan-200 ring-1 ring-cyan-300/50 hover:bg-cyan-300/25"}`}>
@@ -199,10 +204,18 @@ export default function BuildingCard({ slug, view, currency, features, onClose, 
             </button>
           )}
         </div>
-        {data ? <FacilityChips facilities={data.facilities} onToggle={nearby ? onToggleKind : undefined} hidden={hiddenKinds} /> : <div className="h-[108px] animate-pulse rounded-lg bg-white/[0.06]" />}
+        {nearby && data?.routing && (
+          <div role="group" aria-label="Show distances as" className="mb-1.5 flex gap-1 rounded-full bg-white/[0.07] p-0.5 text-[11px]">
+            {([["line", "Straight line"], ...ROUTE_MODES.map((m) => [m.id, m.label])] as ["line" | RouteMode, string][]).map(([id, label]) => (
+              <button key={id} type="button" aria-pressed={routeMode === id} onClick={() => onRouteMode(id)}
+                className={`flex-1 rounded-full px-2 py-1 font-semibold ${routeMode === id ? "bg-cyan-300 text-slate-900" : "text-[var(--muted)] hover:text-[var(--fg)]"}`}>{label}</button>
+            ))}
+          </div>
+        )}
+        {data ? <FacilityChips facilities={data.facilities} onToggle={nearby ? onToggleKind : undefined} hidden={hiddenKinds} routes={routes} mode={routeMode} /> : <div className="h-[108px] animate-pulse rounded-lg bg-white/[0.06]" />}
       </div>
       <p className="mt-auto text-[10.5px] leading-snug text-[var(--muted)]">
-        Source: DLD sales and rents{periodEnd ? `, data to ${day(periodEnd)}` : ""}; places from OpenStreetMap, KHDA, DHA. {DISCLAIMER}
+        Source: DLD sales and rents{periodEnd ? `, data to ${day(periodEnd)}` : ""}; places from OpenStreetMap, KHDA, DHA.{routeMode !== "line" && " Walk and drive times are estimates from OpenStreetMap routing, without traffic or waiting."} {DISCLAIMER}
       </p>
       <div className="flex gap-2">
         <button type="button" onClick={() => onView("panel")} className="min-w-0 flex-1 rounded-xl bg-cyan-300 px-3 py-2.5 text-sm font-semibold text-slate-900 hover:bg-cyan-200">
