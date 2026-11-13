@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Currency } from "@/config/currency";
 import type { CardData } from "@/lib/cardData";
+import { fetchCard } from "@/lib/cardClient";
+import type { FacilityId, NearestFacility } from "@/lib/facilities";
 import { count, day, formatMoney, formatPsf, formatShortPrice, pct, roomsLabel, sqft } from "@/lib/format";
 import type { MapBuildingProps } from "@/lib/mapMetrics";
 import { DISCLAIMER, SOURCES } from "@/lib/sources";
@@ -22,6 +24,14 @@ type Props = {
   onClose: () => void;
   onView: (v: "card" | "panel") => void;
   onSelect: (slug: string) => void;
+  /** Location mode: straight lines from the building to the nearest places, drawn on the map behind the card. */
+  nearby: boolean;
+  hiddenKinds: FacilityId[];
+  onNearby: (on: boolean) => void;
+  onToggleKind: (id: FacilityId) => void;
+  onFacilities: (list: NearestFacility[]) => void;
+  compared: string[];
+  onCompare: (slug: string) => void;
 };
 
 type Tab = "overview" | "prices" | "rent" | "nearby" | "sales" | "similar";
@@ -50,7 +60,7 @@ function Tile({ label, value, note }: { label: string; value: string; note?: str
   );
 }
 
-export default function BuildingCard({ slug, view, currency, features, onClose, onView, onSelect }: Props) {
+export default function BuildingCard({ slug, view, currency, features, onClose, onView, onSelect, nearby, hiddenKinds, onNearby, onToggleKind, onFacilities, compared, onCompare }: Props) {
   const desktop = useDesktop();
   const feature = useMemo(() => features.find((f) => f.slug === slug) ?? null, [features, slug]);
   const [data, setData] = useState<CardData | null>(null);
@@ -59,23 +69,19 @@ export default function BuildingCard({ slug, view, currency, features, onClose, 
   const [full, setFull] = useState(false); // phone only: the sheet at full height
   const [drag, setDrag] = useState<number | null>(null);
   const [shared, setShared] = useState("");
-  const cache = useRef(new Map<string, CardData>());
   const closeRef = useRef<HTMLButtonElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const startY = useRef(0);
 
   useEffect(() => {
-    const hit = cache.current.get(slug);
+    let live = true;
     setTab("overview");
-    if (hit) { setData(hit); setState("ok"); return; }
     setData(null);
     setState("loading");
-    const ctrl = new AbortController();
-    fetch(`/api/building-card/${encodeURIComponent(slug)}`, { signal: ctrl.signal })
-      .then((r) => (r.ok ? (r.json() as Promise<CardData>) : Promise.reject(new Error("bad"))))
-      .then((d) => { cache.current.set(slug, d); setData(d); setState("ok"); })
-      .catch((e) => { if (e?.name !== "AbortError") setState("error"); });
-    return () => ctrl.abort();
+    fetchCard(slug).then((d) => { if (live) { setData(d); setState("ok"); onFacilities(d.facilities); } }).catch(() => { if (live) setState("error"); });
+    return () => { live = false; };
+    // onFacilities is stable (state setter wrapper).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
 
   useEffect(() => { if (view === "card") setFull(false); }, [view]);
@@ -163,15 +169,28 @@ export default function BuildingCard({ slug, view, currency, features, onClose, 
         <Tile label="Sales, 12 mo" value={count(sales)} />
       </div>
       <div>
-        <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-[var(--muted)]">Nearest, straight-line</div>
-        {data ? <FacilityChips facilities={data.facilities} /> : <div className="h-[108px] animate-pulse rounded-lg bg-white/[0.06]" />}
+        <div className="mb-1 flex items-center justify-between gap-2">
+          <span className="text-[11px] font-medium uppercase tracking-wide text-[var(--muted)]">Nearest, straight-line</span>
+          {data && data.facilities.length > 0 && (
+            <button type="button" onClick={() => onNearby(!nearby)} aria-pressed={nearby}
+              className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${nearby ? "bg-white/15 text-[var(--fg)] hover:bg-white/25" : "bg-cyan-300/15 text-cyan-200 ring-1 ring-cyan-300/50 hover:bg-cyan-300/25"}`}>
+              {nearby ? "Reset" : "Show on map"}
+            </button>
+          )}
+        </div>
+        {data ? <FacilityChips facilities={data.facilities} onToggle={nearby ? onToggleKind : undefined} hidden={hiddenKinds} /> : <div className="h-[108px] animate-pulse rounded-lg bg-white/[0.06]" />}
       </div>
       <p className="mt-auto text-[10.5px] leading-snug text-[var(--muted)]">
         Source: DLD sales and rents{periodEnd ? `, data to ${day(periodEnd)}` : ""}; places from OpenStreetMap, KHDA, DHA. {DISCLAIMER}
       </p>
-      <button type="button" onClick={() => onView("panel")} className="w-full rounded-xl bg-cyan-300 px-3 py-2.5 text-sm font-semibold text-slate-900 hover:bg-cyan-200">
-        Explore building
-      </button>
+      <div className="flex gap-2">
+        <button type="button" onClick={() => onView("panel")} className="min-w-0 flex-1 rounded-xl bg-cyan-300 px-3 py-2.5 text-sm font-semibold text-slate-900 hover:bg-cyan-200">
+          Explore building
+        </button>
+        <button type="button" onClick={() => onCompare(slug)} aria-pressed={compared.includes(slug)} className="shrink-0 rounded-xl bg-white/10 px-3 py-2.5 text-sm font-medium hover:bg-white/20">
+          {compared.includes(slug) ? "✓ Comparing" : "+ Compare"}
+        </button>
+      </div>
     </div>
   );
 
@@ -219,6 +238,7 @@ export default function BuildingCard({ slug, view, currency, features, onClose, 
             <div>
               <h3 className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-[var(--muted)]">Nearest places, straight-line</h3>
               <FacilityChips facilities={data.facilities} showNames />
+              <p className="mt-1.5 text-xs text-[var(--muted)]">Straight-line distances, not routes. ≈ marks a school whose official position is rounded to about 1 km. Lines on the map: close this panel and press “Show on map”.</p>
             </div>
             <SourceNote source={`${SOURCES.dldSales}; ${SOURCES.dldRents}`} date={data.periodEnd} estimate>Apartments only; 12 months to the newest sale.</SourceNote>
           </div>
