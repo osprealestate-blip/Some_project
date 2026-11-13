@@ -15,7 +15,7 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = { width: "device-width", initialScale: 1 };
 
-export default function RootLayout({ children, modal }: { children: React.ReactNode; modal: React.ReactNode }) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   // dir is set per locale later; the layout already uses logical (start/end) spacing so Arabic can follow.
   return (
     <html lang="en" dir="ltr">
@@ -24,7 +24,6 @@ export default function RootLayout({ children, modal }: { children: React.ReactN
         <SiteHeader />
         <div id="main" tabIndex={-1} className="flex-1 outline-none">{children}</div>
         <SiteFooter />
-        {modal}
       </body>
     </html>
   );

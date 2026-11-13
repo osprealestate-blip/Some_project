@@ -5,7 +5,8 @@ import { useEffect, useId, useRef, useState } from "react";
 
 type Hit = { kind: "building" | "community"; slug: string; name: string; community: string | null };
 
-export default function SearchBox({ autoFocus = false, placeholder = "Search a building or area" }: { autoFocus?: boolean; placeholder?: string }) {
+/** `mapMode`: on the map page a building result opens its card on the map instead of leaving for its page. */
+export default function SearchBox({ autoFocus = false, placeholder = "Search a building or area", mapMode = false }: { autoFocus?: boolean; placeholder?: string; mapMode?: boolean }) {
   const router = useRouter();
   const [q, setQ] = useState("");
   const [hits, setHits] = useState<Hit[]>([]);
@@ -34,7 +35,7 @@ export default function SearchBox({ autoFocus = false, placeholder = "Search a b
     return () => ctrl.abort();
   }, [q]);
 
-  const href = (h: Hit) => (h.kind === "building" ? `/building/${h.slug}` : `/community/${h.slug}`);
+  const href = (h: Hit) => (h.kind === "building" ? (mapMode ? `/map?building=${encodeURIComponent(h.slug)}` : `/building/${h.slug}`) : `/community/${h.slug}`);
   const go = (h: Hit) => {
     setOpen(false);
     setQ("");

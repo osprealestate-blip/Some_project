@@ -4,6 +4,7 @@ import BuildingMap from "@/components/LazyBuildingMap";
 import GoldenVisaChecker from "@/components/GoldenVisaChecker";
 import LineChart from "@/components/LineChart";
 import MonthlyCostCalculator from "@/components/MonthlyCostCalculator";
+import AtAGlance from "@/components/AtAGlance";
 import KeyDistances from "@/components/KeyDistances";
 import NearbyPanel from "@/components/NearbyPanel";
 import NoData from "@/components/NoData";
@@ -22,10 +23,12 @@ import { getServerCurrency } from "@/lib/currency";
 import { hasDatabase } from "@/lib/db";
 import { count, day, formatMoney, formatPsf, formatShortPrice, pct, roomsLabel, sqft } from "@/lib/format";
 import {
-  buildingBySlug, buildingImages, buildingSeries, buildingSummaries, isOffPlanOnly, nearbyPlaces, offPlanRentEstimate, recentSales, siblingBuildings,
+  buildingBySlug, buildingImages, buildingSeries, buildingSummaries, communitySummaries, isOffPlanOnly, nearbyPlaces, nearestFacilities, offPlanRentEstimate,
+  recentSales, siblingBuildings,
 } from "@/lib/queries";
+import { buildingVerdict } from "@/lib/verdict";
 import { SOURCES } from "@/lib/sources";
-import { change } from "@/lib/stats";
+import { change, median } from "@/lib/stats";
 
 const METHOD_TEXT: Record<string, string> = {
   land_number: "DLD sales matched by name, confirmed by the DLD plot number",
@@ -56,8 +59,9 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
   if (!b) notFound();
   const currency = await getServerCurrency();
   const conversionNote = getConversionNote(currency);
-  const [summaries, series, sales, places, siblings, images] = await Promise.all([
+  const [summaries, series, sales, places, siblings, images, communityRows, facilities] = await Promise.all([
     buildingSummaries(b.id), buildingSeries(b), recentSales(b.id), nearbyPlaces(b), siblingBuildings(b), buildingImages(b.id),
+    communitySummaries(b.community_id), b.lng != null && b.lat != null ? nearestFacilities(b.lng, b.lat) : Promise.resolve([]),
   ]);
   const all = summaries.find((s) => s.rooms === -1);
   const noRent = all?.rent_median_12m == null && series.rentLevel == null;
@@ -69,12 +73,22 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
   const midYield = yields.length ? yields[Math.floor((yields.length - 1) / 2)] : null;
   const rentLevel = all?.rent_level ?? series.rentLevel;
   const periodEnd = all?.period_end ?? null;
+  const glanceYield = all?.rent_median_12m != null ? median(yields) : null;
+  const communityAll = communityRows.find((r) => r.rooms === -1);
+  const verdict = buildingVerdict({
+    psf: all?.sale_median_psf_12m ?? null, yield: glanceYield, sales: all?.sale_count_12m ?? 0, communityName: b.community,
+    communityPsf: communityAll?.sale_median_psf_12m ?? null, communityYield: communityAll?.gross_yield ?? null,
+  });
   const placed = b.lng != null && b.lat != null;
 
   return (
     <main className={panel ? "p-4 sm:p-5" : "mx-auto max-w-5xl p-4 sm:p-6"}>
+      {!panel && (
+        <Link href={`/map?building=${encodeURIComponent(b.slug)}`} className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--panel)] px-3 py-1.5 text-sm font-medium hover:border-[var(--accent)]">
+          <span aria-hidden>←</span> Back to map
+        </Link>
+      )}
       <nav className="text-xs text-[var(--muted)]">
-        {!panel && <><Link className="link" href="/map">Map</Link> /{" "}</>}
         {b.dm_code ? <Link className="link" href={`/community/${b.dm_code}`}>{b.community}</Link> : b.community}
       </nav>
       <h1 id={panel ? "building-panel-title" : undefined} className="mt-1 text-2xl font-semibold">{b.name_en}</h1>
@@ -85,6 +99,17 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
         {b.unit_count ? ` · ${count(b.unit_count)} units` : ""}
       </p>
       {!panel && <p className="mt-1 text-sm"><Link className="link" href={`/compare?ids=${b.slug}`}>Compare with other buildings</Link></p>}
+      <AtAGlance
+        verdict={verdict}
+        tiles={[
+          { label: "Price per sq ft", value: formatPsf(all?.sale_median_psf_12m, currency) },
+          { label: "Gross yield (est.)", value: pct(glanceYield) },
+          { label: "Median annual rent", value: formatShortPrice(all?.rent_median_12m, currency) },
+          { label: "Sales, 12 months", value: count(all?.sale_count_12m ?? 0) },
+        ]}
+        facilities={facilities}
+      />
+      <p className="mt-1 text-xs text-[var(--muted)]">Estimate based on DLD data to {day(periodEnd)}. Not a valuation or financial advice.</p>
       <BuildingGallery images={images} name={b.name_en} />
       <FavouriteButton slug={b.slug} name={b.name_en} />
       <DataBadge saleCount={all?.sale_count_12m} periodEnd={periodEnd} />

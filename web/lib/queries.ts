@@ -2,6 +2,7 @@
  *  Dates come back as ISO text, counts as integers. Figures follow the rules in pipeline/src/dpi/metrics. */
 import { one, query } from "./db";
 import type { Comparables } from "./fairPrice";
+import type { FacilityId, NearestFacility } from "./facilities";
 import type { NearbyPlace } from "./lifeScore";
 
 export const SALE_TYPES = ["apartment"];
@@ -235,6 +236,25 @@ export async function nearbyPlaces(b: Building, radius = 2000, perKind = 3): Pro
      ) x where n <= $4 order by distance_m`,
     [b.lng, b.lat, radius, perKind],
   );
+}
+
+/** The nearest metro station, hospital, school, mall and park to a point, however far (straight-line, metres).
+ *  School positions from KHDA are rounded to about 1 km: `approx` says so. */
+export async function nearestFacilities(lng: number, lat: number): Promise<NearestFacility[]> {
+  const rows = await query<{ id: FacilityId; name: string; distance_m: number; lng: number; lat: number; attributes: Record<string, string> | null }>(
+    `with pt as (select ST_SetSRID(ST_MakePoint($1, $2), 4326) as g)
+     select k.id, p.name, p.distance_m, p.lng, p.lat, p.attributes
+       from (values ('metro','transit','metro'), ('hospital','health','hospital'), ('school','school',null),
+                    ('mall','lifestyle','mall'), ('park','lifestyle','park')) as k(id, cat, sub)
+       cross join lateral (
+         select o.name, o.attributes, ST_X(o.geom) as lng, ST_Y(o.geom) as lat,
+                ST_Distance(o.geom::geography, pt.g::geography) as distance_m
+           from pois o, pt
+          where o.active and o.category = k.cat and (k.sub is null or o.subcategory = k.sub)
+          order by o.geom <-> pt.g limit 1) p`,
+    [lng, lat],
+  );
+  return rows.map((r) => ({ id: r.id, name: r.name, distanceM: Math.round(r.distance_m), lng: r.lng, lat: r.lat, approx: !!r.attributes?.approx_location }));
 }
 
 export async function siblingBuildings(b: Building): Promise<{ slug: string; name_en: string }[]> {

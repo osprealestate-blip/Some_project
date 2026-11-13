@@ -1,0 +1,330 @@
+"use client";
+
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { Currency } from "@/config/currency";
+import type { CardData } from "@/lib/cardData";
+import { count, day, formatMoney, formatPsf, formatShortPrice, pct, roomsLabel, sqft } from "@/lib/format";
+import type { MapBuildingProps } from "@/lib/mapMetrics";
+import { DISCLAIMER, SOURCES } from "@/lib/sources";
+import DataBadge from "./DataBadge";
+import FacilityChips from "./FacilityChips";
+import NearbyPanel from "./NearbyPanel";
+import SourceNote from "./SourceNote";
+
+type Feature = MapBuildingProps & { lng: number; lat: number };
+type Props = {
+  slug: string;
+  view: "card" | "panel";
+  currency: Currency;
+  /** All buildings on the map: used for the instant first paint and the "Similar" tab. */
+  features: Feature[];
+  onClose: () => void;
+  onView: (v: "card" | "panel") => void;
+  onSelect: (slug: string) => void;
+};
+
+type Tab = "overview" | "prices" | "rent" | "nearby" | "sales" | "similar";
+const TABS: [Tab, string][] = [["overview", "Overview"], ["prices", "Prices"], ["rent", "Rent"], ["nearby", "Nearby"], ["sales", "Sales"], ["similar", "Similar"]];
+type Sheet = "compact" | "expanded" | "full";
+
+function useDesktop() {
+  const [d, setD] = useState(true);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 768px)");
+    const f = () => setD(mq.matches);
+    f();
+    mq.addEventListener("change", f);
+    return () => mq.removeEventListener("change", f);
+  }, []);
+  return d;
+}
+
+function Tile({ label, value, note }: { label: string; value: string; note?: string }) {
+  return (
+    <div className="min-w-0 rounded-lg bg-white/[0.06] px-2.5 py-2 ring-1 ring-white/10">
+      <div className="truncate text-[11px] text-[var(--muted)]">{label}</div>
+      <div className="mt-0.5 truncate text-[15px] font-semibold tabular-nums">{value}</div>
+      {note && <div className="truncate text-[10.5px] text-[var(--muted)]">{note}</div>}
+    </div>
+  );
+}
+
+export default function BuildingCard({ slug, view, currency, features, onClose, onView, onSelect }: Props) {
+  const desktop = useDesktop();
+  const feature = useMemo(() => features.find((f) => f.slug === slug) ?? null, [features, slug]);
+  const [data, setData] = useState<CardData | null>(null);
+  const [state, setState] = useState<"loading" | "ok" | "error">("loading");
+  const [tab, setTab] = useState<Tab>("overview");
+  const [full, setFull] = useState(false); // phone only: the sheet at full height
+  const [drag, setDrag] = useState<number | null>(null);
+  const [shared, setShared] = useState("");
+  const cache = useRef(new Map<string, CardData>());
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const startY = useRef(0);
+
+  useEffect(() => {
+    const hit = cache.current.get(slug);
+    setTab("overview");
+    if (hit) { setData(hit); setState("ok"); return; }
+    setData(null);
+    setState("loading");
+    const ctrl = new AbortController();
+    fetch(`/api/building-card/${encodeURIComponent(slug)}`, { signal: ctrl.signal })
+      .then((r) => (r.ok ? (r.json() as Promise<CardData>) : Promise.reject(new Error("bad"))))
+      .then((d) => { cache.current.set(slug, d); setData(d); setState("ok"); })
+      .catch((e) => { if (e?.name !== "AbortError") setState("error"); });
+    return () => ctrl.abort();
+  }, [slug]);
+
+  useEffect(() => { if (view === "card") setFull(false); }, [view]);
+  useEffect(() => { bodyRef.current?.scrollTo({ top: 0 }); }, [tab, slug]);
+
+  // Esc: panel back to card, card closed. Focus goes to the close button when the card opens.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (view === "panel") onView("card"); else onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [view, onView, onClose]);
+  useEffect(() => { closeRef.current?.focus({ preventScroll: true }); }, [slug, view]);
+
+  const sheet: Sheet = view === "card" ? "compact" : full ? "full" : "expanded";
+  const showPanel = view === "panel";
+
+  const share = useCallback(async () => {
+    const url = `${window.location.origin}/map?building=${encodeURIComponent(slug)}`;
+    try {
+      if (navigator.share && !desktop) await navigator.share({ title: data?.name ?? feature?.name ?? "Building", url });
+      else { await navigator.clipboard.writeText(url); setShared("Link copied"); }
+    } catch { setShared(url); }
+    setTimeout(() => setShared(""), 3000);
+  }, [slug, data, feature, desktop]);
+
+  // Phone sheet: drag the handle up or down between compact, expanded and full; down from compact closes.
+  const onDown = (e: React.PointerEvent) => { startY.current = e.clientY; setDrag(0); (e.target as HTMLElement).setPointerCapture(e.pointerId); };
+  const onMove = (e: React.PointerEvent) => { if (drag !== null) setDrag(e.clientY - startY.current); };
+  const onUp = () => {
+    const dy = drag ?? 0;
+    setDrag(null);
+    if (Math.abs(dy) < 8) { // a tap steps up: compact, expanded, full
+      if (sheet === "compact") onView("panel"); else if (sheet === "expanded") setFull(true); else setFull(false);
+    } else if (dy < -40) { if (sheet === "compact") onView("panel"); else setFull(true); }
+    else if (dy > 40) { if (sheet === "full") setFull(false); else if (sheet === "expanded") onView("card"); else onClose(); }
+  };
+
+  const name = data?.name ?? feature?.name ?? "Building";
+  const community = data?.community ?? feature?.community ?? "";
+  const sum = data?.summary;
+  const psf = sum ? sum.psf : feature?.psf ?? null;
+  const yld = sum ? sum.yield : feature?.yield ?? null;
+  const sales = sum ? sum.sales : feature?.sales ?? 0;
+  const periodEnd = data?.periodEnd ?? null;
+
+  // Geometry. Desktop: the card sits bottom-left and grows into a centred panel. Phone: a sheet from the bottom.
+  const style: React.CSSProperties = desktop
+    ? showPanel
+      ? { left: "max(16px, calc(50vw - 460px))", bottom: "calc((100dvh - min(700px, 100dvh - 7rem)) / 2)", width: "min(920px, calc(100vw - 32px))", height: "min(700px, calc(100dvh - 7rem))", borderRadius: 20 }
+      : { left: 16, bottom: 16, width: 392, height: "min(500px, calc(100dvh - 6rem))", borderRadius: 20 }
+    : {
+        left: 0, bottom: 0, width: "100%", borderRadius: "20px 20px 0 0",
+        height: `calc(${sheet === "full" ? "100dvh" : sheet === "expanded" ? "74dvh" : "min(60dvh, 470px)"} - ${drag ?? 0}px)`,
+      };
+
+  const sim = useMemo(() => {
+    if (!feature) return [];
+    return features
+      .filter((f) => f.slug !== slug && f.community === feature.community && f.sales >= 5 && f.psf != null)
+      .sort((a, b) => Math.abs(a.psf! - (feature.psf ?? a.psf!)) - Math.abs(b.psf! - (feature.psf ?? b.psf!)))
+      .slice(0, 6);
+  }, [features, feature, slug]);
+
+  const cardBody = (
+    <div className="flex h-full flex-col gap-2.5 p-4">
+      <div className="flex items-start gap-2">
+        <div className="min-w-0 flex-1">
+          <h2 id="building-card-title" className="line-clamp-2 text-[17px] font-semibold leading-tight">{name}</h2>
+          <p className="mt-0.5 truncate text-xs text-[var(--muted)]">
+            {community}{data?.floors ? ` · ${data.floors} floors` : ""}{data?.approx ? " · position approximate" : ""}
+          </p>
+        </div>
+        <button ref={showPanel ? undefined : closeRef} type="button" onClick={onClose} aria-label="Close building card" title="Close (Esc)"
+          className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/10 text-base hover:bg-white/20">✕</button>
+      </div>
+      <div className="rounded-lg border-s-2 border-cyan-300/80 bg-cyan-300/[0.08] px-3 py-2 text-[13px] leading-snug">
+        {state === "ok" && data?.verdict ? data.verdict.text : state === "error" ? "Could not load the summary. Try again, or open the full page." : <span className="text-[var(--muted)]">Reading the numbers…</span>}
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        <Tile label="Price / sq ft" value={formatMoney(psf, currency)} />
+        <Tile label="Gross yield (est.)" value={pct(yld)} />
+        <Tile label="Sales, 12 mo" value={count(sales)} />
+      </div>
+      <div>
+        <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-[var(--muted)]">Nearest, straight-line</div>
+        {data ? <FacilityChips facilities={data.facilities} /> : <div className="h-[108px] animate-pulse rounded-lg bg-white/[0.06]" />}
+      </div>
+      <p className="mt-auto text-[10.5px] leading-snug text-[var(--muted)]">
+        Source: DLD sales and rents{periodEnd ? `, data to ${day(periodEnd)}` : ""}; places from OpenStreetMap, KHDA, DHA. {DISCLAIMER}
+      </p>
+      <button type="button" onClick={() => onView("panel")} className="w-full rounded-xl bg-cyan-300 px-3 py-2.5 text-sm font-semibold text-slate-900 hover:bg-cyan-200">
+        Explore building
+      </button>
+    </div>
+  );
+
+  const panelBody = (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex items-start gap-2 border-b border-white/10 px-4 pb-2 pt-3 md:px-5">
+        <div className="min-w-0 flex-1">
+          <h2 id="building-panel-title" className="line-clamp-2 text-lg font-semibold leading-tight md:text-xl">{name}</h2>
+          <p className="truncate text-xs text-[var(--muted)]">
+            {community}{data?.project && data.project.toLowerCase() !== name.toLowerCase() ? ` · Project: ${data.project}` : ""}
+            {data?.floors ? ` · ${data.floors} floors` : ""}{data?.units ? ` · ${count(data.units)} units` : ""}
+          </p>
+        </div>
+        <button type="button" onClick={share} className="shrink-0 rounded-full bg-white/10 px-3 py-1.5 text-xs hover:bg-white/20">{shared || "Share"}</button>
+        <Link href={`/building/${encodeURIComponent(slug)}`} className="hidden shrink-0 rounded-full bg-cyan-300 px-3 py-1.5 text-xs font-semibold text-slate-900 hover:bg-cyan-200 sm:inline-block">Open full page</Link>
+        {desktop && <button type="button" onClick={() => onView("card")} title="Back to the small card (Esc)" className="shrink-0 rounded-full bg-white/10 px-3 py-1.5 text-xs hover:bg-white/20">Shrink</button>}
+        <button ref={showPanel ? closeRef : undefined} type="button" onClick={onClose} aria-label="Close building details" title="Close"
+          className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/10 hover:bg-white/20">✕</button>
+      </div>
+      <div role="tablist" aria-label="Building sections" className="flex gap-1 overflow-x-auto border-b border-white/10 px-3 py-1.5 md:px-4">
+        {TABS.map(([id, label]) => (
+          <button key={id} role="tab" aria-selected={tab === id} type="button" onClick={() => setTab(id)}
+            className={`shrink-0 rounded-full px-3 py-1.5 text-[13px] ${tab === id ? "bg-cyan-300 font-semibold text-slate-900" : "text-[var(--fg)] hover:bg-white/10"}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+      <div ref={bodyRef} role="tabpanel" className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 text-sm md:p-5">
+        {state === "loading" && <div className="space-y-3"><div className="h-16 animate-pulse rounded-lg bg-white/[0.06]" /><div className="h-40 animate-pulse rounded-lg bg-white/[0.06]" /></div>}
+        {state === "error" && (
+          <p>Could not load this building. <Link className="link" href={`/building/${encodeURIComponent(slug)}`}>Open the full page</Link> instead.</p>
+        )}
+        {data && tab === "overview" && (
+          <div className="space-y-4">
+            {data.verdict && <div className="rounded-lg border-s-2 border-cyan-300/80 bg-cyan-300/[0.08] px-3 py-2 text-[15px] leading-snug">{data.verdict.text}</div>}
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              <Tile label="Median price per sq ft" value={formatPsf(data.summary.psf, currency)} />
+              <Tile label="Median sale price" value={formatShortPrice(data.summary.price, currency)} />
+              <Tile label="Gross yield (estimate)" value={pct(data.summary.yield)} note="Median across bedroom types" />
+              <Tile label={data.summary.rentLevel === "project" ? "Annual rent (whole project)" : "Median annual rent"} value={formatShortPrice(data.summary.rent, currency)} note={`${count(data.summary.rentCount)} contracts`} />
+              <Tile label="Change on a year earlier" value={pct(data.summary.change, 1, true)} note="Median per sq ft" />
+              <Tile label="Sales, 12 months" value={count(data.summary.sales)} />
+            </div>
+            <DataBadge saleCount={data.summary.sales} periodEnd={data.periodEnd} />
+            <div>
+              <h3 className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-[var(--muted)]">Nearest places, straight-line</h3>
+              <FacilityChips facilities={data.facilities} showNames />
+            </div>
+            <SourceNote source={`${SOURCES.dldSales}; ${SOURCES.dldRents}`} date={data.periodEnd} estimate>Apartments only; 12 months to the newest sale.</SourceNote>
+          </div>
+        )}
+        {data && tab === "prices" && (
+          <div>
+            <h3 className="mb-2 font-semibold">Sale prices by bedroom type</h3>
+            <div className="overflow-x-auto"><table className="w-full whitespace-nowrap tabular-nums [&_td]:py-1.5 [&_td]:pe-3 [&_th]:pe-3">
+              <thead className="text-xs text-[var(--muted)]"><tr className="border-b border-white/10"><th className="py-1 text-start font-medium">Type</th><th className="text-end font-medium">Sales</th><th className="text-end font-medium">Median price</th><th className="text-end font-medium">Per sq ft</th></tr></thead>
+              <tbody>{data.rows.filter((r) => r.sale_count_12m > 0).map((r) => (
+                <tr key={r.rooms} className="border-b border-white/10"><td>{roomsLabel(r.rooms)}</td><td className="text-end">{count(r.sale_count_12m)}</td><td className="text-end">{r.sale_count_12m >= 3 ? formatShortPrice(r.sale_median_price_12m, currency) : "–"}</td><td className="text-end">{r.sale_count_12m >= 3 ? formatPsf(r.sale_median_psf_12m, currency) : "–"}</td></tr>
+              ))}</tbody>
+            </table></div>
+            <p className="mt-1 text-xs text-[var(--muted)]">Rows with fewer than 3 deals show no median. Charts by quarter are on the full page.</p>
+            <SourceNote source={SOURCES.dldSales} date={data.periodEnd} />
+          </div>
+        )}
+        {data && tab === "rent" && (
+          <div>
+            <h3 className="mb-2 font-semibold">Rent and gross yield by bedroom type</h3>
+            <div className="overflow-x-auto"><table className="w-full whitespace-nowrap tabular-nums [&_td]:py-1.5 [&_td]:pe-3 [&_th]:pe-3">
+              <thead className="text-xs text-[var(--muted)]"><tr className="border-b border-white/10"><th className="py-1 text-start font-medium">Type</th><th className="text-end font-medium">Contracts</th><th className="text-end font-medium">Median rent / year</th><th className="text-end font-medium">Gross yield*</th></tr></thead>
+              <tbody>{data.rows.filter((r) => r.rooms >= 0 && r.rent_count_12m > 0).map((r) => (
+                <tr key={r.rooms} className="border-b border-white/10"><td>{roomsLabel(r.rooms)}</td><td className="text-end">{count(r.rent_count_12m)}</td><td className="text-end">{r.rent_count_12m >= 3 ? formatShortPrice(r.rent_median_12m, currency) : "–"}</td><td className="text-end">{pct(r.gross_yield)}</td></tr>
+              ))}</tbody>
+            </table></div>
+            {!data.rows.some((r) => r.rooms >= 0 && r.rent_count_12m > 0) && <p className="text-[var(--muted)]">No rent contracts counted for this building yet.</p>}
+            <p className="mt-1 text-xs text-[var(--muted)]">* Estimate: yearly rent as a share of price, before service charges.{data.summary.rentLevel === "project" ? " Rents are for the whole project: DLD rent contracts name the project, not the tower." : ""}</p>
+            <SourceNote source={SOURCES.dldRents} date={data.periodEnd} estimate />
+          </div>
+        )}
+        {data && tab === "nearby" && (
+          <div className="space-y-4">
+            <FacilityChips facilities={data.facilities} showNames />
+            <NearbyPanel places={data.places} placed={data.lng != null} />
+          </div>
+        )}
+        {data && tab === "sales" && (
+          <div>
+            <h3 className="mb-2 font-semibold">Latest sales</h3>
+            {data.sales.length ? (
+              <div className="overflow-x-auto"><table className="w-full whitespace-nowrap tabular-nums [&_td]:py-1.5 [&_td]:pe-3 [&_th]:pe-3">
+                <thead className="text-xs text-[var(--muted)]"><tr className="border-b border-white/10"><th className="py-1 text-start font-medium">Date</th><th className="text-start font-medium">Type</th><th className="text-end font-medium">Size</th><th className="text-end font-medium">Price</th><th className="text-end font-medium">Status</th></tr></thead>
+                <tbody>{data.sales.map((s, i) => (
+                  <tr key={i} className="border-b border-white/10"><td>{day(s.txn_date)}</td><td>{s.rooms == null ? "–" : roomsLabel(s.rooms)}</td><td className="text-end">{sqft(s.size_sqft)}</td><td className="text-end">{formatMoney(s.price, currency)}</td><td className="text-end">{s.off_plan == null ? "–" : s.off_plan ? "Off-plan" : "Ready"}</td></tr>
+                ))}</tbody>
+              </table></div>
+            ) : <p className="text-[var(--muted)]">No counted sales.</p>}
+            <SourceNote source={SOURCES.dldSales} date={data.periodEnd}>Market fields only; unit numbers and parties are never shown.</SourceNote>
+          </div>
+        )}
+        {data && tab === "similar" && (
+          <div className="space-y-4">
+            {data.siblings.length > 0 && (
+              <div>
+                <h3 className="mb-1.5 font-semibold">Other buildings in {data.project}</h3>
+                <ul className="flex flex-wrap gap-2">{data.siblings.map((s) => (
+                  <li key={s.slug}><button type="button" onClick={() => onSelect(s.slug)} className="rounded-full bg-white/10 px-3 py-1.5 text-[13px] hover:bg-white/20">{s.name_en}</button></li>
+                ))}</ul>
+              </div>
+            )}
+            <div>
+              <h3 className="mb-1.5 font-semibold">Similar price in {data.community}</h3>
+              {sim.length ? (
+                <ul className="divide-y divide-white/10">{sim.map((f) => (
+                  <li key={f.slug}>
+                    <button type="button" onClick={() => onSelect(f.slug)} className="flex w-full items-baseline justify-between gap-3 py-2 text-start hover:text-cyan-200">
+                      <span className="min-w-0 truncate">{f.name}</span>
+                      <span className="shrink-0 tabular-nums text-[var(--muted)]">{formatPsf(f.psf, currency)} · {pct(f.yield)} yield</span>
+                    </button>
+                  </li>
+                ))}</ul>
+              ) : <p className="text-[var(--muted)]">No buildings with enough sales to compare.</p>}
+              <p className="mt-1 text-xs text-[var(--muted)]">Buildings in the same community with the closest median price per sq ft and at least 5 sales. Tap one to see it on the map.</p>
+            </div>
+            <Link className="link inline-block" href={`/compare?ids=${encodeURIComponent(slug)}`}>Compare with other buildings</Link>
+          </div>
+        )}
+      </div>
+      <div className="flex items-center gap-3 border-t border-white/10 px-4 py-2 text-xs md:hidden">
+        <Link href={`/building/${encodeURIComponent(slug)}`} className="rounded-full bg-cyan-300 px-3 py-1.5 font-semibold text-slate-900">Open full page</Link>
+        <span className="text-[var(--muted)]">Charts, history, costs</span>
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      {showPanel && desktop && <div className="dpi-backdrop fixed inset-0 z-30" onClick={() => onView("card")} aria-hidden />}
+      <aside
+        role="dialog"
+        aria-modal={showPanel && desktop}
+        aria-labelledby={showPanel ? "building-panel-title" : "building-card-title"}
+        className={`dpi-glass fixed z-40 overflow-hidden ${drag !== null ? "is-dragging" : ""}`}
+        style={style}
+      >
+        {!desktop && (
+          <div role="button" tabIndex={0} aria-label="Resize building sheet" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={() => setDrag(null)}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (sheet === "compact") onView("panel"); else if (sheet === "expanded") setFull(true); else setFull(false); } }}
+            className="absolute inset-x-0 top-0 z-10 flex h-6 touch-none cursor-grab items-center justify-center">
+            <span className="h-1.5 w-11 rounded-full bg-white/40" />
+          </div>
+        )}
+        <div className={`dpi-fade absolute inset-0 overflow-y-auto ${!desktop ? "pt-3" : ""} ${showPanel ? "pointer-events-none opacity-0" : "opacity-100"}`} aria-hidden={showPanel} inert={showPanel}>{cardBody}</div>
+        <div className={`dpi-fade absolute inset-0 ${!desktop ? "pt-4" : ""} ${showPanel ? "opacity-100" : "pointer-events-none opacity-0"}`} aria-hidden={!showPanel} inert={!showPanel}>{showPanel && panelBody}</div>
+      </aside>
+    </>
+  );
+}
