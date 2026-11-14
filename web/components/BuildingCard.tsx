@@ -43,11 +43,20 @@ type Props = {
   onRouteMode: (m: RouteMode) => void;
   compared: string[];
   onCompare: (slug: string) => void;
+  /** Phone: the sheet height in px (0 on desktop), so the map can keep the building in the free area above it. */
+  onSheetHeight?: (px: number) => void;
 };
 
 type Tab = "overview" | "prices" | "rent" | "nearby" | "sales" | "similar";
 const TABS: [Tab, string][] = [["overview", "Overview"], ["prices", "Prices"], ["rent", "Rent"], ["nearby", "Nearby"], ["sales", "Sales"], ["similar", "Similar"]];
-type Sheet = "compact" | "expanded" | "full";
+type Sheet = "peek" | "compact" | "expanded" | "full";
+const PEEK_H = "clamp(248px, 32dvh, 296px)";
+/** Sheet height in px for the map framing. The full sheet is capped so the building is not pushed off the screen. */
+function sheetPx(sheet: Sheet, vh: number) {
+  if (sheet === "peek") return Math.min(296, Math.max(248, 0.32 * vh));
+  if (sheet === "compact") return Math.min(0.6 * vh, 470);
+  return 0.74 * vh;
+}
 
 function useDesktop() {
   const [d, setD] = useState(true);
@@ -72,7 +81,7 @@ function Tile({ label, value, note }: { label: string; value: string; note?: str
   );
 }
 
-export default function BuildingCard({ slug, view, currency, features, onClose, onView, onSelect, nearby, hiddenKinds, onNearby, onToggleKind, onFacilities, routeMode, routes, onRouteMode, compared, onCompare }: Props) {
+export default function BuildingCard({ slug, view, currency, features, onClose, onView, onSelect, nearby, hiddenKinds, onNearby, onToggleKind, onFacilities, routeMode, routes, onRouteMode, compared, onCompare, onSheetHeight }: Props) {
   const desktop = useDesktop();
   const t = useT();
   const lang = useLang();
@@ -81,6 +90,7 @@ export default function BuildingCard({ slug, view, currency, features, onClose, 
   const [state, setState] = useState<"loading" | "ok" | "error">("loading");
   const [tab, setTab] = useState<Tab>("overview");
   const [full, setFull] = useState(false); // phone only: the sheet at full height
+  const [peek, setPeek] = useState(true); // phone only: the card opens as a short peek, so the map stays usable
   const [drag, setDrag] = useState<number | null>(null);
   const [shared, setShared] = useState("");
   const [series, setSeries] = useState<SeriesData | null>(null);
@@ -109,6 +119,7 @@ export default function BuildingCard({ slug, view, currency, features, onClose, 
     return () => { live = false; };
   }, [tab, slug, series, seriesFailed]);
   useEffect(() => { if (view === "card") setFull(false); }, [view]);
+  useEffect(() => { setPeek(true); }, [slug]);
   useEffect(() => { bodyRef.current?.scrollTo({ top: 0 }); }, [tab, slug]);
 
   // Esc: panel back to card, card closed. Focus goes to the close button when the card opens.
@@ -122,7 +133,18 @@ export default function BuildingCard({ slug, view, currency, features, onClose, 
   }, [view, onView, onClose]);
   useEffect(() => { closeRef.current?.focus({ preventScroll: true }); }, [slug, view]);
 
-  const sheet: Sheet = view === "card" ? "compact" : full ? "full" : "expanded";
+  const sheet: Sheet = view === "card" ? (peek ? "peek" : "compact") : full ? "full" : "expanded";
+  const peeking = !desktop && sheet === "peek";
+  useEffect(() => {
+    if (!onSheetHeight) return;
+    if (desktop) { onSheetHeight(0); return; }
+    const f = () => onSheetHeight(Math.round(sheetPx(sheet, window.innerHeight)));
+    f();
+    window.addEventListener("resize", f);
+    return () => window.removeEventListener("resize", f);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sheet, desktop]);
+  useEffect(() => () => onSheetHeight?.(0), []); // eslint-disable-line react-hooks/exhaustive-deps
   const showPanel = view === "panel";
 
   // The tab is kept in the URL, so a shared link opens the same view: building, panel, tab, colour layer and compare list.
@@ -141,16 +163,19 @@ export default function BuildingCard({ slug, view, currency, features, onClose, 
     setTimeout(() => setShared(""), 3000);
   }, [slug, data, feature, desktop]);
 
-  // Phone sheet: drag the handle up or down between compact, expanded and full; down from compact closes.
+  // Phone sheet: drag the handle up or down between peek, compact, expanded and full; down from the peek hides the sheet
+  // (the building stays selected on the map). A tap steps up and wraps from full back to the peek.
+  const stepUp = () => { if (sheet === "peek") setPeek(false); else if (sheet === "compact") onView("panel"); else if (sheet === "expanded") setFull(true); };
+  const stepDown = () => { if (sheet === "full") setFull(false); else if (sheet === "expanded") onView("card"); else if (sheet === "compact") setPeek(true); else onClose(); };
+  const tapStep = () => { if (sheet === "full") { setFull(false); onView("card"); setPeek(true); } else stepUp(); };
   const onDown = (e: React.PointerEvent) => { startY.current = e.clientY; setDrag(0); (e.target as HTMLElement).setPointerCapture(e.pointerId); };
   const onMove = (e: React.PointerEvent) => { if (drag !== null) setDrag(e.clientY - startY.current); };
   const onUp = () => {
     const dy = drag ?? 0;
     setDrag(null);
-    if (Math.abs(dy) < 8) { // a tap steps up: compact, expanded, full
-      if (sheet === "compact") onView("panel"); else if (sheet === "expanded") setFull(true); else setFull(false);
-    } else if (dy < -40) { if (sheet === "compact") onView("panel"); else setFull(true); }
-    else if (dy > 40) { if (sheet === "full") setFull(false); else if (sheet === "expanded") onView("card"); else onClose(); }
+    if (Math.abs(dy) < 8) tapStep();
+    else if (dy < -40) stepUp();
+    else if (dy > 40) stepDown();
   };
 
   const name = data?.name ?? feature?.name ?? t("Building");
@@ -173,7 +198,7 @@ export default function BuildingCard({ slug, view, currency, features, onClose, 
       : { left: "var(--card-x, 16px)", top: "var(--card-y, calc(100dvh - min(500px, 100dvh - 6rem) - 16px))", width: 392, height: "min(500px, calc(100dvh - 6rem))", borderRadius: 16 }
     : {
         insetInlineStart: 0, bottom: 0, width: "100%", borderRadius: "20px 20px 0 0",
-        height: `calc(${sheet === "full" ? "100dvh" : sheet === "expanded" ? "74dvh" : "min(60dvh, 470px)"} - ${drag ?? 0}px)`,
+        height: `calc(${sheet === "full" ? "100dvh" : sheet === "expanded" ? "74dvh" : sheet === "peek" ? PEEK_H : "min(60dvh, 470px)"} - ${drag ?? 0}px)`,
       };
 
   const sim = useMemo(() => {
@@ -193,29 +218,45 @@ export default function BuildingCard({ slug, view, currency, features, onClose, 
             {community}{data?.floors ? ` · ${t("{n} floors", { n: data.floors })}` : ""}{data?.approx ? ` · ${t("position approximate")}` : ""}
           </p>
         </div>
-        <button ref={showPanel ? undefined : closeRef} type="button" onClick={onClose} aria-label={t("Close building card")} title={t("Close (Esc)")}
+        <button ref={showPanel ? undefined : closeRef} type="button" onClick={onClose} aria-label={t("Hide building card")} title={t("Hide card (Esc). The building stays selected.")}
           className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/10 text-base hover:bg-white/20">✕</button>
       </div>
-      <div className="rounded-lg border-s-2 border-cyan-300/80 bg-cyan-300/[0.08] px-3 py-2 text-[13px] leading-snug">
+      {!peeking && <div className="rounded-lg border-s-2 border-cyan-300/80 bg-cyan-300/[0.08] px-3 py-2 text-[13px] leading-snug">
         {state === "ok" && data?.verdict ? data.verdict.text : state === "error" ? t("Could not load the summary. Try again, or open the full page.") : <span className="text-[var(--muted)]">{t("Reading the numbers…")}</span>}
-      </div>
+      </div>}
       <div className="grid grid-cols-3 gap-1.5">
         <Tile label="Price / sq ft" value={formatMoney(psf, currency)} />
         <Tile label="Median sale price" value={formatShortPrice(price, currency)} />
         <Tile label="Gross yield (est.)" value={pct(yld)} />
-        <Tile label="Sales, 12 mo" value={count(sales)} />
-        <Tile label="Year on year" value={pct(change, 1, true)} />
-        <button type="button" onClick={() => setConfInfo((v) => !v)} aria-expanded={confInfo} className="min-w-0 rounded-lg bg-white/[0.06] px-2.5 py-2 text-start ring-1 ring-white/10 hover:bg-white/10">
+        {!peeking && <Tile label="Sales, 12 mo" value={count(sales)} />}
+        {!peeking && <Tile label="Year on year" value={pct(change, 1, true)} />}
+        {!peeking && <button type="button" onClick={() => setConfInfo((v) => !v)} aria-expanded={confInfo} className="min-w-0 rounded-lg bg-white/[0.06] px-2.5 py-2 text-start ring-1 ring-white/10 hover:bg-white/10">
           <div className="truncate text-[11px] text-[var(--muted)]">{t("Data confidence")} ⓘ</div>
           <div className={`mt-0.5 truncate text-[15px] font-semibold ${conf.level === "good" ? "text-[var(--good)]" : conf.level === "limited" ? "text-[var(--warn)]" : "text-[var(--muted)]"}`}>{conf.label}</div>
-        </button>
+        </button>}
       </div>
-      {confInfo && (
+      {peeking && (
+        <div className="flex gap-2">
+          {data && data.facilities.length > 0 && (
+            <button type="button" onClick={() => onNearby(!nearby)} aria-pressed={nearby}
+              className={`min-w-0 flex-1 rounded-xl px-3 py-2 text-[13px] font-semibold ${nearby ? "bg-white/15 text-[var(--fg)]" : "bg-cyan-300/15 text-cyan-200 ring-1 ring-cyan-300/50"}`}>
+              {nearby ? t("Reset nearby lines") : t("Show nearby on map")}
+            </button>
+          )}
+          <button type="button" onClick={() => setPeek(false)} className="min-w-0 flex-1 rounded-xl bg-white/10 px-3 py-2 text-[13px] font-semibold">{t("More details")} ▴</button>
+        </div>
+      )}
+      {peeking && (
+        <p className="text-[10px] leading-snug text-[var(--muted)]">
+          {t("Source: DLD sales and rents")}{periodEnd ? `, ${t("data to {date}", { date: day(periodEnd) })}` : ""}. {t(DISCLAIMER)} {t("Map: OpenFreeMap, OpenStreetMap contributors, Dubai Municipality.")}
+        </p>
+      )}
+      {!peeking && confInfo && (
         <p role="note" className="rounded-lg bg-white/[0.06] px-3 py-2 text-xs leading-snug">
           {t("Data confidence counts how many sales the figures rest on: Strong is 15 or more in 12 months, Limited is 5 to 14, Low is under 5. It measures how much data there is, not the quality of the building.")}
         </p>
       )}
-      <div>
+      {!peeking && <div>
         <div className="mb-1 flex items-center justify-between gap-2">
           <span className="text-[11px] font-medium uppercase tracking-wide text-[var(--muted)]">{data?.routing ? t("Nearest · km straight-line, time by route") : t("Nearest, straight-line")}</span>
           {data && data.facilities.length > 0 && (
@@ -235,11 +276,11 @@ export default function BuildingCard({ slug, view, currency, features, onClose, 
         )}
         {nearby && data && !data.routing && <p role="note" className="mb-1.5 text-[11px] text-[var(--muted)]">{t("Travel times unavailable. Distances are straight-line.")}</p>}
         {data ? <FacilityChips facilities={data.facilities} onToggle={nearby ? onToggleKind : undefined} hidden={hiddenKinds} routes={routes} mode={nearby && data.routing ? routeMode : "line"} /> : <div className="h-[108px] animate-pulse rounded-lg bg-white/[0.06]" />}
-      </div>
-      <p className="mt-auto text-[10.5px] leading-snug text-[var(--muted)]">
+      </div>}
+      {!peeking && <p className="mt-auto text-[10.5px] leading-snug text-[var(--muted)]">
         {t("Source: DLD sales and rents")}{periodEnd ? `, ${t("data to {date}", { date: day(periodEnd) })}` : ""}; {t("places from OpenStreetMap, KHDA, DHA.")}{data?.routing && ` ${t("Walk and drive times are estimates from OpenStreetMap routing, without traffic or waiting.")}`} {t(DISCLAIMER)}
-      </p>
-      <div className="flex gap-2">
+      </p>}
+      {!peeking && <div className="flex gap-2">
         <button type="button" onClick={() => onView("panel")} className="min-w-0 flex-1 rounded-xl bg-cyan-300 px-3 py-2.5 text-sm font-semibold text-slate-900 hover:bg-cyan-200">
           {t("Explore building")}
         </button>
@@ -247,7 +288,7 @@ export default function BuildingCard({ slug, view, currency, features, onClose, 
         <button type="button" onClick={() => onCompare(slug)} aria-pressed={compared.includes(slug)} className="shrink-0 rounded-xl bg-white/10 px-3 py-2.5 text-sm font-medium hover:bg-white/20">
           {compared.includes(slug) ? t("✓ Comparing") : t("+ Compare")}
         </button>
-      </div>
+      </div>}
     </div>
   );
 
@@ -443,7 +484,7 @@ export default function BuildingCard({ slug, view, currency, features, onClose, 
         <div className="sr-only" role="status" aria-live="polite">{t("{name} selected", { name })}{showPanel ? `, ${t("details open")}` : ""}</div>
         {!desktop && (
           <div role="button" tabIndex={0} aria-label={t("Resize building sheet")} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={() => setDrag(null)}
-            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (sheet === "compact") onView("panel"); else if (sheet === "expanded") setFull(true); else setFull(false); } }}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); tapStep(); } else if (e.key === "ArrowUp") { e.preventDefault(); stepUp(); } else if (e.key === "ArrowDown") { e.preventDefault(); stepDown(); } }}
             className="absolute inset-x-0 top-0 z-10 flex h-6 touch-none cursor-grab items-center justify-center">
             <span className="h-1.5 w-11 rounded-full bg-white/40" />
           </div>

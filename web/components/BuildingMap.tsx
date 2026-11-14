@@ -182,6 +182,12 @@ export default function BuildingMap({
   const [facilities, setFacilities] = useState<NearestFacility[]>([]);
   const [routeMode, setRouteMode] = useState<RouteMode>("drive"); // real driving (default) or walking routes
   const [routes, setRoutes] = useState<RouteMap>({});
+  // Closing the card hides it but keeps the building selected: its highlight and nearby lines stay on the map until
+  // "Deselect". The sheet height (phones) tells the camera how much of the map is free above it.
+  const [hiddenFor, setHiddenFor] = useState<string | null>(null);
+  const cardHidden = !!selected && hiddenFor === selected;
+  const [sheetH, setSheetH] = useState(0);
+  const padH = cardHidden ? 140 : sheetH;
   // Map search: ?f=near:metro | dev:Name | area:392 limits the map to the buildings that match.
   const filterRaw = cardMode ? params.get("f") : null;
   const [mapFilter, setMapFilter] = useState<{ key: string; label: string; slugs: string[] | null; state: "loading" | "ok" | "error" } | null>(null);
@@ -246,11 +252,12 @@ export default function BuildingMap({
   const lang = useLang();
   const tRef = useRef(t);
   tRef.current = t;
-  const live = useRef({ settings, currency, theme, selected, hover: null as string | null, baseKey: null as string | null, restored: false });
+  const live = useRef({ settings, currency, theme, selected, padH: 0, hover: null as string | null, baseKey: null as string | null, restored: false });
   live.current.settings = settings;
   live.current.currency = currency;
   live.current.theme = theme;
   live.current.selected = selected;
+  live.current.padH = padH;
 
   const coloured = useMemo(() => (raw ? colourise(raw.features, settings) : null), [raw, settings]);
 
@@ -263,6 +270,7 @@ export default function BuildingMap({
   const select = useCallback((slug: string, keepView = false) => {
     const sp = new URLSearchParams(window.location.search);
     const had = sp.has("building");
+    setHiddenFor(null);
     const v = keepView ? sp.get("view") : null;
     const url = mapUrl(slug, v);
     if (had) window.history.replaceState(null, "", url);
@@ -279,9 +287,17 @@ export default function BuildingMap({
       window.history.back();
     } else window.history.replaceState(null, "", mapUrl(slug));
   }, []);
-  const closeCard = useCallback(() => {
+  const deselect = useCallback(() => {
     panelPushed.current = false;
+    setHiddenFor(null);
     window.history.replaceState(null, "", mapUrl(null));
+  }, []);
+  const hideCard = useCallback(() => {
+    const slug = new URLSearchParams(window.location.search).get("building");
+    if (!slug) return;
+    panelPushed.current = false;
+    setHiddenFor(slug);
+    window.history.replaceState(null, "", mapUrl(slug)); // back to the card view, so reopening starts at the peek
   }, []);
 
   // 1. Read saved choices, then create the map.
@@ -673,9 +689,9 @@ export default function BuildingMap({
   // The selected building: glow outline, the page flag the phone layout reads, and the camera move.
   useEffect(() => {
     if (!cardMode) return;
-    document.documentElement.toggleAttribute(SELECTED_ATTR, !!selected);
+    document.documentElement.toggleAttribute(SELECTED_ATTR, !!selected && !cardHidden);
     return () => document.documentElement.removeAttribute(SELECTED_ATTR);
-  }, [cardMode, selected]);
+  }, [cardMode, selected, cardHidden]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -685,12 +701,22 @@ export default function BuildingMap({
     if (src) src.setData(f ? { type: "FeatureCollection", features: [{ type: "Feature", geometry: f.geometry, properties: {} }] } : EMPTY);
     if (!selected) live.current.restored = false;
     const wide = window.matchMedia("(min-width: 768px)").matches;
-    const padding = !f ? { left: 0, bottom: 0, top: 0, right: 0 } : wide ? { left: 420, bottom: 0, top: 0, right: 0 } : { left: 0, bottom: Math.round(window.innerHeight * 0.45), top: 0, right: 0 };
+    const padding = !f ? { left: 0, bottom: 0, top: 0, right: 0 } : wide ? { left: 420, bottom: 0, top: 0, right: 0 } : { left: 0, bottom: live.current.padH || Math.round(window.innerHeight * 0.34), top: 56, right: 0 };
     // Returning from the full page: the saved camera already shows the building, so do not move it again.
     if (f && live.current.restored) { live.current.restored = false; map.easeTo({ padding, duration: 0 }); return; }
     if (f) map.easeTo({ center: [f.properties.lng, f.properties.lat], zoom: Math.max(map.getZoom(), 15.8), padding, duration: 750 });
     else map.easeTo({ padding, duration: 400 });
   }, [cardMode, selected, raw, styleGen]);
+
+  // The sheet changed height (peek, expanded, hidden): keep the building centred in the map area still free above it.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!cardMode || !map || !styleGen || !selected || window.matchMedia("(min-width: 768px)").matches) return;
+    const f = raw?.features.find((x) => x.properties.slug === selected);
+    if (!f || !padH) return;
+    map.easeTo({ center: [f.properties.lng, f.properties.lat], zoom: Math.max(map.getZoom(), 15.8), padding: { left: 0, right: 0, top: 56, bottom: padH }, duration: 300 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [padH]);
 
   // The desktop card stays attached to the selected building: on every map move its position is written to two CSS
   // variables the card reads, and a thin leader line joins the two. The card sits beside the building (never over it)
@@ -701,7 +727,7 @@ export default function BuildingMap({
     const root = document.documentElement;
     const clear = () => { root.style.removeProperty("--card-x"); root.style.removeProperty("--card-y"); if (leaderRef.current) leaderRef.current.style.display = "none"; };
     const f = selected && raw ? raw.features.find((x) => x.properties.slug === selected)?.properties : null;
-    if (!cardMode || !map || !f || view !== "card") { clear(); return; }
+    if (!cardMode || !map || !f || view !== "card" || cardHidden) { clear(); return; }
     const place = () => {
       if (!window.matchMedia("(min-width: 768px)").matches) { clear(); return; }
       const box = map.getContainer().getBoundingClientRect();
@@ -732,7 +758,7 @@ export default function BuildingMap({
     map.on("move", place);
     window.addEventListener("resize", place);
     return () => { map.off("move", place); window.removeEventListener("resize", place); clear(); };
-  }, [cardMode, selected, raw, view, styleGen]);
+  }, [cardMode, selected, raw, view, styleGen, cardHidden]);
 
   // Compare list: kept in the URL (?compare=a,b,c) so it survives a reload and can be shared.
   useEffect(() => {
@@ -818,7 +844,7 @@ export default function BuildingMap({
         const b = new maplibregl.LngLatBounds([from.lng, from.lat], [from.lng, from.lat]);
         visible.forEach((f) => b.extend([f.lng, f.lat]));
         const wide = window.matchMedia("(min-width: 768px)").matches;
-        map.fitBounds(b, { padding: wide ? { top: 90, bottom: 60, left: 440, right: 60 } : { top: 90, bottom: Math.round(window.innerHeight * 0.55), left: 40, right: 40 }, maxZoom: 15.5, duration: 900 });
+        map.fitBounds(b, { padding: wide ? { top: 90, bottom: 60, left: 440, right: 60 } : { top: 90, bottom: (live.current.padH || Math.round(window.innerHeight * 0.34)) + 16, left: 40, right: 40 }, maxZoom: 15.5, duration: 900 });
       }
     }
     wasNearby.current = nearby;
@@ -875,19 +901,20 @@ export default function BuildingMap({
         />
         </div>
       )}
-      {cardMode && selected && (
+      {cardMode && selected && !cardHidden && (
         <svg ref={leaderRef} aria-hidden className="pointer-events-none fixed inset-0 z-[39] h-full w-full" style={{ display: "none" }}>
           <line stroke="#0891b2" strokeWidth={1.5} strokeDasharray="1 5" strokeLinecap="round" />
           <circle r={4} fill="#fff" stroke="#0891b2" strokeWidth={2} />
         </svg>
       )}
-      {cardMode && selected && (
+      {cardMode && selected && !cardHidden && (
         <BuildingCard
           slug={selected}
           view={view}
           currency={currency}
           features={raw?.features.map((f) => f.properties) ?? []}
-          onClose={closeCard}
+          onClose={hideCard}
+          onSheetHeight={setSheetH}
           onView={setView}
           onSelect={(slug) => select(slug, true)}
           nearby={nearby}
@@ -901,6 +928,14 @@ export default function BuildingMap({
           compared={compare}
           onCompare={toggleCompare}
         />
+      )}
+      {cardMode && selected && cardHidden && (
+        <div role="status" className="dpi-glass dpi-enter fixed inset-x-3 bottom-[5.5rem] z-40 mx-auto flex max-w-md items-center gap-2 rounded-2xl p-2 ps-3 md:bottom-28 md:max-w-sm">
+          <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-full bg-cyan-400 ring-2 ring-cyan-200" />
+          <span className="min-w-0 flex-1 truncate text-sm font-semibold">{raw?.features.find((x) => x.properties.slug === selected)?.properties.name ?? t("Building")}</span>
+          <button type="button" onClick={() => select(selected, true)} className="shrink-0 rounded-full bg-cyan-300 px-3 py-1.5 text-xs font-semibold text-slate-900 hover:bg-cyan-200">{t("Details")}</button>
+          <button type="button" onClick={deselect} className="shrink-0 rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold hover:bg-white/20">{t("Deselect")}</button>
+        </div>
       )}
       {cardMode && (
         <CompareTray
