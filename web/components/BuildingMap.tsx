@@ -160,6 +160,23 @@ function readCamera(): { c: [number, number]; z: number; p: number; b: number } 
   }
 }
 
+/** Phone camera padding. The sheet covers the bottom of the map, the top bar (and the compare tray) the top. The ground point
+ *  of the building goes about two thirds of the way down what is left, so the tower, which rises above it, stays in view. */
+function phonePadding(map: maplibregl.Map | null, sheetPx: number, compareOpen: boolean) {
+  const box = map?.getContainer().getBoundingClientRect();
+  const h = box?.height ?? window.innerHeight;
+  const hiddenBelow = box ? Math.max(0, window.innerHeight - box.bottom) : 0; // browser toolbar under the map
+  const bottom = Math.min(Math.max(0, (sheetPx || Math.round(h * 0.34)) - hiddenBelow), h * 0.7);
+  const topMin = compareOpen ? 120 : 64;
+  const free = Math.max(80, h - bottom - topMin);
+  const y = topMin + 0.68 * free; // wanted screen y of the building's ground point
+  const top = Math.max(0, 2 * y - (h - bottom));
+  return { left: 0, right: 0, top: Math.round(top), bottom: Math.round(bottom) };
+}
+
+/** Zoom for a selected building: the visitor's own zoom is kept. Only a view too far out to read a building is brought in. */
+const keepZoom = (z: number) => Math.max(z, 14);
+
 export default function BuildingMap({
   focus = null, bounds = null, className = "h-full w-full", currency = DEFAULT_CURRENCY, controls = "full", cardMode = false,
 }: Props) {
@@ -188,6 +205,7 @@ export default function BuildingMap({
   const cardHidden = !!selected && hiddenFor === selected;
   const [sheetH, setSheetH] = useState(0);
   const padH = cardHidden ? 140 : sheetH;
+  const compareOpen = useRef(false);
   // Map search: ?f=near:metro | dev:Name | area:392 limits the map to the buildings that match.
   const filterRaw = cardMode ? params.get("f") : null;
   const [mapFilter, setMapFilter] = useState<{ key: string; label: string; slugs: string[] | null; state: "loading" | "ok" | "error" } | null>(null);
@@ -258,6 +276,7 @@ export default function BuildingMap({
   live.current.theme = theme;
   live.current.selected = selected;
   live.current.padH = padH;
+  compareOpen.current = compare.length > 0;
 
   const coloured = useMemo(() => (raw ? colourise(raw.features, settings) : null), [raw, settings]);
 
@@ -701,10 +720,10 @@ export default function BuildingMap({
     if (src) src.setData(f ? { type: "FeatureCollection", features: [{ type: "Feature", geometry: f.geometry, properties: {} }] } : EMPTY);
     if (!selected) live.current.restored = false;
     const wide = window.matchMedia("(min-width: 768px)").matches;
-    const padding = !f ? { left: 0, bottom: 0, top: 0, right: 0 } : wide ? { left: 420, bottom: 0, top: 0, right: 0 } : { left: 0, bottom: live.current.padH || Math.round(window.innerHeight * 0.34), top: 56, right: 0 };
+    const padding = !f ? { left: 0, bottom: 0, top: 0, right: 0 } : wide ? { left: 420, bottom: 0, top: 0, right: 0 } : phonePadding(mapRef.current, live.current.padH, compareOpen.current);
     // Returning from the full page: the saved camera already shows the building, so do not move it again.
     if (f && live.current.restored) { live.current.restored = false; map.easeTo({ padding, duration: 0 }); return; }
-    if (f) map.easeTo({ center: [f.properties.lng, f.properties.lat], zoom: Math.max(map.getZoom(), 15.8), padding, duration: 750 });
+    if (f) map.easeTo({ center: [f.properties.lng, f.properties.lat], zoom: keepZoom(map.getZoom()), padding, duration: 750 });
     else map.easeTo({ padding, duration: 400 });
   }, [cardMode, selected, raw, styleGen]);
 
@@ -714,7 +733,7 @@ export default function BuildingMap({
     if (!cardMode || !map || !styleGen || !selected || window.matchMedia("(min-width: 768px)").matches) return;
     const f = raw?.features.find((x) => x.properties.slug === selected);
     if (!f || !padH) return;
-    map.easeTo({ center: [f.properties.lng, f.properties.lat], zoom: Math.max(map.getZoom(), 15.8), padding: { left: 0, right: 0, top: 56, bottom: padH }, duration: 300 });
+    map.easeTo({ center: [f.properties.lng, f.properties.lat], zoom: keepZoom(map.getZoom()), padding: phonePadding(map, padH, compareOpen.current), duration: 300 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [padH]);
 
