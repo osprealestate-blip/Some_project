@@ -1,5 +1,6 @@
 "use client";
 
+import { planFit, verifyFit, FIT_MAX_ZOOM, FIT_MIN_ZOOM } from "@/lib/mapFit";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import maplibregl, { type ExpressionSpecification, type FilterSpecification, type MapLayerMouseEvent } from "maplibre-gl";
@@ -162,12 +163,17 @@ function readCamera(): { c: [number, number]; z: number; p: number; b: number } 
 
 /** Phone camera padding. The sheet covers the bottom of the map, the top bar (and the compare tray) the top. The ground point
  *  of the building goes about two thirds of the way down what is left, so the tower, which rises above it, stays in view. */
-function phonePadding(map: maplibregl.Map | null, sheetPx: number, compareOpen: boolean) {
+/** What the sheet (bottom) and the top bar / compare tray (top) cover of the map. */
+function phoneCovered(map: maplibregl.Map | null, sheetPx: number, compareOpen: boolean) {
   const box = map?.getContainer().getBoundingClientRect();
   const h = box?.height ?? window.innerHeight;
   const hiddenBelow = box ? Math.max(0, window.innerHeight - box.bottom) : 0; // browser toolbar under the map
   const bottom = Math.min(Math.max(0, (sheetPx || Math.round(h * 0.34)) - hiddenBelow), h * 0.7);
-  const topMin = compareOpen ? 120 : 64;
+  return { h, bottom, topMin: compareOpen ? 120 : 64 };
+}
+
+function phonePadding(map: maplibregl.Map | null, sheetPx: number, compareOpen: boolean) {
+  const { h, bottom, topMin } = phoneCovered(map, sheetPx, compareOpen);
   const free = Math.max(80, h - bottom - topMin);
   const y = topMin + 0.68 * free; // wanted screen y of the building's ground point
   const top = Math.max(0, 2 * y - (h - bottom));
@@ -206,6 +212,28 @@ export default function BuildingMap({
   const [sheetH, setSheetH] = useState(0);
   const padH = cardHidden ? 140 : sheetH;
   const compareOpen = useRef(false);
+  // The selected building and the places its nearby lines point at (empty when the lines are off): the camera keeps all of them in view.
+  const fitPts = useRef<[number, number][]>([]);
+  /** Bring the building and every nearby place into the map area the sheet / side card / top bar leave free. Zooms out only
+   *  when they do not fit; never zooms in. A tilted view is checked against the real projection after the move. */
+  const fitNearby = (duration: number) => {
+    const map = mapRef.current;
+    const pts = fitPts.current;
+    if (!map || pts.length < 2) return false;
+    const wide = window.matchMedia("(min-width: 768px)").matches;
+    const inset = wide ? { top: 0, bottom: 0, left: 420, right: 0 } : (() => {
+      const c = phoneCovered(map, live.current.padH, compareOpen.current);
+      return { top: c.topMin, bottom: c.bottom, left: 0, right: 0 };
+    })();
+    const plan = planFit(map, pts, inset, (p) => p.reduce((b, c) => b.extend(c), new maplibregl.LngLatBounds(p[0], p[0])), { maxZoom: FIT_MAX_ZOOM });
+    if (!plan) return false;
+    map.once("moveend", () => {
+      const more = verifyFit(map, fitPts.current, inset);
+      if (more < -0.02) map.easeTo({ zoom: Math.max(map.getZoom() + more - 0.1, FIT_MIN_ZOOM), duration: 400 });
+    });
+    map.easeTo({ center: plan.center, zoom: plan.zoom, duration });
+    return true;
+  };
   // Map search: ?f=near:metro | dev:Name | area:392 limits the map to the buildings that match.
   const filterRaw = cardMode ? params.get("f") : null;
   const [mapFilter, setMapFilter] = useState<{ key: string; label: string; slugs: string[] | null; state: "loading" | "ok" | "error" } | null>(null);
@@ -733,6 +761,12 @@ export default function BuildingMap({
     if (!cardMode || !map || !styleGen || !selected || window.matchMedia("(min-width: 768px)").matches) return;
     const f = raw?.features.find((x) => x.properties.slug === selected);
     if (!f || !padH) return;
+    // With the nearby lines on, what matters is that all of them are in view above the sheet; otherwise keep the building there.
+    if (fitPts.current.length > 1) {
+      map.once("moveend", () => fitNearby(400));
+      map.easeTo({ padding: phonePadding(map, padH, compareOpen.current), duration: 300 });
+      return;
+    }
     map.easeTo({ center: [f.properties.lng, f.properties.lat], zoom: keepZoom(map.getZoom()), padding: phonePadding(map, padH, compareOpen.current), duration: 300 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [padH]);
@@ -859,14 +893,14 @@ export default function BuildingMap({
           : kindLabel;
         markers.push(new maplibregl.Marker({ element: lab }).setLngLat(labelPoint(from, f, r)).addTo(map));
       }
-      if (!wasNearby.current && visible.length) {
-        const b = new maplibregl.LngLatBounds([from.lng, from.lat], [from.lng, from.lat]);
-        visible.forEach((f) => b.extend([f.lng, f.lat]));
-        const wide = window.matchMedia("(min-width: 768px)").matches;
-        map.fitBounds(b, { padding: wide ? { top: 90, bottom: 60, left: 440, right: 60 } : { top: 90, bottom: (live.current.padH || Math.round(window.innerHeight * 0.34)) + 16, left: 40, right: 40 }, maxZoom: 15.5, duration: 900 });
-      }
+      // The building plus every place with a line. Fit when the lines first appear (once there is something to show);
+      // choosing which kinds to show moves nothing.
+      fitPts.current = [[from.lng, from.lat], ...visible.map((f): [number, number] => [f.lng, f.lat])];
+      if (!wasNearby.current && visible.length) { fitNearby(900); wasNearby.current = true; }
+    } else {
+      fitPts.current = [];
+      wasNearby.current = false;
     }
-    wasNearby.current = nearby;
     return () => markers.forEach((m) => m.remove());
   }, [cardMode, nearby, facilities, hiddenKinds, selected, raw, styleGen, routes, routeMode, lang]);
 
