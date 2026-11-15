@@ -38,6 +38,9 @@ export default function MonthlyCostCalculator({
   const [rate, setRate] = useState(String(DEFAULT_COST_CONFIG.mortgageRatePct));
   const [term, setTerm] = useState(String(DEFAULT_COST_CONFIG.termYears));
   const [scPsf, setScPsf] = useState(String(DEFAULT_COST_CONFIG.serviceChargePsf));
+  const [agency, setAgency] = useState(String(DEFAULT_COST_CONFIG.agencyFeePct));
+  const [maint, setMaint] = useState(String(DEFAULT_COST_CONFIG.maintenancePsf));
+  const [vacancy, setVacancy] = useState(String(DEFAULT_COST_CONFIG.vacancyPct));
   const [utilities, setUtilities] = useState(String(DEFAULT_COST_CONFIG.utilitiesMonthly));
 
   const pickRooms = (r: number) => {
@@ -61,6 +64,9 @@ export default function MonthlyCostCalculator({
     serviceChargePsf: num(scPsf),
     sizeSqft: num(size),
     utilitiesMonthly: num(utilities),
+    agencyFeePct: num(agency),
+    maintenancePsf: num(maint),
+    vacancyPct: num(vacancy),
     annualRent: row?.rent_median_12m ?? null,
   });
   const money = (n: number | null | undefined) => formatAedWithConverted(n, currency);
@@ -114,6 +120,15 @@ export default function MonthlyCostCalculator({
           <label className="font-medium"><Term id="service-charge">Service charge</Term> (AED per sq ft a year)
             <input type="number" min={0} step={1} value={scPsf} onChange={(e) => setScPsf(e.target.value)} className={inputCls} />
           </label>
+          <label className="font-medium">Agent fee (% of price)
+            <input type="number" min={0} max={10} step={0.5} value={agency} onChange={(e) => setAgency(e.target.value)} className={inputCls} />
+          </label>
+          <label className="font-medium">Upkeep (AED per sq ft a year)
+            <input type="number" min={0} step={0.5} value={maint} onChange={(e) => setMaint(e.target.value)} className={inputCls} />
+          </label>
+          <label className="font-medium">Empty time (% of the year)
+            <input type="number" min={0} max={100} step={1} value={vacancy} onChange={(e) => setVacancy(e.target.value)} className={inputCls} />
+          </label>
           <label className="font-medium">Utilities (AED a month)
             <input type="number" min={0} step={50} value={utilities} onChange={(e) => setUtilities(e.target.value)} className={inputCls} />
           </label>
@@ -131,6 +146,14 @@ export default function MonthlyCostCalculator({
               <dt className="font-medium">Net yield (estimate, after service charge only)</dt>
               <dd className="text-end font-semibold tabular-nums">{res.netYield != null ? pct(res.netYield) : "–"}</dd>
             </div>
+            <div className="flex justify-between gap-2">
+              <dt className="font-medium">Net yield after empty time and upkeep (estimate)</dt>
+              <dd className="text-end font-semibold tabular-nums">{res.netYieldAllCosts != null ? pct(res.netYieldAllCosts) : "–"}</dd>
+            </div>
+            <div className="flex justify-between gap-2">
+              <dt className="text-[var(--muted)]">Yearly cash left after mortgage payments, if let out (estimate)</dt>
+              <dd className="text-end tabular-nums">{res.annualCashFlow != null ? money(res.annualCashFlow) : "–"}</dd>
+            </div>
           </dl>
           <p className="mt-1 text-xs text-[var(--muted)]">
             {res.netYield != null && row?.rent_median_12m != null
@@ -144,9 +167,10 @@ export default function MonthlyCostCalculator({
               <div className="flex justify-between gap-2"><dt className="text-[var(--muted)]">Down payment</dt><dd className="text-end tabular-nums">{money(res.upfrontCosts.downPaymentCash)}</dd></div>
               <div className="flex justify-between gap-2"><dt className="text-[var(--muted)]">DLD transfer fee (4%)</dt><dd className="text-end tabular-nums">{money(res.upfrontCosts.dldTransferFee)}</dd></div>
               <div className="flex justify-between gap-2"><dt className="text-[var(--muted)]">Mortgage registration (0.25% of loan + AED 290)</dt><dd className="text-end tabular-nums">{money(res.upfrontCosts.mortgageRegistrationFee)}</dd></div>
+              <div className="flex justify-between gap-2"><dt className="text-[var(--muted)]">Agent fee ({num(agency) ?? 0}%, your assumption)</dt><dd className="text-end tabular-nums">{money(res.upfrontCosts.agencyFee)}</dd></div>
               <div className="flex justify-between gap-2 font-medium"><dt>Total</dt><dd className="text-end tabular-nums">{money(res.upfrontCosts.totalUpfront)}</dd></div>
             </dl>
-            <p className="mt-1 text-xs text-[var(--muted)]">Agent, trustee and bank fees are not included.</p>
+            <p className="mt-1 text-xs text-[var(--muted)]">Trustee, title-deed and bank fees are not included. Interest over the whole loan: {money(res.totalInterest)} if the rate never changes.</p>
           </details>
         </>
       ) : (
@@ -154,7 +178,7 @@ export default function MonthlyCostCalculator({
       )}
 
       <SourceNote source={`${SOURCES.dldSales}; ${SOURCES.dldRents}`} date={periodEnd} estimate>
-        Starting price, size and rent are 12-month medians for the bedroom type. Mortgage rate, service charge and utilities are general assumptions, not this building&apos;s figures.{conversionNote ? ` ${conversionNote}` : ""}
+        Starting price, size and rent are 12-month medians for the bedroom type. Mortgage rate, agent fee, service charge, upkeep, empty time and utilities are general assumptions, not this building&apos;s figures. Utilities are left out of the yield because a tenant normally pays them.{conversionNote ? ` ${conversionNote}` : ""}
       </SourceNote>
     </div>
   );

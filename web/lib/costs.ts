@@ -9,12 +9,17 @@ export interface MonthlyCostInputs {
   sizeSqft?: number | null | undefined;
   utilitiesMonthly?: number;
   annualRent?: number | null | undefined;
+  /** Optional extras. Left out means 0, so existing callers keep their figures. */
+  agencyFeePct?: number;
+  maintenancePsf?: number;
+  vacancyPct?: number;
 }
 
 export interface UpfrontCosts {
   downPaymentCash: number;
   dldTransferFee: number;
   mortgageRegistrationFee: number;
+  agencyFee: number;
   totalUpfront: number;
 }
 
@@ -31,6 +36,14 @@ export interface MonthlyCostOutputs {
   netYield: number | null;
   netYieldNote?: string;
   upfrontCosts: UpfrontCosts;
+  annualMaintenance: number;
+  vacancyLoss: number;
+  /** Interest paid over the whole term, assuming the rate never changes. */
+  totalInterest: number;
+  /** (rent after vacancy - service charge - maintenance) / price. Before mortgage payments. Null without rent. */
+  netYieldAllCosts: number | null;
+  /** Rent after vacancy and running costs, minus the year of mortgage payments. Can be negative. Null without rent. */
+  annualCashFlow: number | null;
 }
 
 /**
@@ -91,8 +104,14 @@ export function calculateMonthlyCosts(inputs: MonthlyCostInputs): MonthlyCostOut
         downPaymentCash: 0,
         dldTransferFee: 0,
         mortgageRegistrationFee: 0,
+        agencyFee: 0,
         totalUpfront: 0,
       },
+      annualMaintenance: 0,
+      vacancyLoss: 0,
+      totalInterest: 0,
+      netYieldAllCosts: null,
+      annualCashFlow: null,
     };
   }
 
@@ -137,7 +156,15 @@ export function calculateMonthlyCosts(inputs: MonthlyCostInputs): MonthlyCostOut
       DEFAULT_COST_CONFIG.mortgageRegistrationAdminFee
     : 0;
 
-  const totalUpfront = downCash + dldTransferFee + mortgageRegistrationFee;
+  const clampPct = (v: number | undefined, max: number) =>
+    v != null && Number.isFinite(v) ? Math.max(0, Math.min(max, v)) : 0;
+  const agencyFee = price * (clampPct(inputs.agencyFeePct, 10) / 100);
+  const totalUpfront = downCash + dldTransferFee + mortgageRegistrationFee + agencyFee;
+
+  const maintPsf = inputs.maintenancePsf != null && Number.isFinite(inputs.maintenancePsf) ? Math.max(0, inputs.maintenancePsf) : 0;
+  const annualMaintenance = maintPsf * size;
+  const vacancyFrac = clampPct(inputs.vacancyPct, 100) / 100;
+  const totalInterest = Math.max(0, monthlyMortgage * Math.round(term * 12) - loanAmount);
 
   // Net yield: (annual rent - annual service charge) / purchase price
   let netYield: number | null = null;
@@ -150,6 +177,16 @@ export function calculateMonthlyCosts(inputs: MonthlyCostInputs): MonthlyCostOut
   } else {
     netYield = null;
     netYieldNote = "No rental contracts recorded to calculate net yield.";
+  }
+
+  let netYieldAllCosts: number | null = null;
+  let annualCashFlow: number | null = null;
+  let vacancyLoss = 0;
+  if (rent != null && !isNaN(rent) && rent > 0) {
+    vacancyLoss = rent * vacancyFrac;
+    const noi = rent - vacancyLoss - annualServiceCharge - annualMaintenance;
+    netYieldAllCosts = noi / price;
+    annualCashFlow = noi - monthlyMortgage * 12;
   }
 
   return {
@@ -167,7 +204,13 @@ export function calculateMonthlyCosts(inputs: MonthlyCostInputs): MonthlyCostOut
       downPaymentCash: downCash,
       dldTransferFee,
       mortgageRegistrationFee,
+      agencyFee,
       totalUpfront,
     },
+    annualMaintenance,
+    vacancyLoss,
+    totalInterest,
+    netYieldAllCosts,
+    annualCashFlow,
   };
 }

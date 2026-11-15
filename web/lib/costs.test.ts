@@ -136,3 +136,28 @@ describe("calculateMonthlyCosts integration", () => {
     );
   });
 });
+
+describe("calculateMonthlyCosts extras (agent fee, upkeep, empty time)", () => {
+  it("adds agent fee to cash needed and applies vacancy and upkeep to yield and cash flow", () => {
+    const res = calculateMonthlyCosts({
+      purchasePrice: 2_000_000, downPaymentPct: 20, mortgageRatePct: 4.5, termYears: 25,
+      serviceChargePsf: 15, sizeSqft: 1000, annualRent: 140_000,
+      agencyFeePct: 2, maintenancePsf: 3, vacancyPct: 5,
+    });
+    expect(res.upfrontCosts.agencyFee).toBe(40_000);
+    expect(res.upfrontCosts.totalUpfront).toBe(524_290);
+    expect(res.annualMaintenance).toBe(3000);
+    expect(res.vacancyLoss).toBe(7000);
+    // (140,000 - 7,000 - 15,000 - 3,000) / 2,000,000
+    expect(res.netYieldAllCosts).toBeCloseTo(0.0575, 4);
+    expect(res.annualCashFlow).toBeCloseTo(115_000 - res.monthlyMortgage * 12, 2);
+    expect(res.totalInterest).toBeCloseTo(res.monthlyMortgage * 300 - 1_600_000, 2);
+  });
+
+  it("gives no all-cost yield without rent, and no extras when omitted", () => {
+    const res = calculateMonthlyCosts({ purchasePrice: 1_000_000 });
+    expect(res.netYieldAllCosts).toBeNull();
+    expect(res.annualCashFlow).toBeNull();
+    expect(res.upfrontCosts.agencyFee).toBe(0);
+  });
+});
