@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { allInside, fitPadding, freeRect, planFit, verifyFit, zoomOutToFit, type FitMap } from "./mapFit";
+import { pickFitPoints, allInside, fitPadding, freeRect, planFit, verifyFit, zoomOutToFit, type FitMap } from "./mapFit";
 
 const zero = { top: 0, bottom: 0, left: 0, right: 0 };
 
@@ -68,7 +68,7 @@ describe("planFit", () => {
     expect(plan.zoom).toBeLessThanOrEqual(12);
   });
   it("is limited by the minimum zoom", () => {
-    expect(planFit(fake(14), [[0, 0], [5, 5]], inset, mk)!.zoom).toBe(9);
+    expect(planFit(fake(14), [[0, 0], [5, 5]], inset, mk)!.zoom).toBe(12.5);
   });
   it("needs two points", () => expect(planFit(fake(14), [[0, 0]], inset, mk)).toBeNull());
 });
@@ -77,5 +77,21 @@ describe("verifyFit", () => {
   it("asks for more zoom-out when a point is still hidden (tilted view)", () => {
     expect(verifyFit(fake(13), [[0, 0], [0.12, 0]], inset)).toBeLessThan(0);
     expect(verifyFit(fake(13), [[0, 0], [0.01, 0.01]], inset)).toBe(0);
+  });
+});
+
+describe("pickFitPoints", () => {
+  const from: [number, number] = [55.14, 25.08];
+  it("leaves out a place far away", () => {
+    const near: [number, number][] = [[55.145, 25.082], [55.15, 25.085], [55.135, 25.075], [55.155, 25.09]];
+    const far: [number, number] = [55.4, 25.3]; // ~ 30 km
+    const pts = pickFitPoints(from, [...near, far]);
+    expect(pts).toContainEqual(from);
+    expect(pts).not.toContainEqual(far);
+    expect(pts).toHaveLength(1 + near.length);
+  });
+  it("always keeps the nearest few, however far", () => {
+    const pts = pickFitPoints(from, [[55.4, 25.3], [55.5, 25.4], [55.6, 25.5], [55.7, 25.6]]);
+    expect(pts).toHaveLength(1 + 3);
   });
 });

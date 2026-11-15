@@ -14,7 +14,25 @@ export type Rect = { left: number; top: number; right: number; bottom: number };
 
 export const FIT_MARGIN = 28;
 export const FIT_MAX_ZOOM = 15.5;
-export const FIT_MIN_ZOOM = 9;
+export const FIT_MIN_ZOOM = 12.5;
+/** Places farther than this (straight line) from the building are left out of the fit: one far hospital must not push the map out to a city view. */
+export const FIT_RADIUS_M = 3500;
+/** ...but the nearest few are always kept, so there is always something to frame. */
+export const FIT_KEEP_NEAREST = 3;
+
+function metres(a: [number, number], b: [number, number]): number {
+  const k = 111320;
+  const dx = (a[0] - b[0]) * k * Math.cos(((a[1] + b[1]) / 2) * Math.PI / 180);
+  const dy = (a[1] - b[1]) * k;
+  return Math.hypot(dx, dy);
+}
+
+/** The points the camera frames: the building, then the places within FIT_RADIUS_M (at least the nearest FIT_KEEP_NEAREST). */
+export function pickFitPoints(from: [number, number], places: [number, number][], radius = FIT_RADIUS_M, keep = FIT_KEEP_NEAREST): [number, number][] {
+  const sorted = places.map((p) => ({ p, d: metres(from, p) })).sort((a, b) => a.d - b.d);
+  const chosen = sorted.filter((x, i) => i < keep || x.d <= radius).map((x) => x.p);
+  return [from, ...chosen];
+}
 
 /** Padding to hand to cameraForBounds so that, together with the map's own padding, the free area is `inset` + margin. */
 export function fitPadding(inset: Inset, current: Partial<Inset>, margin = FIT_MARGIN): Inset {
@@ -77,7 +95,7 @@ export function planFit(
   const cur = map.getZoom();
   const cam = map.cameraForBounds(makeBounds(pts), { padding: fitPadding(inset, map.getPadding(), margin), maxZoom: Math.min(cur, opts.maxZoom ?? FIT_MAX_ZOOM) });
   if (!cam || !cam.center) return null;
-  return { center: cam.center, zoom: Math.max(cam.zoom ?? cur, opts.minZoom ?? FIT_MIN_ZOOM) };
+  return { center: cam.center, zoom: Math.max(cam.zoom ?? cur, Math.min(cur, opts.minZoom ?? FIT_MIN_ZOOM)) };
 }
 
 /** After the move (the view is tilted, which a flat fit cannot see): the extra zoom-out still needed, 0 if all fit. */

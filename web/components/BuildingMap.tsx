@@ -1,6 +1,6 @@
 "use client";
 
-import { planFit, verifyFit, FIT_MAX_ZOOM, FIT_MIN_ZOOM } from "@/lib/mapFit";
+import { pickFitPoints, planFit, verifyFit, FIT_MAX_ZOOM, FIT_MIN_ZOOM } from "@/lib/mapFit";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import maplibregl, { type ExpressionSpecification, type FilterSpecification, type MapLayerMouseEvent } from "maplibre-gl";
@@ -229,7 +229,7 @@ export default function BuildingMap({
     if (!plan) return false;
     map.once("moveend", () => {
       const more = verifyFit(map, fitPts.current, inset);
-      if (more < -0.02) map.easeTo({ zoom: Math.max(map.getZoom() + more - 0.1, FIT_MIN_ZOOM), duration: 400 });
+      if (more < -0.02) map.easeTo({ zoom: Math.max(map.getZoom() + more - 0.1, Math.min(map.getZoom(), FIT_MIN_ZOOM)), duration: 400 });
     });
     map.easeTo({ center: plan.center, zoom: plan.zoom, duration });
     return true;
@@ -895,7 +895,7 @@ export default function BuildingMap({
       }
       // The building plus every place with a line. Fit when the lines first appear (once there is something to show);
       // choosing which kinds to show moves nothing.
-      fitPts.current = [[from.lng, from.lat], ...visible.map((f): [number, number] => [f.lng, f.lat])];
+      fitPts.current = pickFitPoints([from.lng, from.lat], visible.map((f): [number, number] => [f.lng, f.lat]));
       if (!wasNearby.current && visible.length) { fitNearby(900); wasNearby.current = true; }
     } else {
       fitPts.current = [];
