@@ -591,6 +591,7 @@ export function handoverSummary(rows: ConstructionProject[], today: Date): Hando
     else if (d <= limit) dueNext12m++;
   }
   return { underConstruction: rows.length, dueNext12m, overdue, undated };
+}
 
 /** KHDA-listed schools within 2 km and 5 km of a point, counted by KHDA rating (straight-line). */
 export async function schoolRatingCounts(lng: number, lat: number): Promise<SchoolRatingRow[]> {
