@@ -26,7 +26,7 @@ export const A_PLACE: Record<FacilityId, string> = { metro: "a metro station", h
 export function filterLabel(f: MapFilter, t: T = makeT("en"), area?: string): string {
   if (f.type === "near") return t("Within {km} km of {place} (straight-line)", { km: NEAR_RADIUS_M[f.value] / 1000, place: t(A_PLACE[f.value]) });
   if (f.type === "dev") return t("Developer: {name}", { name: f.value });
-  if (f.type === "under") { const v = Number(f.value); return t("Median sale price under AED {n}", { n: v >= 1e6 ? `${+(v / 1e6).toFixed(2)}M` : `${Math.round(v / 1000)}K` }); }
+  if (f.type === "under") { const v = Number(f.value); return t("Median sale price under AED {n}", { n: v >= 1e6 ? Math.round(v).toLocaleString("en-US") : `${Math.round(v / 1000)}K` }); }
   return area ?? t("Area");
 }
 export const nearLabel = (kind: FacilityId) => filterLabel({ type: "near", value: kind });
