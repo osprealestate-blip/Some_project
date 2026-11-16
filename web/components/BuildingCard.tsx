@@ -210,8 +210,9 @@ export default function BuildingCard({ slug, view, currency, features, onClose, 
   }, [features, feature, slug]);
 
   const cardBody = (
-    <div className="flex h-full flex-col gap-2.5 p-4">
-      <div className="flex items-start gap-2">
+    <div className="flex min-h-full flex-col gap-2.5 p-4">
+      {/* Pinned while the card scrolls, so the title and the close button stay in reach on a phone. */}
+      <div className="sticky top-0 z-10 -mx-4 -mt-4 flex items-start gap-2 bg-white/95 px-4 pb-2 pt-4 backdrop-blur">
         <div className="min-w-0 flex-1">
           <h2 id="building-card-title" className="line-clamp-2 text-[17px] font-semibold leading-tight">{name}</h2>
           <p className="mt-0.5 truncate text-xs text-[var(--muted)]">
