@@ -16,6 +16,7 @@ import Section from "@/components/Section";
 import BuildingGallery from "@/components/BuildingGallery";
 import DataBadge from "@/components/DataBadge";
 import SchoolSummary from "@/components/SchoolSummary";
+import AboutNumbers from "@/components/AboutNumbers";
 import Stat from "@/components/Stat";
 import ViewToggle from "@/components/ViewToggle";
 import FavouriteButton from "@/components/FavouriteButton";
@@ -135,6 +136,7 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
         <a className="link adv-only" href="#recent-sales">Recent transactions</a>
         <a className="link" href="#ownership-costs">Ownership costs</a>
         <a className="link" href="#nearby">Nearby</a>
+        <a className="link" href="#about-numbers">About these numbers</a>
         <a className="link adv-only" href="#methodology">Data and methodology</a>
       </nav>
 
@@ -279,6 +281,8 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
           </ul>
         </section>
       )}
+
+      <AboutNumbers periodEnd={periodEnd} saleCount={all?.sale_count_12m} rentCount={all?.rent_count_12m} rentLevel={rentLevel} offPlan={offPlan} />
 
       <Section id="methodology" title="Data and methodology" adv open={false}>
         <p className="text-xs text-[var(--muted)]">

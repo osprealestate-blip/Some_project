@@ -67,8 +67,8 @@ export default function Page() {
               <tr className="border-b border-[var(--border)] align-top">
                 <th scope="row" className="py-2 pe-3 text-start font-medium">Monthly cost and net yield</th>
                 <td className="py-2 pe-3">{`${SOURCES.dldSales}; ${SOURCES.dldRents}`}</td>
-                <td className="py-2 pe-3">Price, size and rent are DLD medians. Mortgage rate, service charge and utilities are general assumptions you can change.</td>
-                <td className="py-2">The assumptions are not this building&apos;s figures. Agent, trustee and bank fees are not included.</td>
+                <td className="py-2 pe-3">Price, size and rent are DLD medians. Mortgage rate, agent fee, service charge, upkeep, empty time and utilities are general assumptions you can change.</td>
+                <td className="py-2">The assumptions are not this building&apos;s figures. Trustee, title-deed and bank fees are not included.</td>
               </tr>
               <tr className="border-b border-[var(--border)] align-top">
                 <th scope="row" className="py-2 pe-3 text-start font-medium">Nearby places and distances</th>

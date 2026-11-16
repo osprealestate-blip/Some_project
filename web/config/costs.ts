@@ -33,4 +33,13 @@ export const DEFAULT_COST_CONFIG = {
 
   /** Standard DLD administrative mortgage registration charge in AED */
   mortgageRegistrationAdminFee: 290,
+
+  /** Buyer-side agent fee, % of price. A market convention, not DLD data. Editable. */
+  agencyFeePct: 2,
+
+  /** Yearly upkeep reserve in AED per sq ft (repairs, painting, appliances). A rough planning figure. Editable. */
+  maintenancePsf: 3,
+
+  /** Share of the year the flat sits empty or between tenants, %. Editable. */
+  vacancyPct: 5,
 } as const;
