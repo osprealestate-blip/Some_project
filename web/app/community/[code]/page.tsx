@@ -18,7 +18,8 @@ import { launchCommunity } from "@/lib/communities";
 import { getServerCurrency } from "@/lib/currency";
 import { hasDatabase } from "@/lib/db";
 import { count, formatMoneyShort, formatPsf, pct } from "@/lib/format";
-import { communityBuildings, communityByCode, communitySeries, communitySummaries } from "@/lib/queries";
+import ConstructionProjects from "@/components/ConstructionProjects";
+import { communityBuildings, communityByCode, communitySeries, communitySummaries, constructionProjects } from "@/lib/queries";
 import { pageMetadata } from "@/lib/seo";
 import { SOURCES } from "@/lib/sources";
 import { change } from "@/lib/stats";
@@ -72,7 +73,7 @@ export default async function Page({ params }: Params) {
   }
   const currency = await getServerCurrency();
   const conversionNote = getConversionNote(currency);
-  const [summaries, series, buildings] = await Promise.all([communitySummaries(c.id), communitySeries(c.id), communityBuildings(c.id)]);
+  const [summaries, series, buildings, sites] = await Promise.all([communitySummaries(c.id), communitySeries(c.id), communityBuildings(c.id), constructionProjects(code)]);
   const all = summaries.find((s) => s.rooms === -1);
   const plainYoy = change(all?.sale_median_psf_12m, all?.sale_median_psf_prev_12m);
   const lfl = all?.like_for_like_change ?? null;
@@ -163,6 +164,8 @@ export default async function Page({ params }: Params) {
           </div>
         </section>
       )}
+
+      <ConstructionProjects rows={sites} />
 
       <section className="mt-8">
         <h2 className="text-base font-semibold">Buildings ({buildings.length})</h2>

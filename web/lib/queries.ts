@@ -551,3 +551,43 @@ export async function offPlanProjects(dmCode: string | null, limit = 60): Promis
     return rows.map((r) => ({ ...r, developer: null, dld_status: null, percent_completed: null, completion_date: null }));
   }
 }
+
+// ---------- projects under construction ----------
+
+export type ConstructionProject = {
+  name: string; developer: string | null; dld_status: string | null;
+  percent_completed: number | null; completion_date: string | null;
+};
+
+/** Projects in a community that DLD marks ACTIVE (under construction), soonest completion first, undated last.
+ *  Only projects that already appear in the sales we hold are known here; it is not DLD's full project list.
+ *  Returns [] when the Projects file has not been loaded. */
+export async function constructionProjects(dmCode: string, limit = 200): Promise<ConstructionProject[]> {
+  try {
+    return await query<ConstructionProject>(
+      `select p.name, p.developer_name as developer, p.dld_status, p.percent_completed::float8 as percent_completed,
+              p.completion_date::text as completion_date
+         from projects p join communities c on c.id = p.community_id
+        where c.dm_code = $1 and p.dld_status = 'ACTIVE'
+        order by p.completion_date nulls last, p.name limit $2`,
+      [dmCode, limit],
+    );
+  } catch {
+    return [];
+  }
+}
+
+export type HandoverSummary = { underConstruction: number; dueNext12m: number; overdue: number; undated: number };
+
+/** Counts for the community page. `today` is passed in so the result is testable. */
+export function handoverSummary(rows: ConstructionProject[], today: Date): HandoverSummary {
+  const limit = new Date(today); limit.setFullYear(limit.getFullYear() + 1);
+  let dueNext12m = 0, overdue = 0, undated = 0;
+  for (const r of rows) {
+    if (!r.completion_date) { undated++; continue; }
+    const d = new Date(r.completion_date);
+    if (d < today) overdue++;
+    else if (d <= limit) dueNext12m++;
+  }
+  return { underConstruction: rows.length, dueNext12m, overdue, undated };
+}
