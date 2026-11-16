@@ -15,6 +15,7 @@ import KeyTerms from "@/components/KeyTerms";
 import Section from "@/components/Section";
 import BuildingGallery from "@/components/BuildingGallery";
 import DataBadge from "@/components/DataBadge";
+import SchoolSummary from "@/components/SchoolSummary";
 import AboutNumbers from "@/components/AboutNumbers";
 import Stat from "@/components/Stat";
 import ViewToggle from "@/components/ViewToggle";
@@ -24,7 +25,7 @@ import { getServerCurrency } from "@/lib/currency";
 import { hasDatabase } from "@/lib/db";
 import { count, day, formatMoney, formatPsf, formatShortPrice, pct, roomsLabel, sqft } from "@/lib/format";
 import {
-  buildingBySlug, buildingImages, buildingSeries, buildingSummaries, communitySummaries, isOffPlanOnly, nearbyPlaces, nearestFacilities, offPlanRentEstimate,
+  buildingBySlug, buildingImages, buildingSeries, buildingSummaries, communitySummaries, isOffPlanOnly, nearbyPlaces, nearestFacilities, offPlanRentEstimate, schoolRatingCounts,
   recentSales, siblingBuildings,
 } from "@/lib/queries";
 import { buildingVerdict } from "@/lib/verdict";
@@ -60,9 +61,10 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
   if (!b) notFound();
   const currency = await getServerCurrency();
   const conversionNote = getConversionNote(currency);
-  const [summaries, series, sales, places, siblings, images, communityRows, facilities] = await Promise.all([
+  const [summaries, series, sales, places, siblings, images, communityRows, facilities, schools] = await Promise.all([
     buildingSummaries(b.id), buildingSeries(b), recentSales(b.id), nearbyPlaces(b), siblingBuildings(b), buildingImages(b.id),
     communitySummaries(b.community_id), b.lng != null && b.lat != null ? nearestFacilities(b.lng, b.lat) : Promise.resolve([]),
+    b.lng != null && b.lat != null ? schoolRatingCounts(b.lng, b.lat) : Promise.resolve([]),
   ]);
   const all = summaries.find((s) => s.rooms === -1);
   const noRent = all?.rent_median_12m == null && series.rentLevel == null;
@@ -251,6 +253,7 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
             </div>
           )}
         </div>
+        {placed && schools.length > 0 && <div className="mt-6"><SchoolSummary rows={schools} sourceDate={places.find((p) => p.category === "school")?.source_date} /></div>}
         {placed && (
           <div className="mt-6">
             <h3 className="text-sm font-semibold">How far to key places</h3>
