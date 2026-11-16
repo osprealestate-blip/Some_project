@@ -99,6 +99,24 @@ export async function dataFreshness(): Promise<{ period_end: string | null; sour
 
 // ---------- communities ----------
 
+/** Areas that have sales figures, for the area-comparison picker. */
+export async function areasWithFigures(): Promise<{ dm_code: string; name: string; sales: number }[]> {
+  return query(
+    `select c.dm_code, coalesce(c.name_common, c.name_official) as name, s.sale_count_12m::int as sales
+       from communities c join community_summary s on s.community_id = c.id and s.rooms = -1
+      where c.dm_code is not null and s.sale_count_12m > 0 order by name limit 300`,
+  );
+}
+
+/** Community summary rows for the given area codes (all-bedroom row plus per-bedroom yields). */
+export async function summariesForCodes(codes: string[]): Promise<{ code: string; name: string; rows: CommunitySummary[] }[]> {
+  if (!codes.length) return [];
+  const cs = await query<{ id: number; dm_code: string; name: string }>(
+    "select id, dm_code, coalesce(name_common, name_official) as name from communities where dm_code = any($1)", [codes]);
+  const out = await Promise.all(cs.map(async (c) => ({ code: c.dm_code, name: c.name, rows: await communitySummaries(c.id) })));
+  return codes.map((k) => out.find((o) => o.code === k)).filter((o): o is NonNullable<typeof o> => !!o);
+}
+
 export async function launchCommunities(): Promise<(Community & { summary: CommunitySummary | null; buildings: number })[]> {
   const rows = await query<Community & { summary: CommunitySummary | null; buildings: number }>(
     `select c.id, c.dm_code, c.name_official, c.name_common, c.is_launch,
