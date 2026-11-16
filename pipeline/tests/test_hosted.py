@@ -30,3 +30,17 @@ def test_env_file_keeps_other_lines(tmp_path):
 def test_pooler_url_escapes_password():
     url = hosted.pooler_url("dpi_push", "ref", "a/b@c", "aws-1-x.pooler.supabase.com")
     assert url == "postgresql://dpi_push.ref:a%2Fb%40c@aws-1-x.pooler.supabase.com:5432/postgres?sslmode=require"
+
+
+def test_push_plan_params_split_structure_from_detail():
+    from dpi import push_public
+
+    p = push_public.plan_params(["392", "681"], years=3, rent_years=1, all_structure=True)
+    assert p["all_struct"] is True and p["codes"] == ["392", "681"]
+    assert p["detail"] == ["392", "681"] and p["years"] == 3 and p["rent_years"] == 1
+    q = push_public.plan_params(["392"], years=10)
+    assert q["all_struct"] is False and q["rent_years"] == 10
+    # every placeholder in the plan has a value
+    import re
+    wanted = set(re.findall(r"%\((\w+)\)s", " ".join(w for _, w in push_public.PLAN)))
+    assert wanted <= set(p)
