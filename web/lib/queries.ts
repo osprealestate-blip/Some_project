@@ -557,12 +557,28 @@ export async function offPlanProjects(dmCode: string | null, limit = 60): Promis
 export type ConstructionProject = {
   name: string; developer: string | null; dld_status: string | null;
   percent_completed: number | null; completion_date: string | null;
+  no_of_units?: number | null; no_of_buildings?: number | null; master_project?: string | null;
 };
 
-/** Projects in a community that DLD marks ACTIVE (under construction), soonest completion first, undated last.
- *  Only projects that already appear in the sales we hold are known here; it is not DLD's full project list.
- *  Returns [] when the Projects file has not been loaded. */
+/** Projects in a community that DLD lists as not finished (under construction, not started, pending), soonest date
+ *  first, undated last. Read from the DLD Projects file itself (`dld_projects`), so projects with no sales yet are
+ *  included. Falls back to the sales-derived `projects` table when `dld_projects` is empty or not loaded, and to []
+ *  when neither has data. The date is DLD's planned end date, or its completion date when that is all there is. */
 export async function constructionProjects(dmCode: string, limit = 200): Promise<ConstructionProject[]> {
+  try {
+    const rows = await query<ConstructionProject>(
+      `select d.name, d.developer_name as developer, d.dld_status, d.percent_completed::float8 as percent_completed,
+              coalesce(d.end_date, d.completion_date)::text as completion_date,
+              d.no_of_units, d.no_of_buildings, d.master_project
+         from dld_projects d join communities c on c.id = d.community_id
+        where c.dm_code = $1
+        order by coalesce(d.end_date, d.completion_date) nulls last, d.name limit $2`,
+      [dmCode, limit],
+    );
+    if (rows.length) return rows;
+  } catch {
+    /* table not created yet: use the sales-derived list below */
+  }
   try {
     return await query<ConstructionProject>(
       `select p.name, p.developer_name as developer, p.dld_status, p.percent_completed::float8 as percent_completed,
