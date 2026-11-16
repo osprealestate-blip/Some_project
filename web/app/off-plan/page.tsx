@@ -6,6 +6,7 @@ import { hasDatabase } from "@/lib/db";
 import { count, day, formatPsf, formatShortPrice, pct } from "@/lib/format";
 import { LAUNCH_COMMUNITIES } from "@/lib/communities";
 import { dataFreshness, offPlanProjects, type OffPlanProject } from "@/lib/queries";
+import { handoverView } from "@/lib/handover";
 import { pageMetadata } from "@/lib/seo";
 import { SOURCES } from "@/lib/sources";
 
@@ -44,8 +45,9 @@ function Row({ p, currency }: { p: OffPlanProject; currency: Awaited<ReturnType<
   );
 }
 
-export default async function Page({ searchParams }: { searchParams: Promise<{ area?: string }> }) {
-  const { area } = await searchParams;
+export default async function Page({ searchParams }: { searchParams: Promise<{ area?: string; view?: string }> }) {
+  const { area, view } = await searchParams;
+  const handover = view === "handover";
   const code = LAUNCH_COMMUNITIES.some((c) => c.code === area) ? area! : null;
   const currency = await getServerCurrency();
   let rows: OffPlanProject[] = [];
@@ -58,6 +60,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ a
       failed = true;
     }
   }
+  const hv = handover ? handoverView(rows, new Date()) : null;
+  const q = (v: string | null, a: string | null) => { const p = new URLSearchParams(); if (a) p.set("area", a); if (v) p.set("view", v); const s = p.toString(); return s ? `/off-plan?${s}` : "/off-plan"; };
   const chip = (href: string, label: string, on: boolean) => (
     <Link key={href} href={href} aria-current={on ? "page" : undefined} className={`inline-flex min-h-11 items-center rounded-full border px-4 text-sm ${on ? "border-[var(--accent)] bg-[var(--accent)] text-white" : "border-[var(--border)] hover:border-[var(--accent)]"}`}>{label}</Link>
   );
@@ -69,11 +73,27 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ a
         Off-plan prices are the contract price at registration; the building is not finished and nothing here is an offer.
       </p>
       <nav aria-label="Area" className="mt-5 flex flex-wrap gap-2">
-        {chip("/off-plan", "All launch areas", code === null)}
-        {LAUNCH_COMMUNITIES.map((c) => chip(`/off-plan?area=${c.code}`, c.label, code === c.code))}
+        {chip(q(handover ? "handover" : null, null), "All launch areas", code === null)}
+        {LAUNCH_COMMUNITIES.map((c) => chip(q(handover ? "handover" : null, c.code), c.label, code === c.code))}
+      </nav>
+      <nav aria-label="View" className="mt-3 flex flex-wrap gap-2">
+        {chip(q(null, code), "Most sold", !handover)}
+        {chip(q("handover", code), "Completion in the next 12 months", handover)}
       </nav>
       {!hasDatabase() ? <div className="mt-6"><NoData /></div> : failed ? (
         <p className="mt-6 text-sm text-[var(--muted)]">Off-plan data could not be loaded just now. Please try again in a moment.</p>
+      ) : hv ? (
+        <div className="mt-6 space-y-6">
+          <p className="text-sm text-[var(--muted)]">Towers on this list with a completion date on file. Towers with no date are left out, not estimated. The DLD Projects file does not publish how many units are planned, so no unit total is shown.</p>
+          {hv.next12.length === 0 ? <p className="text-sm text-[var(--muted)]">No listed tower has a completion date in the next 12 months.</p> : <ul className="grid gap-3">{hv.next12.map((p) => <Row key={p.slug} p={p} currency={currency} />)}</ul>}
+          {hv.passed.length > 0 && (
+            <section>
+              <h2 className="text-base font-semibold">Date on file has passed, not marked completed</h2>
+              <p className="mt-1 text-sm text-[var(--muted)]">The completion date filed with the DLD is in the past but the project is not marked finished. This can be a late handover or an out-of-date filing; we cannot tell which.</p>
+              <ul className="mt-3 grid gap-3">{hv.passed.map((p) => <Row key={p.slug} p={p} currency={currency} />)}</ul>
+            </section>
+          )}
+        </div>
       ) : rows.length === 0 ? (
         <p className="mt-6 text-sm text-[var(--muted)]">No tower in this area has 3 or more off-plan sales in the last 12 months.</p>
       ) : (
