@@ -113,3 +113,11 @@ After changing the aliases, run `dpi load-communities` (refreshes common names) 
 234 community polygons copied from osp-crm (2026-10-26 fetch): 226 Dubai Municipality statistical
 communities (`code` = community number) and 8 master-community outlines from OpenStreetMap (ODbL).
 Confirm the Dubai Municipality licence on the official download page before launch.
+
+## Off-plan and unfinished projects (dld_projects)
+
+The Projects file names projects in Arabic (`project_name`), so joining it to sales by name rarely works. `dpi import-projects`
+now also stores every ACTIVE, NOT_STARTED and PENDING project, keyed by `project_number`, in `dld_projects` (migration 0007), placed
+by `area_name_en`. This is what lists off-plan launches that have no sales yet on community pages. The file does publish
+`no_of_units` and `no_of_buildings` (units filed for the project, not units left for sale). Dates shown are `project_end_date`
+(planned end), or `completion_date` when that is all there is. Re-run `dpi push-public` to copy the table to the hosted database.
