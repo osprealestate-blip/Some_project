@@ -1,5 +1,6 @@
 /** Every SQL query the web app runs. Only market fields are selected; public tables hold no personal data.
  *  Dates come back as ISO text, counts as integers. Figures follow the rules in pipeline/src/dpi/metrics. */
+import type { SchoolRatingRow } from "@/lib/schoolSummary";
 import { one, query } from "./db";
 import type { Comparables } from "./fairPrice";
 import type { FacilityId, NearestFacility } from "./facilities";
@@ -550,4 +551,17 @@ export async function offPlanProjects(dmCode: string | null, limit = 60): Promis
     const rows = await query<OffPlanProject>(base("", ""), args);
     return rows.map((r) => ({ ...r, developer: null, dld_status: null, percent_completed: null, completion_date: null }));
   }
+}
+
+/** KHDA-listed schools within 2 km and 5 km of a point, counted by KHDA rating (straight-line). */
+export async function schoolRatingCounts(lng: number, lat: number): Promise<SchoolRatingRow[]> {
+  return query<SchoolRatingRow>(
+    `select nullif(trim(p.attributes->>'rating'), '') as rating,
+            count(*) filter (where ST_DWithin(p.geom::geography, pt.g, 2000))::int as within_2km,
+            count(*)::int as within_5km
+       from pois p, (select ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography as g) pt
+      where p.active and p.category = 'school' and ST_DWithin(p.geom::geography, pt.g, 5000)
+      group by 1`,
+    [lng, lat],
+  );
 }
