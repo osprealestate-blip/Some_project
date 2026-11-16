@@ -53,6 +53,8 @@ def main(argv: list[str] | None = None) -> int:
     fc.add_argument("--communities", default="392,681,346")
     fc.add_argument("--per-building", type=int, default=3)
     fc.add_argument("--limit", type=int, default=100, help="how many buildings to look up (busiest first)")
+    cb = sub.add_parser("classify-buildings", help="Residential, commercial, mixed, hotel or unknown for every building")
+    cb.add_argument("--manual", type=Path, default=Path("db/seeds/manual_building_types.csv"))
     sub.add_parser("compute-metrics", help="Trailing 12-month medians, yields and monthly series")
     sub.add_parser("rent-backtest", help="How often rents placed by unit size land in the right tower (read-only)")
     lp = sub.add_parser("load-pois", help="Nearby places: KHDA schools, DHA facilities, OpenStreetMap")
@@ -165,6 +167,12 @@ def main(argv: list[str] | None = None) -> int:
             n = images.write_commons_manifest(conn, args.out, codes, args.per_building, args.limit)
         print(f"{n} candidate photos written to {args.out}. Open it, delete rows that do not show the building, "
               f"then run: dpi import-images {args.out} --approve")
+    elif args.cmd == "classify-buildings":
+        from dpi.db import connect
+        from dpi.matching import building_use
+
+        with connect() as conn:
+            print(building_use.run(conn, args.manual).render())
     elif args.cmd == "compute-metrics":
         from dpi.db import connect
         from dpi.metrics import compute

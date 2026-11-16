@@ -22,6 +22,7 @@ import ViewToggle from "@/components/ViewToggle";
 import FavouriteButton from "@/components/FavouriteButton";
 import { convertFromAed, getConversionNote } from "@/config/currency";
 import { getServerCurrency } from "@/lib/currency";
+import { getT } from "@/lib/lang";
 import { hasDatabase } from "@/lib/db";
 import { count, day, formatMoney, formatPsf, formatShortPrice, pct, roomsLabel, sqft } from "@/lib/format";
 import {
@@ -52,6 +53,8 @@ const POSITION_TEXT: Record<string, string> = {
 type Props = { slug: string; variant?: "page" | "panel" };
 
 /** Everything shown for one building. The standalone page and the panel over the map both render this. */
+const USE_NAME: Record<string, string> = { residential: "Residential", commercial: "Commercial", mixed: "Mixed-use", hotel: "Hotel" };
+
 export default async function BuildingDetail({ slug, variant = "page" }: Props) {
   const panel = variant === "panel";
   if (!hasDatabase()) {
@@ -59,6 +62,7 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
   }
   const b = await buildingBySlug(slug);
   if (!b) notFound();
+  const { t } = await getT();
   const currency = await getServerCurrency();
   const conversionNote = getConversionNote(currency);
   const [summaries, series, sales, places, siblings, images, communityRows, facilities, schools] = await Promise.all([
@@ -101,6 +105,12 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
         {b.floors ? ` · ${b.floors} floors` : ""}
         {b.unit_count ? ` · ${count(b.unit_count)} units` : ""}
       </p>
+      {USE_NAME[b.building_type ?? ""] && (
+        <p className="mt-1 text-xs text-[var(--muted)]" title={t("Use is taken from the property types in DLD sales and rent records.")}>
+          <span className="rounded-full border border-[var(--border)] px-2 py-0.5">{t(USE_NAME[b.building_type!])}</span>
+          {b.building_type === "commercial" || b.building_type === "mixed" ? ` ${t("Prices and rents here cover residential units only.")}` : ""}
+        </p>
+      )}
       {!panel && <p className="mt-1 text-sm"><Link className="link" href={`/compare?ids=${b.slug}`}>Compare with other buildings</Link></p>}
       <AtAGlance
         verdict={verdict}
