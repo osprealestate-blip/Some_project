@@ -1,4 +1,5 @@
 import Link from "next/link";
+import HomeSearch from "@/components/HomeSearch";
 import SearchBox from "@/components/SearchBox";
 import { getConversionNote } from "@/config/currency";
 import { LAUNCH_COMMUNITIES } from "@/lib/communities";
@@ -37,28 +38,17 @@ export default async function Home() {
   const asOf = cards?.find((c) => c.summary)?.summary?.period_end ?? null;
   return (
     <main>
-      <section className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:py-16">
-        <div className="text-center">
-          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl lg:text-5xl">
-            Is the asking price fair?
-          </h1>
-          <p className="mx-auto mt-4 max-w-2xl text-lg text-[var(--muted)] sm:text-xl">
+      <section className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:py-10">
+        <div className="rounded-3xl bg-gradient-to-b from-[#8fb0d0] via-[#c9d9e8] to-[var(--bg)] p-5 sm:p-10 lg:p-14" style={{ color: "#0f2742" }}>
+          <h1 className="max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl lg:text-5xl">Is the asking price fair?</h1>
+          <p className="mt-4 max-w-xl text-base sm:text-lg" style={{ color: "#2c4560" }}>
             Check any Dubai apartment against real Dubai Land Department sales and rents in the same building. Free, no login.
           </p>
-          <div className="mt-8 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center">
-            <Link
-              href="/tools/fair-price"
-              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-[var(--accent)] px-6 py-3 text-base font-semibold text-white hover:opacity-90 focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2"
-            >
-              Check a price <span aria-hidden="true">→</span>
-            </Link>
-            <Link
-              href="/map"
-              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--panel)] px-6 py-3 text-base font-semibold hover:border-[var(--accent)]"
-            >
-              Explore the map
-            </Link>
-          </div>
+          <div className="mt-8 sm:mt-12"><HomeSearch areas={LAUNCH_COMMUNITIES.map((c) => ({ code: c.code, label: c.label }))} /></div>
+        </div>
+        <div className="mt-6 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center">
+          <Link href="/tools/fair-price" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-[var(--accent)] px-6 py-3 text-base font-semibold text-white hover:opacity-90 focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2">Check a price <span aria-hidden="true">→</span></Link>
+          <Link href="/map" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--panel)] px-6 py-3 text-base font-semibold hover:border-[var(--accent)]">Explore the map</Link>
         </div>
 
         <h2 className="mx-auto mb-4 mt-12 max-w-2xl text-center text-base font-semibold sm:mt-16">
