@@ -210,6 +210,24 @@ export async function buildingSeries(b: Building): Promise<{ sales: SeriesPoint[
   return { sales: sales.map(thin), rents: rents.map(thin), rentLevel };
 }
 
+/** Sales, median price per sq ft, off-plan count and median size for the last 12 months and the 12 before. Counts and medians only. */
+export async function activityPeriods(buildingId: number): Promise<{ now: PeriodRow; prev: PeriodRow }> {
+  const rows = await query<PeriodRow & { p: string }>(
+    `with n as (select max(txn_date) as d from transactions)
+     select case when t.txn_date > n.d - interval '12 months' then 'now' else 'prev' end as p,
+            count(*)::int as sales, percentile_cont(0.5) within group (order by t.price_psf) as "medianPsf",
+            count(*) filter (where t.off_plan)::int as "offPlan", percentile_cont(0.5) within group (order by t.size_sqft) as "medianSize"
+       from transactions t, n
+      where t.building_id = $1 and t.excluded is null and t.property_type = any($2) and t.txn_date > n.d - interval '24 months'
+      group by 1`,
+    [buildingId, SALE_TYPES],
+  );
+  const empty: PeriodRow = { sales: 0, medianPsf: null, offPlan: 0, medianSize: null };
+  const get = (k: string) => rows.find((r) => r.p === k) ?? empty;
+  return { now: get("now"), prev: get("prev") };
+}
+type PeriodRow = { sales: number; medianPsf: number | null; offPlan: number; medianSize: number | null };
+
 /** Latest counted sales: market fields only (no unit numbers, no parties). */
 export async function recentSales(id: number, limit = 15): Promise<RecentSale[]> {
   return query<RecentSale>(
