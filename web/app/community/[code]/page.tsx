@@ -19,7 +19,8 @@ import { getServerCurrency } from "@/lib/currency";
 import { hasDatabase } from "@/lib/db";
 import { count, formatMoneyShort, formatPsf, pct } from "@/lib/format";
 import ConstructionProjects from "@/components/ConstructionProjects";
-import { communityBuildings, communityByCode, communitySeries, communitySummaries, constructionProjects } from "@/lib/queries";
+import { communityBuildings, communityByCode, communitySeries, communitySummaries, constructionProjects, matchCoverage } from "@/lib/queries";
+import { coverageLines } from "@/lib/matchCoverage";
 import { pageMetadata } from "@/lib/seo";
 import { SOURCES } from "@/lib/sources";
 import { change } from "@/lib/stats";
@@ -73,7 +74,7 @@ export default async function Page({ params }: Params) {
   }
   const currency = await getServerCurrency();
   const conversionNote = getConversionNote(currency);
-  const [summaries, series, buildings, sites] = await Promise.all([communitySummaries(c.id), communitySeries(c.id), communityBuildings(c.id), constructionProjects(code)]);
+  const [summaries, series, buildings, sites, coverage] = await Promise.all([communitySummaries(c.id), communitySeries(c.id), communityBuildings(c.id), constructionProjects(code), matchCoverage(c.id).catch(() => null)]);
   const all = summaries.find((s) => s.rooms === -1);
   const plainYoy = change(all?.sale_median_psf_12m, all?.sale_median_psf_prev_12m);
   const lfl = all?.like_for_like_change ?? null;
@@ -107,6 +108,11 @@ export default async function Page({ params }: Params) {
         Apartments only; 12 months to the newest sale.
         {lfl != null && plainYoy != null && ` The area median itself moved ${pct(plainYoy, 1, true)}, partly because the mix of towers and off-plan sales changed; the same-tower figure compares each tower with itself.`}
       </SourceNote>
+      {coverageLines(coverage).length > 0 && (
+        <p className="mt-2 text-xs text-[var(--muted)]">
+          <strong className="font-medium text-[var(--fg)]">Coverage, last 12 months.</strong> {coverageLines(coverage).join(" ")} Records not tied to a building still count in the area figures above.
+        </p>
+      )}
       <KeyTerms />
 
       {(all?.sale_count_ready_12m || all?.sale_count_offplan_12m) ? (

@@ -621,3 +621,26 @@ export async function schoolRatingCounts(lng: number, lat: number): Promise<Scho
     [lng, lat],
   );
 }
+
+export type MatchCoverage = { sales_total: number; sales_linked: number; rents_total: number; rents_linked: number };
+
+/** How many of a community's counted apartment sales and rent contracts in the last 12 months could be tied to a building page.
+ *  The rest still count in the area figures; they just have no tower. Counts only. */
+export async function matchCoverage(communityId: number): Promise<MatchCoverage | null> {
+  return one<MatchCoverage>(
+    `select
+       (select count(*)::int from transactions t
+         where t.community_id = $1 and t.excluded is null and t.property_type = any($2)
+           and t.txn_date > (select max(txn_date) from transactions) - interval '12 months') as sales_total,
+       (select count(*)::int from transactions t join buildings b on b.id = t.building_id and b.match_confidence >= $3
+         where t.community_id = $1 and t.excluded is null and t.property_type = any($2)
+           and t.txn_date > (select max(txn_date) from transactions) - interval '12 months') as sales_linked,
+       (select count(*)::int from rent_contracts r
+         where r.community_id = $1 and r.excluded is null
+           and r.start_date > (select max(start_date) from rent_contracts) - interval '12 months') as rents_total,
+       (select count(*)::int from rent_contracts r join buildings b on b.id = r.building_id and b.match_confidence >= $3
+         where r.community_id = $1 and r.excluded is null
+           and r.start_date > (select max(start_date) from rent_contracts) - interval '12 months') as rents_linked`,
+    [communityId, SALE_TYPES, MIN_CONFIDENCE],
+  );
+}
