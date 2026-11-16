@@ -17,6 +17,8 @@ import BuildingGallery from "@/components/BuildingGallery";
 import DataBadge from "@/components/DataBadge";
 import SchoolSummary from "@/components/SchoolSummary";
 import AboutNumbers from "@/components/AboutNumbers";
+import CoverageNotice from "@/components/CoverageNotice";
+import { EMPTY_TEXT, evidenceState } from "@/lib/coverage";
 import Stat from "@/components/Stat";
 import ViewToggle from "@/components/ViewToggle";
 import FavouriteButton from "@/components/FavouriteButton";
@@ -25,7 +27,7 @@ import { getServerCurrency } from "@/lib/currency";
 import { hasDatabase } from "@/lib/db";
 import { count, day, formatMoney, formatPsf, formatShortPrice, pct, roomsLabel, sqft } from "@/lib/format";
 import {
-  buildingBySlug, buildingImages, buildingSeries, buildingSummaries, communitySummaries, isOffPlanOnly, nearbyPlaces, nearestFacilities, offPlanRentEstimate, schoolRatingCounts,
+  buildingBySlug, buildingImages, freshnessStamps, buildingSeries, buildingSummaries, communitySummaries, isOffPlanOnly, nearbyPlaces, nearestFacilities, offPlanRentEstimate, schoolRatingCounts,
   recentSales, siblingBuildings,
 } from "@/lib/queries";
 import { buildingVerdict } from "@/lib/verdict";
@@ -61,10 +63,11 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
   if (!b) notFound();
   const currency = await getServerCurrency();
   const conversionNote = getConversionNote(currency);
-  const [summaries, series, sales, places, siblings, images, communityRows, facilities, schools] = await Promise.all([
+  const [summaries, series, sales, places, siblings, images, communityRows, facilities, schools, stamps] = await Promise.all([
     buildingSummaries(b.id), buildingSeries(b), recentSales(b.id), nearbyPlaces(b), siblingBuildings(b), buildingImages(b.id),
     communitySummaries(b.community_id), b.lng != null && b.lat != null ? nearestFacilities(b.lng, b.lat) : Promise.resolve([]),
     b.lng != null && b.lat != null ? schoolRatingCounts(b.lng, b.lat) : Promise.resolve([]),
+    freshnessStamps(),
   ]);
   const all = summaries.find((s) => s.rooms === -1);
   const noRent = all?.rent_median_12m == null && series.rentLevel == null;
@@ -116,6 +119,13 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
       <BuildingGallery images={images} name={b.name_en} />
       <FavouriteButton slug={b.slug} name={b.name_en} />
       <DataBadge saleCount={all?.sale_count_12m} periodEnd={periodEnd} />
+      <CoverageNotice dmCode={b.dm_code} stamps={stamps} />
+      {evidenceState(all?.sale_count_12m) !== "ok" && (
+        <p className="mt-2 rounded-lg border border-dashed border-[var(--border)] p-3 text-sm text-[var(--muted)]">
+          {evidenceState(all?.sale_count_12m) === "none" ? EMPTY_TEXT.noSales : EMPTY_TEXT.thinSales}
+        </p>
+      )}
+      {noRent && !offPlan && (all?.sale_count_12m ?? 0) > 0 && <p className="mt-2 text-sm text-[var(--muted)]">{EMPTY_TEXT.noRents}</p>}
       <ViewToggle />
 
       <section aria-label="Key figures" className={`mt-4 grid grid-cols-2 gap-3 ${panel ? "" : "sm:grid-cols-3 lg:grid-cols-5"}`}>
