@@ -23,6 +23,67 @@ ALIASES = {
     "completion": ["completion_date", "end_date", "project_end_date", "expected_completion_date"],
 }
 
+# Statuses listed on community pages. FINISHED projects are left out on purpose.
+PIPELINE_STATUSES = ("ACTIVE", "NOT_STARTED", "PENDING")
+
+
+def _int(v: str | None) -> int | None:
+    try:
+        n = int(float((v or "").strip()))
+    except ValueError:
+        return None
+    return n if n > 0 else None
+
+
+def parse_pipeline(rows, resolver, source_date: date) -> tuple[list[tuple], dict[str, int]]:
+    """Rows of the DLD Projects file -> dld_projects tuples for projects not yet finished, in communities we hold.
+
+    The file names projects in Arabic, so the key is `project_number`. Rows with no number, no name, a status
+    outside PIPELINE_STATUSES or an area we cannot place are skipped and counted (never guessed).
+    """
+    out: dict[str, tuple] = {}
+    skipped = {"no_number_or_name": 0, "other_status": 0, "no_community": 0}
+    for r in rows:
+        num = (r.get("project_number") or "").strip()
+        name = " ".join((r.get("project_name") or "").split())
+        if not num or not name:
+            skipped["no_number_or_name"] += 1
+            continue
+        status = (r.get("project_status") or "").strip().upper().replace(" ", "_")
+        if status not in PIPELINE_STATUSES:
+            skipped["other_status"] += 1
+            continue
+        cid = resolver.resolve(r.get("area_name_en"))
+        if cid is None:
+            skipped["no_community"] += 1
+            continue
+        try:
+            pct = float(r["percent_completed"]) if r.get("percent_completed") not in (None, "") else None
+        except ValueError:
+            pct = None
+        if pct is not None and not 0 <= pct <= 100:
+            pct = None
+        out[num] = (num, cid, name, (r.get("master_project_en") or "").strip() or None,
+                    (r.get("developer_name") or "").strip() or None, status, pct,
+                    _parse_date(r.get("project_start_date", "")), _parse_date(r.get("project_end_date", "")),
+                    _parse_date(r.get("completion_date", "")), _int(r.get("no_of_units")),
+                    _int(r.get("no_of_buildings")), source_date)
+    return list(out.values()), skipped
+
+
+def import_pipeline(conn, path: Path, resolver, source_date: date) -> str:
+    with path.open(newline="", encoding="utf-8-sig") as f:
+        rows, skipped = parse_pipeline(csv.DictReader(f), resolver, source_date)
+    with conn.cursor() as cur:
+        cur.execute("truncate dld_projects")
+        cur.executemany(
+            "insert into dld_projects (project_number, community_id, name, master_project, developer_name, dld_status, "
+            "percent_completed, start_date, end_date, completion_date, no_of_units, no_of_buildings, source_date) "
+            "values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)", rows)
+    conn.commit()
+    return (f"dld_projects: {len(rows):,} not-finished projects stored (skipped: "
+            + ", ".join(f"{k.replace('_', ' ')} {v:,}" for k, v in skipped.items()) + ")")
+
 
 @dataclass
 class ProjectsReport:
