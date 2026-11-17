@@ -1,9 +1,9 @@
+import Link from "next/link";
 import LaunchAreaCards from "@/components/LaunchAreaCards";
 import NoData from "@/components/NoData";
 import { getServerCurrency } from "@/lib/currency";
 import { hasDatabase } from "@/lib/db";
 import { LAUNCH_COMMUNITIES } from "@/lib/communities";
-import Link from "next/link";
 import { areasWithBuildings, launchCommunities } from "@/lib/queries";
 import { isLaunchCommunity } from "@/lib/communities";
 import { count } from "@/lib/format";
@@ -42,6 +42,7 @@ export default async function Page() {
         Three areas are checked by hand first: Dubai Marina, JVC and Business Bay. Sales and rents for the rest of Dubai are loaded, and more areas get their own pages as they are checked.
       </p>
       {cards && cards.length > 0 ? <LaunchAreaCards cards={cards} currency={currency} title="Areas covered today" /> : <div className="mt-6"><NoData /></div>}
+      <p className="mt-4 text-sm"><Link className="link" href="/communities/compare">Compare areas side by side</Link></p>
       {more.length > 0 && (
         <section className="mt-10">
           <h2 className="text-base font-semibold">More areas with building pages ({more.length})</h2>
