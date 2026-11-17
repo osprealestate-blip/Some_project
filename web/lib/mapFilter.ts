@@ -1,8 +1,11 @@
 import { FACILITIES, type FacilityId } from "./facilities";
 import { makeT, type T } from "./i18n";
 
+export const USE_FILTERS = ["residential", "commercial", "mixed"] as const;
+export type UseFilter = (typeof USE_FILTERS)[number];
+
 /** A filter on the map, kept in the URL as ?f=near:metro, ?f=dev:Emaar or ?f=area:392 so a link shares it. */
-export type MapFilter = { type: "near"; value: FacilityId } | { type: "dev"; value: string } | { type: "area"; value: string } | { type: "under"; value: string };
+export type MapFilter = { type: "near"; value: FacilityId } | { type: "dev"; value: string } | { type: "area"; value: string } | { type: "under"; value: string } | { type: "use"; value: UseFilter };
 
 /** Straight-line radius for "near a ...". Short for things you walk to, longer for a hospital or a school. */
 export const NEAR_RADIUS_M: Record<FacilityId, number> = { metro: 800, hospital: 2000, school: 1500, mall: 1500, park: 800 };
@@ -17,15 +20,19 @@ export function parseFilter(raw: string | null): MapFilter | null {
   if (type === "dev") return { type, value };
   if (type === "area") return /^\d{1,4}$/.test(value) ? { type, value } : null;
   if (type === "under") return /^\d{5,9}$/.test(value) ? { type, value } : null; // median sale price ceiling in AED
+  if (type === "use") return (USE_FILTERS as readonly string[]).includes(value) ? { type, value: value as UseFilter } : null;
   return null;
 }
 
 export const filterParam = (f: MapFilter) => `${f.type}:${f.value}`;
 
+export const USE_LABEL: Record<UseFilter, string> = { residential: "Residential buildings", commercial: "Commercial buildings", mixed: "Mixed-use buildings" };
+
 export const A_PLACE: Record<FacilityId, string> = { metro: "a metro station", hospital: "a hospital", school: "a school", mall: "a mall", park: "a park" };
 export function filterLabel(f: MapFilter, t: T = makeT("en"), area?: string): string {
   if (f.type === "near") return t("Within {km} km of {place} (straight-line)", { km: NEAR_RADIUS_M[f.value] / 1000, place: t(A_PLACE[f.value]) });
   if (f.type === "dev") return t("Developer: {name}", { name: f.value });
+  if (f.type === "use") return t(USE_LABEL[f.value]);
   if (f.type === "under") { const v = Number(f.value); return t("Median sale price under AED {n}", { n: v >= 1e6 ? Math.round(v).toLocaleString("en-US") : `${Math.round(v / 1000)}K` }); }
   return area ?? t("Area");
 }

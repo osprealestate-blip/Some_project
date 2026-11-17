@@ -87,6 +87,7 @@ class OsmBuilding:
     names: list[str]
     ring: list[tuple[float, float]]  # (lng, lat), closed
     height_m: float | None
+    kind: str | None = None  # raw building= tag, for `dpi classify-buildings`
 
     @property
     def keys(self) -> set[str]:
@@ -140,7 +141,7 @@ def parse(overpass_json: dict) -> list[OsmBuilding]:
             continue
         # relations negative, like osm2pgsql; nodes offset so they never collide with way ids
         osm_id = {"way": el["id"], "relation": -el["id"]}.get(el["type"], 10**12 + el["id"])
-        out.append(OsmBuilding(osm_id, names, ring, _height(tags)))
+        out.append(OsmBuilding(osm_id, names, ring, _height(tags), (tags.get("building") or "").strip().lower() or None))
     return out
 
 
@@ -309,9 +310,9 @@ def place(conn, osm_json: dict | None, manual_csv: Path | None, community_codes:
                     continue
                 used.add(ob.osm_id)
                 cur.execute("update buildings set geom = ST_SetSRID(ST_GeomFromGeoJSON(%s), 4326), osm_id = %s, "
-                            "height_m = coalesce(%s, height_m), geom_source = 'osm', "
+                            "height_m = coalesce(%s, height_m), geom_source = 'osm', osm_building = %s, "
                             "match_confidence = greatest(match_confidence, %s) where id = %s",
-                            (ob.geojson(), ob.osm_id, ob.height_m, round(0.6 + 0.3 * score, 2), bid))
+                            (ob.geojson(), ob.osm_id, ob.height_m, ob.kind, round(0.6 + 0.3 * score, 2), bid))
                 report.osm += 1
 
         for m in read_manual(manual_csv) if manual_csv else []:

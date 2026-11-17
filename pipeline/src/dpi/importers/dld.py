@@ -248,6 +248,7 @@ def parse_rows(lines: Iterable[str], kind: str, resolver: CommunityResolver, sou
             "source": "dld", "source_ref": ref[:64], "source_date": source_date,
             "community_id": community_id, "raw_area": _clean(area, 150), "excluded": rule,
             "size_sqft": size_sqft, "rooms": rooms, "raw_project": _clean(get(r, "project")),
+            "usage": _clean(get(r, "usage"), 60), "sub_type": _clean(sub, 60),   # raw DLD words, for `dpi classify-buildings`
         }
         if kind == "sale":
             row.update(txn_date=when, price=round(price, 2), price_psf=round(price / size_sqft, 2),
@@ -263,9 +264,9 @@ def parse_rows(lines: Iterable[str], kind: str, resolver: CommunityResolver, sou
 
 
 SALE_COLS = ["source", "source_ref", "source_date", "community_id", "raw_building", "raw_project", "raw_area",
-             "txn_date", "price", "size_sqft", "price_psf", "rooms", "property_type", "off_plan", "excluded"]
+             "txn_date", "price", "size_sqft", "price_psf", "rooms", "property_type", "off_plan", "excluded", "usage", "sub_type"]
 RENT_COLS = ["source", "source_ref", "source_date", "community_id", "raw_building", "raw_project", "raw_area",
-             "start_date", "end_date", "annual_rent", "size_sqft", "rooms", "is_new", "excluded"]
+             "start_date", "end_date", "annual_rent", "size_sqft", "rooms", "is_new", "excluded", "usage", "sub_type"]
 
 
 def upsert_sql(kind: str) -> str:

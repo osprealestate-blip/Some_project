@@ -1,0 +1,3 @@
+# Hand checks that override `dpi classify-buildings`. Columns: slug,building_type,note
+# building_type is one of residential, commercial, mixed, hotel, unknown.
+slug,building_type,note

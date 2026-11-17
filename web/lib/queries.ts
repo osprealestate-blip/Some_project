@@ -69,6 +69,7 @@ export type Building = {
   match_method: string | null;
   match_confidence: number;
   geom_source: string | null;
+  building_type: string | null;
   lng: number | null;
   lat: number | null;
   project: string | null;
@@ -198,7 +199,7 @@ export async function communityBuildings(id: number, limit = 200): Promise<Build
 export async function buildingBySlug(slug: string): Promise<Building | null> {
   return one<Building>(
     `select b.id, b.slug, b.name_en, b.aliases, b.floors, b.unit_count, b.completion_year, b.height_m, b.land_number,
-            b.match_method, b.match_confidence, b.geom_source,
+            b.match_method, b.match_confidence, b.geom_source, b.building_type,
             ST_X(ST_PointOnSurface(b.geom)) as lng, ST_Y(ST_PointOnSurface(b.geom)) as lat,
             p.name as project, b.project_id, b.community_id,
             coalesce(c.name_common, c.name_official) as community, c.name_official as community_official, c.dm_code,
@@ -402,6 +403,15 @@ export async function buildingsByDeveloper(name: string): Promise<MapGroup> {
     `select distinct b.slug from buildings b join projects p on p.id = b.project_id
       where b.geom is not null and b.match_confidence >= $2 and lower(p.developer_name) = lower($1)`,
     [name, MIN_CONFIDENCE],
+  );
+  return { slugs: rows.map((r) => r.slug) };
+}
+
+/** Buildings the pipeline has classified as this use (residential, commercial or mixed). Unclassified buildings never match. */
+export async function buildingsByUse(use: string): Promise<MapGroup> {
+  const rows = await query<{ slug: string }>(
+    `select b.slug from buildings b where b.geom is not null and b.match_confidence >= $2 and b.building_type = $1`,
+    [use, MIN_CONFIDENCE],
   );
   return { slugs: rows.map((r) => r.slug) };
 }
