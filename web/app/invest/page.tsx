@@ -37,6 +37,9 @@ export default async function Page() {
             <span className="font-semibold">Look at price trends.</span> Quarterly charts on community pages show how median price per sq ft has moved over time. <Link href="/community/392" className="link">Example: Dubai Marina</Link>.
           </li>
           <li className="text-[var(--fg)]">
+            <span className="font-semibold">See the wider context.</span> <Link href="/market-context" className="link">Dubai market context</Link> shows official sector figures as background. It makes no prediction.
+          </li>
+          <li className="text-[var(--fg)]">
             <span className="font-semibold">Check data quality.</span> Every figure shows its source and date. Where rents are estimated or drawn from the whole project rather than a single tower, the page says so.
           </li>
         </ol>

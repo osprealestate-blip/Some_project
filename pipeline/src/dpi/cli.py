@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import argparse
+import re
 import sys
+from datetime import date
 from pathlib import Path
 
 from dpi.profile import profile_csv, to_markdown
@@ -38,6 +40,8 @@ def main(argv: list[str] | None = None) -> int:
     pb.add_argument("--nominatim-cache", type=Path, default=Path("data/clean/nominatim_cache.json"))
     ip = sub.add_parser("import-projects", help="DLD Projects file: developer, status, % completed, dates (off-plan facts)")
     ip.add_argument("path", type=Path)
+    ip.add_argument("--source-date", type=date.fromisoformat, default=None,
+                    help="date of the export (YYYY-MM-DD); read from the file name when left out")
     im = sub.add_parser("import-images", help="Bulk building photos from a manifest CSV (stored hidden until approved)")
     im.add_argument("manifest", type=Path)
     im.add_argument("--approve", action="store_true", help="make the imported images visible straight away")
@@ -49,6 +53,8 @@ def main(argv: list[str] | None = None) -> int:
     fc.add_argument("--communities", default="392,681,346")
     fc.add_argument("--per-building", type=int, default=3)
     fc.add_argument("--limit", type=int, default=100, help="how many buildings to look up (busiest first)")
+    cb = sub.add_parser("classify-buildings", help="Residential, commercial, mixed, hotel or unknown for every building")
+    cb.add_argument("--manual", type=Path, default=Path("db/seeds/manual_building_types.csv"))
     sub.add_parser("compute-metrics", help="Trailing 12-month medians, yields and monthly series")
     sub.add_parser("rent-backtest", help="How often rents placed by unit size land in the right tower (read-only)")
     lp = sub.add_parser("load-pois", help="Nearby places: KHDA schools, DHA facilities, OpenStreetMap")
@@ -136,6 +142,13 @@ def main(argv: list[str] | None = None) -> int:
 
         with connect() as conn:
             print(projects.import_file(conn, args.path).render())
+            sd = args.source_date
+            if sd is None:
+                m = re.search(r"(\d{4}-\d{2}-\d{2})", args.path.name)
+                if not m:
+                    raise SystemExit("Give --source-date YYYY-MM-DD (no date in the file name).")
+                sd = date.fromisoformat(m.group(1))
+            print(projects.import_pipeline(conn, args.path, _resolver(conn), sd))
     elif args.cmd == "import-images":
         from dpi import images
         from dpi.db import connect
@@ -158,6 +171,12 @@ def main(argv: list[str] | None = None) -> int:
             n = images.write_commons_manifest(conn, args.out, codes, args.per_building, args.limit)
         print(f"{n} candidate photos written to {args.out}. Open it, delete rows that do not show the building, "
               f"then run: dpi import-images {args.out} --approve")
+    elif args.cmd == "classify-buildings":
+        from dpi.db import connect
+        from dpi.matching import building_use
+
+        with connect() as conn:
+            print(building_use.run(conn, args.manual).render())
     elif args.cmd == "compute-metrics":
         from dpi.db import connect
         from dpi.metrics import compute

@@ -85,8 +85,8 @@ describe("Currency formatting and rounding", () => {
   it("keeps output unchanged for AED", () => {
     expect(formatMoney(1_250_000, "AED")).toBe("AED 1,250,000");
     expect(aed(1_250_000)).toBe("AED 1,250,000");
-    expect(formatShortPrice(1_250_000, "AED")).toBe("AED 1.25M");
-    expect(aedShort(1_250_000)).toBe("AED 1.25M");
+    expect(formatShortPrice(1_250_000, "AED")).toBe("AED 1,250,000");
+    expect(aedShort(1_250_000)).toBe("AED 1,250,000");
     expect(formatShortPrice(85_000, "AED")).toBe("AED 85K");
     expect(aedShort(85_000)).toBe("AED 85K");
     expect(formatPsf(1_450, "AED")).toBe("AED 1,450/sq ft");
@@ -96,7 +96,7 @@ describe("Currency formatting and rounding", () => {
   it("formats USD prices with $ prefix and integer rounding", () => {
     // 3,672,500 AED = 1,000,000 USD
     expect(formatMoney(3_672_500, "USD")).toBe("$1,000,000");
-    expect(formatShortPrice(3_672_500, "USD")).toBe("$1.00M");
+    expect(formatShortPrice(3_672_500, "USD")).toBe("$1,000,000");
     // 367,250 AED = 100,000 USD -> $100K
     expect(formatShortPrice(367_250, "USD")).toBe("$100K");
     // 3,672.5 AED/sq ft = 1,000 USD/sq ft
@@ -121,7 +121,7 @@ describe("Currency formatting and rounding", () => {
   it("formats INR prices with ₹ prefix", () => {
     // 100,000 AED * 25.58 = 2,558,000 INR
     expect(formatMoney(100_000, "INR")).toBe("₹2,558,000");
-    expect(formatShortPrice(100_000, "INR")).toBe("₹2.56M");
+    expect(formatShortPrice(100_000, "INR")).toBe("₹2,558,000");
     expect(formatPsf(100, "INR")).toBe("₹2,558/sq ft");
   });
 

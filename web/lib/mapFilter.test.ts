@@ -28,3 +28,13 @@ describe("facilityIntent", () => {
 });
 
 it("labels say straight-line", () => expect(nearLabel("metro")).toBe("Within 0.8 km of a metro station (straight-line)"));
+
+describe("use filter", () => {
+  it("parses the three building uses and rejects others", async () => {
+    const { parseFilter, filterParam } = await import("./mapFilter");
+    expect(parseFilter("use:commercial")).toEqual({ type: "use", value: "commercial" });
+    expect(filterParam({ type: "use", value: "mixed" })).toBe("use:mixed");
+    expect(parseFilter("use:hotel")).toBeNull();
+    expect(parseFilter("use:")).toBeNull();
+  });
+});

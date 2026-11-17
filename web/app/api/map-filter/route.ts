@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { hasDatabase } from "@/lib/db";
-import { nearLabel, NEAR_RADIUS_M, parseFilter } from "@/lib/mapFilter";
-import { buildingsByDeveloper, buildingsInCommunity, buildingsNear } from "@/lib/queries";
+import { nearLabel, NEAR_RADIUS_M, parseFilter, USE_LABEL } from "@/lib/mapFilter";
+import { buildingsByDeveloper, buildingsByUse, buildingsInCommunity, buildingsNear } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +19,10 @@ export async function GET(req: Request) {
     if (f.type === "dev") {
       const g = await buildingsByDeveloper(f.value);
       return NextResponse.json({ label: `Developer: ${f.value}`, slugs: g.slugs }, { headers });
+    }
+    if (f.type === "use") {
+      const g = await buildingsByUse(f.value);
+      return NextResponse.json({ label: USE_LABEL[f.value], slugs: g.slugs }, { headers });
     }
     const a = await buildingsInCommunity(f.value);
     return NextResponse.json({ label: a ? a.name : "Area", slugs: a?.slugs ?? [] }, { headers });

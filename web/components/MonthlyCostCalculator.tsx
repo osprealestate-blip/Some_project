@@ -6,6 +6,7 @@ import Term from "@/components/Term";
 import { type Currency, DEFAULT_CURRENCY, getConversionNote } from "@/config/currency";
 import { DEFAULT_COST_CONFIG } from "@/config/costs";
 import { calculateMonthlyCosts } from "@/lib/costs";
+import { rentScenarios } from "@/lib/rentScenarios";
 import { formatAedWithConverted, pct, roomsLabel } from "@/lib/format";
 import type { Summary } from "@/lib/queries";
 import { SOURCES } from "@/lib/sources";
@@ -38,6 +39,9 @@ export default function MonthlyCostCalculator({
   const [rate, setRate] = useState(String(DEFAULT_COST_CONFIG.mortgageRatePct));
   const [term, setTerm] = useState(String(DEFAULT_COST_CONFIG.termYears));
   const [scPsf, setScPsf] = useState(String(DEFAULT_COST_CONFIG.serviceChargePsf));
+  const [agency, setAgency] = useState(String(DEFAULT_COST_CONFIG.agencyFeePct));
+  const [maint, setMaint] = useState(String(DEFAULT_COST_CONFIG.maintenancePsf));
+  const [vacancy, setVacancy] = useState(String(DEFAULT_COST_CONFIG.vacancyPct));
   const [utilities, setUtilities] = useState(String(DEFAULT_COST_CONFIG.utilitiesMonthly));
 
   const pickRooms = (r: number) => {
@@ -53,7 +57,7 @@ export default function MonthlyCostCalculator({
     return s.trim() === "" || !Number.isFinite(n) ? undefined : n;
   };
   const priceNum = num(price);
-  const res = calculateMonthlyCosts({
+  const costInputs = {
     purchasePrice: priceNum ?? null,
     downPaymentPct: num(downPct),
     mortgageRatePct: num(rate),
@@ -61,8 +65,13 @@ export default function MonthlyCostCalculator({
     serviceChargePsf: num(scPsf),
     sizeSqft: num(size),
     utilitiesMonthly: num(utilities),
+    agencyFeePct: num(agency),
+    maintenancePsf: num(maint),
+    vacancyPct: num(vacancy),
     annualRent: row?.rent_median_12m ?? null,
-  });
+  };
+  const res = calculateMonthlyCosts(costInputs);
+  const scenarios = rentScenarios(costInputs);
   const money = (n: number | null | undefined) => formatAedWithConverted(n, currency);
   const conversionNote = getConversionNote(currency);
   const rentNote = row?.rent_level ? RENT_NOTE[row.rent_level] : undefined;
@@ -114,6 +123,15 @@ export default function MonthlyCostCalculator({
           <label className="font-medium"><Term id="service-charge">Service charge</Term> (AED per sq ft a year)
             <input type="number" min={0} step={1} value={scPsf} onChange={(e) => setScPsf(e.target.value)} className={inputCls} />
           </label>
+          <label className="font-medium">Agent fee (% of price)
+            <input type="number" min={0} max={10} step={0.5} value={agency} onChange={(e) => setAgency(e.target.value)} className={inputCls} />
+          </label>
+          <label className="font-medium">Upkeep (AED per sq ft a year)
+            <input type="number" min={0} step={0.5} value={maint} onChange={(e) => setMaint(e.target.value)} className={inputCls} />
+          </label>
+          <label className="font-medium">Empty time (% of the year)
+            <input type="number" min={0} max={100} step={1} value={vacancy} onChange={(e) => setVacancy(e.target.value)} className={inputCls} />
+          </label>
           <label className="font-medium">Utilities (AED a month)
             <input type="number" min={0} step={50} value={utilities} onChange={(e) => setUtilities(e.target.value)} className={inputCls} />
           </label>
@@ -131,6 +149,14 @@ export default function MonthlyCostCalculator({
               <dt className="font-medium">Net yield (estimate, after service charge only)</dt>
               <dd className="text-end font-semibold tabular-nums">{res.netYield != null ? pct(res.netYield) : "–"}</dd>
             </div>
+            <div className="flex justify-between gap-2">
+              <dt className="font-medium">Net yield after empty time and upkeep (estimate)</dt>
+              <dd className="text-end font-semibold tabular-nums">{res.netYieldAllCosts != null ? pct(res.netYieldAllCosts) : "–"}</dd>
+            </div>
+            <div className="flex justify-between gap-2">
+              <dt className="text-[var(--muted)]">Yearly cash left after mortgage payments, if let out (estimate)</dt>
+              <dd className="text-end tabular-nums">{res.annualCashFlow != null ? money(res.annualCashFlow) : "–"}</dd>
+            </div>
           </dl>
           <p className="mt-1 text-xs text-[var(--muted)]">
             {res.netYield != null && row?.rent_median_12m != null
@@ -138,15 +164,38 @@ export default function MonthlyCostCalculator({
               : "No recent rent contracts for this bedroom type, so no yield."}
           </p>
 
+          {scenarios && (
+            <details className="mt-3 text-sm">
+              <summary className="cursor-pointer font-medium">What if the rent is lower?</summary>
+              <div className="mt-2 overflow-x-auto">
+                <table className="w-full whitespace-nowrap text-sm tabular-nums [&_td]:pe-3 [&_th]:pe-3">
+                  <thead className="text-xs text-[var(--muted)]">
+                    <tr className="border-b border-[var(--border)]"><th className="py-1 text-start font-medium">Rent</th><th className="py-1 text-end font-medium"><Term id="gross-yield">Gross yield</Term></th><th className="py-1 text-end font-medium">Net yield</th><th className="py-1 text-end font-medium">Cash left a year</th><th className="py-1 text-end font-medium">Cash on cash</th></tr>
+                  </thead>
+                  <tbody>
+                    {scenarios.map((r) => (
+                      <tr key={r.label} className="border-b border-[var(--border)]">
+                        <td className="py-1.5">{r.label}</td><td className="py-1.5 text-end">{pct(r.grossYield)}</td><td className="py-1.5 text-end">{pct(r.netYield)}</td>
+                        <td className="py-1.5 text-end">{money(r.annualCashFlow)}</td><td className="py-1.5 text-end">{pct(r.cashOnCash)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="mt-1 text-xs text-[var(--muted)]">Gross yield is rent over price. Net yield also takes off empty time, service charge and upkeep. Cash on cash is the yearly cash left after mortgage payments, over the cash needed to buy. Only the rent changes between rows; every cost is your assumption. A what-if, not a forecast.</p>
+            </details>
+          )}
+
           <details className="mt-3 text-sm">
             <summary className="cursor-pointer font-medium">Cash needed to buy</summary>
             <dl className="mt-2 space-y-1">
               <div className="flex justify-between gap-2"><dt className="text-[var(--muted)]">Down payment</dt><dd className="text-end tabular-nums">{money(res.upfrontCosts.downPaymentCash)}</dd></div>
               <div className="flex justify-between gap-2"><dt className="text-[var(--muted)]">DLD transfer fee (4%)</dt><dd className="text-end tabular-nums">{money(res.upfrontCosts.dldTransferFee)}</dd></div>
               <div className="flex justify-between gap-2"><dt className="text-[var(--muted)]">Mortgage registration (0.25% of loan + AED 290)</dt><dd className="text-end tabular-nums">{money(res.upfrontCosts.mortgageRegistrationFee)}</dd></div>
+              <div className="flex justify-between gap-2"><dt className="text-[var(--muted)]">Agent fee ({num(agency) ?? 0}%, your assumption)</dt><dd className="text-end tabular-nums">{money(res.upfrontCosts.agencyFee)}</dd></div>
               <div className="flex justify-between gap-2 font-medium"><dt>Total</dt><dd className="text-end tabular-nums">{money(res.upfrontCosts.totalUpfront)}</dd></div>
             </dl>
-            <p className="mt-1 text-xs text-[var(--muted)]">Agent, trustee and bank fees are not included.</p>
+            <p className="mt-1 text-xs text-[var(--muted)]">Trustee, title-deed and bank fees are not included. Interest over the whole loan: {money(res.totalInterest)} if the rate never changes.</p>
           </details>
         </>
       ) : (
@@ -154,7 +203,7 @@ export default function MonthlyCostCalculator({
       )}
 
       <SourceNote source={`${SOURCES.dldSales}; ${SOURCES.dldRents}`} date={periodEnd} estimate>
-        Starting price, size and rent are 12-month medians for the bedroom type. Mortgage rate, service charge and utilities are general assumptions, not this building&apos;s figures.{conversionNote ? ` ${conversionNote}` : ""}
+        Starting price, size and rent are 12-month medians for the bedroom type. Mortgage rate, agent fee, service charge, upkeep, empty time and utilities are general assumptions, not this building&apos;s figures. Utilities are left out of the yield because a tenant normally pays them.{conversionNote ? ` ${conversionNote}` : ""}
       </SourceNote>
     </div>
   );

@@ -1,5 +1,6 @@
 /** Every SQL query the web app runs. Only market fields are selected; public tables hold no personal data.
  *  Dates come back as ISO text, counts as integers. Figures follow the rules in pipeline/src/dpi/metrics. */
+import type { SchoolRatingRow } from "@/lib/schoolSummary";
 import { one, query } from "./db";
 import type { Comparables } from "./fairPrice";
 import type { FacilityId, NearestFacility } from "./facilities";
@@ -68,6 +69,7 @@ export type Building = {
   match_method: string | null;
   match_confidence: number;
   geom_source: string | null;
+  building_type: string | null;
   lng: number | null;
   lat: number | null;
   project: string | null;
@@ -96,7 +98,47 @@ export async function dataFreshness(): Promise<{ period_end: string | null; sour
   );
 }
 
+/** Newest date in each public file, for the freshness line. Each part is optional so one missing table never hides the rest. */
+export async function freshnessStamps(): Promise<{ salesTo: string | null; rentsTo: string | null; projectsAsOf: string | null }> {
+  const get = async (sql: string) => (await one<{ d: string | null }>(sql).catch(() => null))?.d ?? null;
+  const [salesTo, rentsTo, projectsAsOf] = await Promise.all([
+    get("select max(period_end)::text as d from community_summary"),
+    get("select max(start_date)::text as d from rent_contracts where start_date <= (select max(txn_date) from transactions)"),
+    get("select max(source_date)::text as d from dld_projects"),
+  ]);
+  return { salesTo, rentsTo, projectsAsOf };
+}
+
+/** Communities that have at least one building page, for the "more areas" list. Counts only. */
+export async function areasWithBuildings(): Promise<{ dm_code: string; name: string; buildings: number; sales: number }[]> {
+  return query(
+    `select c.dm_code, coalesce(c.name_common, c.name_official) as name, count(b.id)::int as buildings,
+            coalesce((select sale_count_12m from community_summary s where s.community_id = c.id and s.rooms = -1), 0)::int as sales
+       from communities c join buildings b on b.community_id = c.id and b.match_confidence >= $1
+      where c.dm_code is not null group by c.id order by sales desc, name limit 150`,
+    [MIN_CONFIDENCE],
+  );
+}
+
 // ---------- communities ----------
+
+/** Areas that have sales figures, for the area-comparison picker. */
+export async function areasWithFigures(): Promise<{ dm_code: string; name: string; sales: number }[]> {
+  return query(
+    `select c.dm_code, coalesce(c.name_common, c.name_official) as name, s.sale_count_12m::int as sales
+       from communities c join community_summary s on s.community_id = c.id and s.rooms = -1
+      where c.dm_code is not null and s.sale_count_12m > 0 order by name limit 300`,
+  );
+}
+
+/** Community summary rows for the given area codes (all-bedroom row plus per-bedroom yields). */
+export async function summariesForCodes(codes: string[]): Promise<{ code: string; name: string; rows: CommunitySummary[] }[]> {
+  if (!codes.length) return [];
+  const cs = await query<{ id: number; dm_code: string; name: string }>(
+    "select id, dm_code, coalesce(name_common, name_official) as name from communities where dm_code = any($1)", [codes]);
+  const out = await Promise.all(cs.map(async (c) => ({ code: c.dm_code, name: c.name, rows: await communitySummaries(c.id) })));
+  return codes.map((k) => out.find((o) => o.code === k)).filter((o): o is NonNullable<typeof o> => !!o);
+}
 
 export async function launchCommunities(): Promise<(Community & { summary: CommunitySummary | null; buildings: number })[]> {
   const rows = await query<Community & { summary: CommunitySummary | null; buildings: number }>(
@@ -157,7 +199,7 @@ export async function communityBuildings(id: number, limit = 200): Promise<Build
 export async function buildingBySlug(slug: string): Promise<Building | null> {
   return one<Building>(
     `select b.id, b.slug, b.name_en, b.aliases, b.floors, b.unit_count, b.completion_year, b.height_m, b.land_number,
-            b.match_method, b.match_confidence, b.geom_source,
+            b.match_method, b.match_confidence, b.geom_source, b.building_type,
             ST_X(ST_PointOnSurface(b.geom)) as lng, ST_Y(ST_PointOnSurface(b.geom)) as lat,
             p.name as project, b.project_id, b.community_id,
             coalesce(c.name_common, c.name_official) as community, c.name_official as community_official, c.dm_code,
@@ -208,6 +250,24 @@ export async function buildingSeries(b: Building): Promise<{ sales: SeriesPoint[
     ({ period: p.period, count: p.count, value: p.count >= 3 ? p.value : null });
   return { sales: sales.map(thin), rents: rents.map(thin), rentLevel };
 }
+
+/** Sales, median price per sq ft, off-plan count and median size for the last 12 months and the 12 before. Counts and medians only. */
+export async function activityPeriods(buildingId: number): Promise<{ now: PeriodRow; prev: PeriodRow }> {
+  const rows = await query<PeriodRow & { p: string }>(
+    `with n as (select max(txn_date) as d from transactions)
+     select case when t.txn_date > n.d - interval '12 months' then 'now' else 'prev' end as p,
+            count(*)::int as sales, percentile_cont(0.5) within group (order by t.price_psf) as "medianPsf",
+            count(*) filter (where t.off_plan)::int as "offPlan", percentile_cont(0.5) within group (order by t.size_sqft) as "medianSize"
+       from transactions t, n
+      where t.building_id = $1 and t.excluded is null and t.property_type = any($2) and t.txn_date > n.d - interval '24 months'
+      group by 1`,
+    [buildingId, SALE_TYPES],
+  );
+  const empty: PeriodRow = { sales: 0, medianPsf: null, offPlan: 0, medianSize: null };
+  const get = (k: string) => rows.find((r) => r.p === k) ?? empty;
+  return { now: get("now"), prev: get("prev") };
+}
+type PeriodRow = { sales: number; medianPsf: number | null; offPlan: number; medianSize: number | null };
 
 /** Latest counted sales: market fields only (no unit numbers, no parties). */
 export async function recentSales(id: number, limit = 15): Promise<RecentSale[]> {
@@ -343,6 +403,15 @@ export async function buildingsByDeveloper(name: string): Promise<MapGroup> {
     `select distinct b.slug from buildings b join projects p on p.id = b.project_id
       where b.geom is not null and b.match_confidence >= $2 and lower(p.developer_name) = lower($1)`,
     [name, MIN_CONFIDENCE],
+  );
+  return { slugs: rows.map((r) => r.slug) };
+}
+
+/** Buildings the pipeline has classified as this use (residential, commercial or mixed). Unclassified buildings never match. */
+export async function buildingsByUse(use: string): Promise<MapGroup> {
+  const rows = await query<{ slug: string }>(
+    `select b.slug from buildings b where b.geom is not null and b.match_confidence >= $2 and b.building_type = $1`,
+    [use, MIN_CONFIDENCE],
   );
   return { slugs: rows.map((r) => r.slug) };
 }
@@ -550,4 +619,96 @@ export async function offPlanProjects(dmCode: string | null, limit = 60): Promis
     const rows = await query<OffPlanProject>(base("", ""), args);
     return rows.map((r) => ({ ...r, developer: null, dld_status: null, percent_completed: null, completion_date: null }));
   }
+}
+
+// ---------- projects under construction ----------
+
+export type ConstructionProject = {
+  name: string; developer: string | null; dld_status: string | null;
+  percent_completed: number | null; completion_date: string | null;
+  no_of_units?: number | null; no_of_buildings?: number | null; master_project?: string | null;
+};
+
+/** Projects in a community that DLD lists as not finished (under construction, not started, pending), soonest date
+ *  first, undated last. Read from the DLD Projects file itself (`dld_projects`), so projects with no sales yet are
+ *  included. Falls back to the sales-derived `projects` table when `dld_projects` is empty or not loaded, and to []
+ *  when neither has data. The date is DLD's planned end date, or its completion date when that is all there is. */
+export async function constructionProjects(dmCode: string, limit = 200): Promise<ConstructionProject[]> {
+  try {
+    const rows = await query<ConstructionProject>(
+      `select d.name, d.developer_name as developer, d.dld_status, d.percent_completed::float8 as percent_completed,
+              coalesce(d.end_date, d.completion_date)::text as completion_date,
+              d.no_of_units, d.no_of_buildings, d.master_project
+         from dld_projects d join communities c on c.id = d.community_id
+        where c.dm_code = $1
+        order by coalesce(d.end_date, d.completion_date) nulls last, d.name limit $2`,
+      [dmCode, limit],
+    );
+    if (rows.length) return rows;
+  } catch {
+    /* table not created yet: use the sales-derived list below */
+  }
+  try {
+    return await query<ConstructionProject>(
+      `select p.name, p.developer_name as developer, p.dld_status, p.percent_completed::float8 as percent_completed,
+              p.completion_date::text as completion_date
+         from projects p join communities c on c.id = p.community_id
+        where c.dm_code = $1 and p.dld_status = 'ACTIVE'
+        order by p.completion_date nulls last, p.name limit $2`,
+      [dmCode, limit],
+    );
+  } catch {
+    return [];
+  }
+}
+
+export type HandoverSummary = { underConstruction: number; dueNext12m: number; overdue: number; undated: number };
+
+/** Counts for the community page. `today` is passed in so the result is testable. */
+export function handoverSummary(rows: ConstructionProject[], today: Date): HandoverSummary {
+  const limit = new Date(today); limit.setFullYear(limit.getFullYear() + 1);
+  let dueNext12m = 0, overdue = 0, undated = 0;
+  for (const r of rows) {
+    if (!r.completion_date) { undated++; continue; }
+    const d = new Date(r.completion_date);
+    if (d < today) overdue++;
+    else if (d <= limit) dueNext12m++;
+  }
+  return { underConstruction: rows.length, dueNext12m, overdue, undated };
+}
+
+/** KHDA-listed schools within 2 km and 5 km of a point, counted by KHDA rating (straight-line). */
+export async function schoolRatingCounts(lng: number, lat: number): Promise<SchoolRatingRow[]> {
+  return query<SchoolRatingRow>(
+    `select nullif(trim(p.attributes->>'rating'), '') as rating,
+            count(*) filter (where ST_DWithin(p.geom::geography, pt.g, 2000))::int as within_2km,
+            count(*)::int as within_5km
+       from pois p, (select ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography as g) pt
+      where p.active and p.category = 'school' and ST_DWithin(p.geom::geography, pt.g, 5000)
+      group by 1`,
+    [lng, lat],
+  );
+}
+
+export type MatchCoverage = { sales_total: number; sales_linked: number; rents_total: number; rents_linked: number };
+
+/** How many of a community's counted apartment sales and rent contracts in the last 12 months could be tied to a building page.
+ *  The rest still count in the area figures; they just have no tower. Counts only. */
+export async function matchCoverage(communityId: number): Promise<MatchCoverage | null> {
+  return one<MatchCoverage>(
+    `select
+       (select count(*)::int from transactions t
+         where t.community_id = $1 and t.excluded is null and t.property_type = any($2)
+           and t.txn_date > (select max(txn_date) from transactions) - interval '12 months') as sales_total,
+       (select count(*)::int from transactions t join buildings b on b.id = t.building_id and b.match_confidence >= $3
+         where t.community_id = $1 and t.excluded is null and t.property_type = any($2)
+           and t.txn_date > (select max(txn_date) from transactions) - interval '12 months') as sales_linked,
+       (select count(*)::int from rent_contracts r
+         where r.community_id = $1 and r.excluded is null
+           and r.start_date > (select max(start_date) from rent_contracts) - interval '12 months') as rents_total,
+       (select count(*)::int from rent_contracts r join buildings b on b.id = r.building_id and b.match_confidence >= $3
+         where r.community_id = $1 and r.excluded is null
+           and r.start_date > (select max(start_date) from rent_contracts) - interval '12 months') as rents_linked`,
+    [communityId, SALE_TYPES, MIN_CONFIDENCE],
+  );
 }
