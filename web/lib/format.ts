@@ -25,7 +25,8 @@ export function formatConverted(
   let formattedNumber = "";
   if (options?.short) {
     if (absVal >= 1_000_000) {
-      formattedNumber = `${(val / 1_000_000).toFixed(absVal >= 10_000_000 ? 1 : 2)}M`;
+      // Millions are shown in full with thousands commas (1,250,000), which reads easier than 1.25M.
+      formattedNumber = num0.format(rounded);
     } else if (absVal >= 10_000) {
       formattedNumber = `${Math.round(val / 1000)}K`;
     } else {
@@ -80,7 +81,7 @@ export function aed(n: number | null | undefined, currency: Currency = DEFAULT_C
   return formatMoney(n, currency);
 }
 
-/** 1,250,000 -> "AED 1.25M"; 85,000 -> "AED 85K". Output unchanged for AED. */
+/** 1,250,000 -> "AED 1,250,000"; 85,000 -> "AED 85K". Output unchanged for AED. */
 export function aedShort(n: number | null | undefined, currency: Currency = DEFAULT_CURRENCY): string {
   return formatMoney(n, currency, { short: true });
 }
