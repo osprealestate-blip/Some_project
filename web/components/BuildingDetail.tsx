@@ -17,6 +17,7 @@ import BuildingGallery from "@/components/BuildingGallery";
 import DataBadge from "@/components/DataBadge";
 import SchoolSummary from "@/components/SchoolSummary";
 import AboutNumbers from "@/components/AboutNumbers";
+import ComparableSales from "@/components/ComparableSales";
 import RentEvidence from "@/components/RentEvidence";
 import CoverageNotice from "@/components/CoverageNotice";
 import { EMPTY_TEXT, evidenceState } from "@/lib/coverage";
@@ -65,7 +66,7 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
   const currency = await getServerCurrency();
   const conversionNote = getConversionNote(currency);
   const [summaries, series, sales, places, siblings, images, communityRows, facilities, schools, stamps] = await Promise.all([
-    buildingSummaries(b.id), buildingSeries(b), recentSales(b.id), nearbyPlaces(b), siblingBuildings(b), buildingImages(b.id),
+    buildingSummaries(b.id), buildingSeries(b), recentSales(b.id, 40), nearbyPlaces(b), siblingBuildings(b), buildingImages(b.id),
     communitySummaries(b.community_id), b.lng != null && b.lat != null ? nearestFacilities(b.lng, b.lat) : Promise.resolve([]),
     b.lng != null && b.lat != null ? schoolRatingCounts(b.lng, b.lat) : Promise.resolve([]),
     freshnessStamps(),
@@ -145,7 +146,7 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
       <nav aria-label="On this page" className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-sm">
         <a className="link adv-only" href="#sale-prices">Sale prices and rentals</a>
         <a className="link adv-only" href="#history">History</a>
-        <a className="link adv-only" href="#recent-sales">Recent transactions</a>
+        <a className="link adv-only" href="#recent-sales">Comparable sales</a>
         <a className="link" href="#ownership-costs">Ownership costs</a>
         <a className="link" href="#nearby">Nearby</a>
         <a className="link" href="#about-numbers">About these numbers</a>
@@ -216,36 +217,9 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
         </div>
       </Section>
 
-      <Section id="recent-sales" title="Recent transactions" adv>
-        {sales.length ? (
-          <div className="mt-2 overflow-x-auto">
-            <table className="w-full whitespace-nowrap text-sm tabular-nums [&_td]:pe-3 [&_th]:pe-3">
-              <thead className="text-xs text-[var(--muted)]">
-                <tr className="border-b border-[var(--border)]">
-                  <th className="py-1 text-start font-medium">Date</th>
-                  <th className="py-1 text-start font-medium">Type</th>
-                  <th className="py-1 text-end font-medium">Size</th>
-                  <th className="py-1 text-end font-medium">Price</th>
-                  <th className="py-1 text-end font-medium">Per sq ft</th>
-                  <th className="py-1 text-end font-medium"><Term id="off-plan">Status</Term></th>
-                </tr>
-              </thead>
-              <tbody>
-                {sales.map((s, i) => (
-                  <tr key={i} className="border-b border-[var(--border)]">
-                    <td className="py-1.5">{day(s.txn_date)}</td>
-                    <td className="py-1.5">{s.rooms == null ? "–" : roomsLabel(s.rooms)}</td>
-                    <td className="py-1.5 text-end">{sqft(s.size_sqft)}</td>
-                    <td className="py-1.5 text-end">{formatMoney(s.price, currency)}</td>
-                    <td className="py-1.5 text-end">{count(convertFromAed(s.price_psf, currency))}</td>
-                    <td className="py-1.5 text-end">{s.off_plan == null ? "–" : s.off_plan ? "Off-plan" : "Ready"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : <p className="mt-2 text-sm text-[var(--muted)]">No counted sales.</p>}
-        <SourceNote source={SOURCES.dldSales} date={periodEnd}>Market fields only; unit numbers and parties are never shown.</SourceNote>
+      <Section id="recent-sales" title="Comparable sales" adv>
+        <ComparableSales rows={sales} currency={currency} />
+        <SourceNote source={SOURCES.dldSales} date={periodEnd}>Last 40 counted sales. Market fields only: no unit numbers, floors or parties. A price here is what that flat sold for, not what yours would.</SourceNote>
       </Section>
 
       <Section id="ownership-costs" title="Ownership costs">
