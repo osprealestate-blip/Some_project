@@ -17,6 +17,7 @@ import BuildingGallery from "@/components/BuildingGallery";
 import DataBadge from "@/components/DataBadge";
 import SchoolSummary from "@/components/SchoolSummary";
 import AboutNumbers from "@/components/AboutNumbers";
+import RentEvidence from "@/components/RentEvidence";
 import CoverageNotice from "@/components/CoverageNotice";
 import { EMPTY_TEXT, evidenceState } from "@/lib/coverage";
 import Stat from "@/components/Stat";
@@ -135,6 +136,7 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
         <Stat label={rentLevel === "project" ? "Project median annual rent" : rentLevel === "estimated" ? "Median annual rent (estimated)" : "Median annual rent"} value={formatShortPrice(all?.rent_median_12m, currency)} note={offPlan ? "Not completed yet: no rent contracts" : rentLevel === "project" ? (unfinished ? "Not completed yet: this is the whole project's rent, not this tower's" : "Whole project (rents are filed per project, not per tower)") : rentLevel === "estimated" ? `Estimated: ${count(all?.rent_count_12m ?? 0)} contracts, some placed by unit size` : `${count(all?.rent_count_12m ?? 0)} contracts`} meaning="Typical yearly rent on contracts registered in the last 12 months." />
         <Stat term="gross-yield" label="Gross yield (estimate)" value={pct(midYield)} note="Median across bedroom types" meaning="Yearly rent as a share of the price, before service charges and other costs. Not a promised return." />
       </section>
+      <RentEvidence rentLevel={rentLevel} rentCount={all?.rent_count_12m} communityRent={communityAll?.rent_median_12m ?? null} offPlan={offPlan} />
       <SourceNote source={`${SOURCES.dldSales}; ${SOURCES.dldRents}`} date={periodEnd} estimate>
         Apartments only; 12 months to the newest sale. Gross yield = median rent ÷ median price, same bedroom type.{conversionNote ? ` ${conversionNote}` : ""}
       </SourceNote>
