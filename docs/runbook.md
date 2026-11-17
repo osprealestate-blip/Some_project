@@ -41,9 +41,9 @@ importer never reads them). It empties those tables on the target first, so it c
    Each prints a SCRAM verifier (safe to share; it cannot be turned back into the password). Create the role on
    Supabase with it, see `db/hosted_roles.sql`, then run `dpi hosted-login --role ... --env-name ... --check`.
    The website's `DATABASE_URL` on Vercel is `WEB_DATABASE_URL` with port 6543 (Supabase's transaction pooler; the session
-   pooler on 5432 allows only 15 clients) and `?uselibpqcompat=true&sslmode=require` (otherwise node-pg rejects the
-   certificate chain with SELF_SIGNED_CERT_IN_CHAIN). The connection is encrypted but the certificate isn't verified, so
-   supply Supabase's CA before a real launch.
+   pooler on 5432 allows only 15 clients) (no query string needed: `web/lib/dbConfig.ts` encrypts hosted connections without verifying the certificate chain, which node-pg
+   otherwise rejects with SELF_SIGNED_CERT_IN_CHAIN; set `DATABASE_CA` to Supabase's CA PEM to verify it before a real launch).
+   The web client sends no `statement_timeout` startup parameter and no named prepared statements, so it works with transaction poolers.
 3. Run, with `DATABASE_URL` pointing at the local database:
 
    ```bash
