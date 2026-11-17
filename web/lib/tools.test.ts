@@ -73,7 +73,7 @@ describe("stats and format", () => {
     expect(change(110, null)).toBeNull();
   });
   it("formats", () => {
-    expect(aedShort(1_250_000)).toBe("AED 1.25M");
+    expect(aedShort(1_250_000)).toBe("AED 1,250,000");
     expect(aedShort(85_000)).toBe("AED 85K");
     expect(pct(0.0512, 1, true)).toBe("+5.1%");
     expect(day("2026-10-30")).toBe("30 Oct 2026");
