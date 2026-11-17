@@ -75,6 +75,11 @@ def main(argv: list[str] | None = None) -> int:
     pp.add_argument("--all-structure", action="store_true",
                     help="copy buildings, aliases and summaries for every community; sales and rents "
                          "still only for --communities")
+    pp.add_argument("--add", action="store_true",
+                    help="only add sales and rents for --communities; nothing is emptied. Per community the old "
+                         "rows are replaced, so a re-run after an interruption is safe")
+    pp.add_argument("--dry-run", action="store_true", help="with --add: print row counts and the size estimate only")
+    pp.add_argument("--force-size", action="store_true", help="with --add: run even above 90%% of 500 MB")
     hl = sub.add_parser("hosted-login",
                         help="Make a hosted-database login whose password stays in pipeline/.env.hosted")
     hl.add_argument("--role", required=True, help="e.g. dpi_push (uploads) or dpi_web (the website, read-only)")
@@ -231,6 +236,11 @@ def main(argv: list[str] | None = None) -> int:
         if not target_url:
             raise SystemExit(f"{args.target_env} is not set.")
         codes = [c.strip() for c in args.communities.split(",") if c.strip()]
+        if args.add:
+            with connect() as src, psycopg.connect(target_url) as dst:
+                print(push_public.run_add(src, dst, codes, args.years, args.rent_years or args.years,
+                                          dry_run=args.dry_run, force_size=args.force_size))
+            return 0
         with connect() as src, psycopg.connect(target_url) as dst:
             print(push_public.run(src, dst, codes, args.years, rent_years=args.rent_years,
                                    all_structure=args.all_structure).render())
