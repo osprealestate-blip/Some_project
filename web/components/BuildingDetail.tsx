@@ -18,6 +18,9 @@ import DataBadge from "@/components/DataBadge";
 import SchoolSummary from "@/components/SchoolSummary";
 import AboutNumbers from "@/components/AboutNumbers";
 import ComparableSales from "@/components/ComparableSales";
+import RentEvidence from "@/components/RentEvidence";
+import CoverageNotice from "@/components/CoverageNotice";
+import { EMPTY_TEXT, evidenceState } from "@/lib/coverage";
 import Stat from "@/components/Stat";
 import ViewToggle from "@/components/ViewToggle";
 import FavouriteButton from "@/components/FavouriteButton";
@@ -26,7 +29,7 @@ import { getServerCurrency } from "@/lib/currency";
 import { hasDatabase } from "@/lib/db";
 import { count, day, formatMoney, formatPsf, formatShortPrice, pct, roomsLabel, sqft } from "@/lib/format";
 import {
-  buildingBySlug, buildingImages, buildingSeries, buildingSummaries, communitySummaries, isOffPlanOnly, nearbyPlaces, nearestFacilities, offPlanRentEstimate, schoolRatingCounts,
+  buildingBySlug, buildingImages, freshnessStamps, buildingSeries, buildingSummaries, communitySummaries, isOffPlanOnly, nearbyPlaces, nearestFacilities, offPlanRentEstimate, schoolRatingCounts,
   recentSales, siblingBuildings,
 } from "@/lib/queries";
 import { buildingVerdict } from "@/lib/verdict";
@@ -62,10 +65,11 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
   if (!b) notFound();
   const currency = await getServerCurrency();
   const conversionNote = getConversionNote(currency);
-  const [summaries, series, sales, places, siblings, images, communityRows, facilities, schools] = await Promise.all([
+  const [summaries, series, sales, places, siblings, images, communityRows, facilities, schools, stamps] = await Promise.all([
     buildingSummaries(b.id), buildingSeries(b), recentSales(b.id, 40), nearbyPlaces(b), siblingBuildings(b), buildingImages(b.id),
     communitySummaries(b.community_id), b.lng != null && b.lat != null ? nearestFacilities(b.lng, b.lat) : Promise.resolve([]),
     b.lng != null && b.lat != null ? schoolRatingCounts(b.lng, b.lat) : Promise.resolve([]),
+    freshnessStamps(),
   ]);
   const all = summaries.find((s) => s.rooms === -1);
   const noRent = all?.rent_median_12m == null && series.rentLevel == null;
@@ -117,6 +121,13 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
       <BuildingGallery images={images} name={b.name_en} />
       <FavouriteButton slug={b.slug} name={b.name_en} />
       <DataBadge saleCount={all?.sale_count_12m} periodEnd={periodEnd} />
+      <CoverageNotice dmCode={b.dm_code} stamps={stamps} />
+      {evidenceState(all?.sale_count_12m) !== "ok" && (
+        <p className="mt-2 rounded-lg border border-dashed border-[var(--border)] p-3 text-sm text-[var(--muted)]">
+          {evidenceState(all?.sale_count_12m) === "none" ? EMPTY_TEXT.noSales : EMPTY_TEXT.thinSales}
+        </p>
+      )}
+      {noRent && !offPlan && (all?.sale_count_12m ?? 0) > 0 && <p className="mt-2 text-sm text-[var(--muted)]">{EMPTY_TEXT.noRents}</p>}
       <ViewToggle />
 
       <section aria-label="Key figures" className={`mt-4 grid grid-cols-2 gap-3 ${panel ? "" : "sm:grid-cols-3 lg:grid-cols-5"}`}>
@@ -126,6 +137,7 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
         <Stat label={rentLevel === "project" ? "Project median annual rent" : rentLevel === "estimated" ? "Median annual rent (estimated)" : "Median annual rent"} value={formatShortPrice(all?.rent_median_12m, currency)} note={offPlan ? "Not completed yet: no rent contracts" : rentLevel === "project" ? (unfinished ? "Not completed yet: this is the whole project's rent, not this tower's" : "Whole project (rents are filed per project, not per tower)") : rentLevel === "estimated" ? `Estimated: ${count(all?.rent_count_12m ?? 0)} contracts, some placed by unit size` : `${count(all?.rent_count_12m ?? 0)} contracts`} meaning="Typical yearly rent on contracts registered in the last 12 months." />
         <Stat term="gross-yield" label="Gross yield (estimate)" value={pct(midYield)} note="Median across bedroom types" meaning="Yearly rent as a share of the price, before service charges and other costs. Not a promised return." />
       </section>
+      <RentEvidence rentLevel={rentLevel} rentCount={all?.rent_count_12m} communityRent={communityAll?.rent_median_12m ?? null} offPlan={offPlan} />
       <SourceNote source={`${SOURCES.dldSales}; ${SOURCES.dldRents}`} date={periodEnd} estimate>
         Apartments only; 12 months to the newest sale. Gross yield = median rent ÷ median price, same bedroom type.{conversionNote ? ` ${conversionNote}` : ""}
       </SourceNote>
