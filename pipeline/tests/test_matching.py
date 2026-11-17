@@ -137,3 +137,22 @@ def test_tower_letters_never_cross_and_old_names_merge():
     assert canonical_key("Marina Old") == "marina old"  # no dash: part of the name
     assert display_name(Counter({"Serenity Lakes 5-old": 9, "Serenity Lakes 5": 3})) == "Serenity Lakes 5"
     assert display_name(Counter({"Old-serenity Lakes 2": 9, "Serenity Lakes 2": 3})) == "Serenity Lakes 2"
+
+
+def test_osm_reads_building_name_and_housename_tags():
+    data = {"elements": [
+        {"type": "way", "id": 1, "tags": {"building": "apartments", "building:name": "Sky Vista Tower"},
+         "geometry": [{"lat": 25.0, "lon": 55.0}, {"lat": 25.0, "lon": 55.001}, {"lat": 25.001, "lon": 55.001}, {"lat": 25.0, "lon": 55.0}]},
+        {"type": "way", "id": 2, "tags": {"building": "yes", "addr:housename": "Palm Court", "name": "Palm Court"},
+         "geometry": [{"lat": 25.1, "lon": 55.1}, {"lat": 25.1, "lon": 55.101}, {"lat": 25.101, "lon": 55.101}, {"lat": 25.1, "lon": 55.1}]},
+        {"type": "way", "id": 3, "tags": {"building": "yes"},
+         "geometry": [{"lat": 25.2, "lon": 55.2}, {"lat": 25.2, "lon": 55.201}, {"lat": 25.201, "lon": 55.201}, {"lat": 25.2, "lon": 55.2}]},
+    ]}
+    found = parse(data)
+    assert [b.names for b in found] == [["Sky Vista Tower"], ["Palm Court"]]  # duplicates dropped, unnamed skipped
+
+
+def test_overpass_query_asks_for_every_name_tag():
+    q = overpass_query((25.0, 55.0, 25.1, 55.1))
+    for tag in ("building:name", "addr:housename", "official_name", "short_name"):
+        assert tag in q

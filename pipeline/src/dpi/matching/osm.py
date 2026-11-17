@@ -67,10 +67,16 @@ def name_variants(raw: str | None) -> tuple[set[str], set[str]]:
     return tower, site - tower
 
 
+# Tags that carry a building's own name, best first. Many towers are tagged only `building:name` or `addr:housename`.
+NAME_TAGS = ("name:en", "name", "official_name", "alt_name", "short_name", "loc_name", "int_name", "old_name",
+             "building:name", "addr:housename")
+_NAME_KEYS = "^(name|name:en|official_name|alt_name|short_name|loc_name|int_name|old_name|building:name|addr:housename)$"
+
+
 def overpass_query(bbox: tuple[float, float, float, float]) -> str:
     s, w, n, e = bbox
     b = f"({s},{w},{n},{e})"
-    return (f"[out:json][timeout:180];(nwr[building][name]{b};nwr[landuse=construction][name]{b};"
+    return (f'[out:json][timeout:180];(nwr[building][~"{_NAME_KEYS}"~"."]{b};nwr[landuse=construction][name]{b};'
             f"nwr[construction][name]{b};);out tags geom;")
 
 
@@ -124,7 +130,7 @@ def parse(overpass_json: dict) -> list[OsmBuilding]:
     out = []
     for el in overpass_json.get("elements", []):
         tags = el.get("tags") or {}
-        names = [tags[k] for k in ("name:en", "name", "alt_name", "old_name") if tags.get(k)]
+        names = list(dict.fromkeys(tags[k] for k in NAME_TAGS if tags.get(k)))
         if not names:
             continue
         ring: list[tuple[float, float]] = []
