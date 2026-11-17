@@ -18,6 +18,12 @@ import DataBadge from "@/components/DataBadge";
 import SchoolSummary from "@/components/SchoolSummary";
 import AboutNumbers from "@/components/AboutNumbers";
 import PrintButton from "@/components/PrintButton";
+import BuyChecklist from "@/components/BuyChecklist";
+import ActivityExplainer from "@/components/ActivityExplainer";
+import ComparableSales from "@/components/ComparableSales";
+import RentEvidence from "@/components/RentEvidence";
+import CoverageNotice from "@/components/CoverageNotice";
+import { EMPTY_TEXT, evidenceState } from "@/lib/coverage";
 import Stat from "@/components/Stat";
 import ViewToggle from "@/components/ViewToggle";
 import FavouriteButton from "@/components/FavouriteButton";
@@ -26,7 +32,7 @@ import { getServerCurrency } from "@/lib/currency";
 import { hasDatabase } from "@/lib/db";
 import { count, day, formatMoney, formatPsf, formatShortPrice, pct, roomsLabel, sqft } from "@/lib/format";
 import {
-  buildingBySlug, buildingImages, buildingSeries, buildingSummaries, communitySummaries, isOffPlanOnly, nearbyPlaces, nearestFacilities, offPlanRentEstimate, schoolRatingCounts,
+  activityPeriods, buildingBySlug, buildingImages, freshnessStamps, buildingSeries, buildingSummaries, communitySummaries, isOffPlanOnly, nearbyPlaces, nearestFacilities, offPlanRentEstimate, schoolRatingCounts,
   recentSales, siblingBuildings,
 } from "@/lib/queries";
 import { buildingVerdict } from "@/lib/verdict";
@@ -62,13 +68,15 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
   if (!b) notFound();
   const currency = await getServerCurrency();
   const conversionNote = getConversionNote(currency);
-  const [summaries, series, sales, places, siblings, images, communityRows, facilities, schools] = await Promise.all([
-    buildingSummaries(b.id), buildingSeries(b), recentSales(b.id), nearbyPlaces(b), siblingBuildings(b), buildingImages(b.id),
+  const [summaries, series, sales, places, siblings, images, communityRows, facilities, schools, stamps] = await Promise.all([
+    buildingSummaries(b.id), buildingSeries(b), recentSales(b.id, 40), nearbyPlaces(b), siblingBuildings(b), buildingImages(b.id),
     communitySummaries(b.community_id), b.lng != null && b.lat != null ? nearestFacilities(b.lng, b.lat) : Promise.resolve([]),
     b.lng != null && b.lat != null ? schoolRatingCounts(b.lng, b.lat) : Promise.resolve([]),
+    freshnessStamps(),
   ]);
   const all = summaries.find((s) => s.rooms === -1);
   const noRent = all?.rent_median_12m == null && series.rentLevel == null;
+  const periods = await activityPeriods(b.id).catch(() => null);
   const unfinished = await isOffPlanOnly(b.id); // every sale in 24 months was off-plan
   const offPlan = noRent && unfinished;
   const offPlanRents = offPlan ? await offPlanRentEstimate(b) : [];
@@ -117,6 +125,13 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
       <BuildingGallery images={images} name={b.name_en} />
       <FavouriteButton slug={b.slug} name={b.name_en} />
       <DataBadge saleCount={all?.sale_count_12m} periodEnd={periodEnd} />
+      <CoverageNotice dmCode={b.dm_code} stamps={stamps} />
+      {evidenceState(all?.sale_count_12m) !== "ok" && (
+        <p className="mt-2 rounded-lg border border-dashed border-[var(--border)] p-3 text-sm text-[var(--muted)]">
+          {evidenceState(all?.sale_count_12m) === "none" ? EMPTY_TEXT.noSales : EMPTY_TEXT.thinSales}
+        </p>
+      )}
+      {noRent && !offPlan && (all?.sale_count_12m ?? 0) > 0 && <p className="mt-2 text-sm text-[var(--muted)]">{EMPTY_TEXT.noRents}</p>}
       <ViewToggle />
 
       <section aria-label="Key figures" className={`mt-4 grid grid-cols-2 gap-3 ${panel ? "" : "sm:grid-cols-3 lg:grid-cols-5"}`}>
@@ -126,6 +141,7 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
         <Stat label={rentLevel === "project" ? "Project median annual rent" : rentLevel === "estimated" ? "Median annual rent (estimated)" : "Median annual rent"} value={formatShortPrice(all?.rent_median_12m, currency)} note={offPlan ? "Not completed yet: no rent contracts" : rentLevel === "project" ? (unfinished ? "Not completed yet: this is the whole project's rent, not this tower's" : "Whole project (rents are filed per project, not per tower)") : rentLevel === "estimated" ? `Estimated: ${count(all?.rent_count_12m ?? 0)} contracts, some placed by unit size` : `${count(all?.rent_count_12m ?? 0)} contracts`} meaning="Typical yearly rent on contracts registered in the last 12 months." />
         <Stat term="gross-yield" label="Gross yield (estimate)" value={pct(midYield)} note="Median across bedroom types" meaning="Yearly rent as a share of the price, before service charges and other costs. Not a promised return." />
       </section>
+      <RentEvidence rentLevel={rentLevel} rentCount={all?.rent_count_12m} communityRent={communityAll?.rent_median_12m ?? null} offPlan={offPlan} />
       <SourceNote source={`${SOURCES.dldSales}; ${SOURCES.dldRents}`} date={periodEnd} estimate>
         Apartments only; 12 months to the newest sale. Gross yield = median rent ÷ median price, same bedroom type.{conversionNote ? ` ${conversionNote}` : ""}
       </SourceNote>
@@ -134,7 +150,7 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
       <nav aria-label="On this page" className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-sm">
         <a className="link adv-only" href="#sale-prices">Sale prices and rentals</a>
         <a className="link adv-only" href="#history">History</a>
-        <a className="link adv-only" href="#recent-sales">Recent transactions</a>
+        <a className="link adv-only" href="#recent-sales">Comparable sales</a>
         <a className="link" href="#ownership-costs">Ownership costs</a>
         <a className="link" href="#nearby">Nearby</a>
         <a className="link" href="#about-numbers">About these numbers</a>
@@ -193,6 +209,7 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
       </Section>
 
       <Section id="history" title="History" adv>
+        {periods && <div className="mb-4"><ActivityExplainer {...periods} /></div>}
         <div className={`grid gap-6 [&>*]:min-w-0 ${panel ? "" : "lg:grid-cols-2"}`}>
           <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
             <LineChart title="Median sale price per sq ft, by quarter" points={series.sales} unit="psf" countLabel="sales" currency={currency} />
@@ -205,36 +222,9 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
         </div>
       </Section>
 
-      <Section id="recent-sales" title="Recent transactions" adv>
-        {sales.length ? (
-          <div className="mt-2 overflow-x-auto">
-            <table className="w-full whitespace-nowrap text-sm tabular-nums [&_td]:pe-3 [&_th]:pe-3">
-              <thead className="text-xs text-[var(--muted)]">
-                <tr className="border-b border-[var(--border)]">
-                  <th className="py-1 text-start font-medium">Date</th>
-                  <th className="py-1 text-start font-medium">Type</th>
-                  <th className="py-1 text-end font-medium">Size</th>
-                  <th className="py-1 text-end font-medium">Price</th>
-                  <th className="py-1 text-end font-medium">Per sq ft</th>
-                  <th className="py-1 text-end font-medium"><Term id="off-plan">Status</Term></th>
-                </tr>
-              </thead>
-              <tbody>
-                {sales.map((s, i) => (
-                  <tr key={i} className="border-b border-[var(--border)]">
-                    <td className="py-1.5">{day(s.txn_date)}</td>
-                    <td className="py-1.5">{s.rooms == null ? "–" : roomsLabel(s.rooms)}</td>
-                    <td className="py-1.5 text-end">{sqft(s.size_sqft)}</td>
-                    <td className="py-1.5 text-end">{formatMoney(s.price, currency)}</td>
-                    <td className="py-1.5 text-end">{count(convertFromAed(s.price_psf, currency))}</td>
-                    <td className="py-1.5 text-end">{s.off_plan == null ? "–" : s.off_plan ? "Off-plan" : "Ready"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : <p className="mt-2 text-sm text-[var(--muted)]">No counted sales.</p>}
-        <SourceNote source={SOURCES.dldSales} date={periodEnd}>Market fields only; unit numbers and parties are never shown.</SourceNote>
+      <Section id="recent-sales" title="Comparable sales" adv>
+        <ComparableSales rows={sales} currency={currency} />
+        <SourceNote source={SOURCES.dldSales} date={periodEnd}>Last 40 counted sales. Market fields only: no unit numbers, floors or parties. A price here is what that flat sold for, not what yours would.</SourceNote>
       </Section>
 
       <Section id="ownership-costs" title="Ownership costs">
@@ -284,6 +274,8 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
       )}
 
       <p className="hidden text-xs print:block">Printed from the building page for {b.name_en}, {b.community}. Data from DLD open data to {day(periodEnd)}. Estimate based on DLD data. Not a valuation or financial advice.</p>
+      <BuyChecklist offPlan={offPlan} sales12m={all?.sale_count_12m ?? 0} rentLevel={noRent ? null : rentLevel ?? null} rentCount={all?.rent_count_12m ?? 0} hasCompletionYear={b.completion_year != null} />
+
       <AboutNumbers periodEnd={periodEnd} saleCount={all?.sale_count_12m} rentCount={all?.rent_count_12m} rentLevel={rentLevel} offPlan={offPlan} />
 
       <Section id="methodology" title="Data and methodology" adv open={false}>

@@ -19,8 +19,10 @@ import { getServerCurrency } from "@/lib/currency";
 import { hasDatabase } from "@/lib/db";
 import { count, formatMoneyShort, formatPsf, pct } from "@/lib/format";
 import ConstructionProjects from "@/components/ConstructionProjects";
-import { communityBuildings, communityByCode, communitySeries, communitySummaries, constructionProjects, matchCoverage } from "@/lib/queries";
+import { communityBuildings, communityByCode, communitySeries, communitySummaries, constructionProjects, freshnessStamps, matchCoverage } from "@/lib/queries";
 import { coverageLines } from "@/lib/matchCoverage";
+import CoverageNotice from "@/components/CoverageNotice";
+import { EMPTY_TEXT, evidenceState } from "@/lib/coverage";
 import { pageMetadata } from "@/lib/seo";
 import { SOURCES } from "@/lib/sources";
 import { change } from "@/lib/stats";
@@ -75,6 +77,7 @@ export default async function Page({ params }: Params) {
   const currency = await getServerCurrency();
   const conversionNote = getConversionNote(currency);
   const [summaries, series, buildings, sites, coverage] = await Promise.all([communitySummaries(c.id), communitySeries(c.id), communityBuildings(c.id), constructionProjects(code), matchCoverage(c.id).catch(() => null)]);
+  const stamps = await freshnessStamps();
   const all = summaries.find((s) => s.rooms === -1);
   const plainYoy = change(all?.sale_median_psf_12m, all?.sale_median_psf_prev_12m);
   const lfl = all?.like_for_like_change ?? null;
@@ -91,6 +94,10 @@ export default async function Page({ params }: Params) {
       {official !== title && <p className="text-sm text-[var(--muted)]">Official community name: {official} (DM {code})</p>}
       {scope && <p className="mt-2 max-w-2xl text-sm">{scope}</p>}
       <DataBadge saleCount={all?.sale_count_12m} periodEnd={all?.period_end} />
+      <CoverageNotice dmCode={code} stamps={stamps} />
+      {evidenceState(all?.sale_count_12m) !== "ok" && (
+        <p className="mt-2 rounded-lg border border-dashed border-[var(--border)] p-3 text-sm text-[var(--muted)]">{evidenceState(all?.sale_count_12m) === "none" ? EMPTY_TEXT.noSales : EMPTY_TEXT.thinSales}</p>
+      )}
       <ViewToggle />
 
       <section className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -204,7 +211,7 @@ export default async function Page({ params }: Params) {
               </tbody>
             </table>
           </div>
-        ) : <p className="mt-2 text-sm text-[var(--muted)]">No buildings matched here yet.</p>}
+        ) : <p className="mt-2 text-sm text-[var(--muted)]">{EMPTY_TEXT.noBuildings}</p>}
         <SourceNote source={SOURCES.dldSales} date={all?.period_end} estimate>* Yield is an estimate, shown only where the rent it comes from is shown. “project” = rents for the whole project, because DLD rent contracts name the project, not the tower; “est.” = some rents placed in the tower by unit size.</SourceNote>
       </section>
       <p className="mt-6 text-xs text-[var(--muted)]">Boundary: {SOURCES.dm}.</p>
