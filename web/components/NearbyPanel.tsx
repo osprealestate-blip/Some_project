@@ -1,6 +1,7 @@
 "use client";
 import { useT } from "./LangProvider";
 import { lifeScore } from "@/lib/lifeScore";
+import { dedupePlaces } from "@/lib/dedupePlaces";
 import { metres } from "@/lib/format";
 import type { Place } from "@/lib/queries";
 import { POI_SOURCE } from "@/lib/sources";
@@ -41,7 +42,7 @@ export default function NearbyPanel({ places, placed }: { places: Place[]; place
       </ul>
       <div className="mt-4 grid gap-4 sm:grid-cols-2 [&>*]:min-w-0">
         {GROUP_ORDER.map(([cat, label]) => {
-          const list = places.filter((p) => p.category === cat).slice(0, 6);
+          const list = dedupePlaces(places.filter((p) => p.category === cat)).slice(0, 6);
           if (!list.length) return null;
           return (
             <div key={cat}>
