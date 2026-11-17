@@ -97,6 +97,28 @@ export async function dataFreshness(): Promise<{ period_end: string | null; sour
   );
 }
 
+/** Newest date in each public file, for the freshness line. Each part is optional so one missing table never hides the rest. */
+export async function freshnessStamps(): Promise<{ salesTo: string | null; rentsTo: string | null; projectsAsOf: string | null }> {
+  const get = async (sql: string) => (await one<{ d: string | null }>(sql).catch(() => null))?.d ?? null;
+  const [salesTo, rentsTo, projectsAsOf] = await Promise.all([
+    get("select max(period_end)::text as d from community_summary"),
+    get("select max(start_date)::text as d from rent_contracts where start_date <= (select max(txn_date) from transactions)"),
+    get("select max(source_date)::text as d from dld_projects"),
+  ]);
+  return { salesTo, rentsTo, projectsAsOf };
+}
+
+/** Communities that have at least one building page, for the "more areas" list. Counts only. */
+export async function areasWithBuildings(): Promise<{ dm_code: string; name: string; buildings: number; sales: number }[]> {
+  return query(
+    `select c.dm_code, coalesce(c.name_common, c.name_official) as name, count(b.id)::int as buildings,
+            coalesce((select sale_count_12m from community_summary s where s.community_id = c.id and s.rooms = -1), 0)::int as sales
+       from communities c join buildings b on b.community_id = c.id and b.match_confidence >= $1
+      where c.dm_code is not null group by c.id order by sales desc, name limit 150`,
+    [MIN_CONFIDENCE],
+  );
+}
+
 // ---------- communities ----------
 
 export async function launchCommunities(): Promise<(Community & { summary: CommunitySummary | null; buildings: number })[]> {
