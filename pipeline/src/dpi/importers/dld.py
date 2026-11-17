@@ -206,7 +206,8 @@ class Report:
 
 def parse_rows(lines: Iterable[str], kind: str, resolver: CommunityResolver, source_date: date,
                report: Report, today: date | None = None) -> Iterator[dict]:
-    today = today or date.today()
+    # The cut-off is the file's own date, not the day the import runs, so re-importing later gives the same result.
+    today = today or source_date
     reader = csv.DictReader(lines)
     if not reader.fieldnames:
         raise DldFileError("The file is empty")

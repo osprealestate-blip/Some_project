@@ -1,7 +1,8 @@
 import { hasDatabase, query } from "@/lib/db";
 import { MIN_CONFIDENCE } from "@/lib/queries";
 
-/** Real counts from our own tables for the homepage. Cached for 10 minutes per server instance (the counts are large). */
+/** `sourceDate` is the date of the newest record (period_end), the same date community pages show as "Data up to".
+ *  Real counts from our own tables for the homepage. Cached for 10 minutes per server instance (the counts are large). */
 export type HomeStats = { buildings: number; sales: number; rents: number; sourceDate: string | null };
 
 let cache: { at: number; value: HomeStats | null } | null = null;
@@ -16,7 +17,7 @@ export async function homeStats(): Promise<HomeStats | null> {
       `select (select count(*) from buildings where match_confidence >= $1)::text as buildings,
               (select count(*) from transactions where excluded is null)::text as sales,
               (select count(*) from rent_contracts where excluded is null)::text as rents,
-              (select max(source_date)::text from community_summary) as source_date`,
+              (select max(period_end)::text from community_summary) as source_date`,
       [MIN_CONFIDENCE],
     );
     const r = rows[0];

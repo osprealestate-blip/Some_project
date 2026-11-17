@@ -86,10 +86,45 @@ def run(source, target, codes: list[str], years: int = 10, detail: list[str] | N
 
 # Measured on the hosted database (tables plus indexes, 2026-11-17): bytes per row.
 BYTES_PER_ROW = {"transactions": 301, "rent_contracts": 259}
+# Rows set aside as impossible future dates are not copied: they never count and only use space.
 ADD_TABLES = {
-    "transactions": "txn_date > now() - make_interval(years => %(years)s)",
-    "rent_contracts": "start_date > now() - make_interval(years => %(rent_years)s)",
+    "transactions": "txn_date > now() - make_interval(years => %(years)s) and excluded is distinct from 'future_date'",
+    "rent_contracts": "start_date > now() - make_interval(years => %(rent_years)s) and excluded is distinct from 'future_date'",
 }
+
+SUMMARY_TABLES = ["building_summary", "community_summary", "community_metrics"]
+
+
+def run_summaries(source, target) -> str:
+    """Replace only the figure tables (building_summary, community_summary, community_metrics) on the target,
+    for every community, after `dpi compute-metrics`. Sales, rents, buildings and places are not touched, so the
+    database size barely changes. Each table is replaced in its own transaction (old rows deleted, new copied,
+    commit): the site shows either the old or the new figures, and a re-run repairs an interrupted one."""
+    with target.cursor() as c:
+        c.execute("select count(*) from buildings")
+        if c.fetchone()[0] == 0:
+            raise SystemExit("The target has no buildings. Run a normal `dpi push-public --all-structure` first.")
+        c.execute("set statement_timeout = 0")
+    target.commit()
+    lines = []
+    for table in SUMMARY_TABLES:
+        cols = [c for c in _columns(target, table) if c in set(_columns(source, table))]
+        col_sql = ", ".join(f'"{c}"' for c in cols)
+        with target.cursor() as tcur:
+            tcur.execute(f"delete from {table}")
+        with source.cursor() as scur, target.cursor() as tcur:
+            with scur.copy(f"copy (select {col_sql} from {table}) to stdout") as out, \
+                    tcur.copy(f"copy {table} ({col_sql}) from stdin") as inp:
+                for chunk in out:
+                    inp.write(chunk)
+            tcur.execute(f"select count(*) from {table}")
+            lines.append(f"{table}: {tcur.fetchone()[0]:,} rows")
+        target.commit()
+    with target.cursor() as c:
+        for table in SUMMARY_TABLES:
+            c.execute(f"analyze {table}")
+    target.commit()
+    return "Figure tables replaced.\n" + "\n".join(lines)
 
 
 def add_plan(source, target, codes: list[str], years: int = 3, rent_years: int = 1,
