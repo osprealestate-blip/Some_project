@@ -58,8 +58,8 @@ def test_full_pipeline(conn):
     assert rep.sales_linked == rep.sales_named == 8 * 140
     # Marina Gate has two towers, so its rents have no exact tower; every other project is one tower.
     # Each tower has its own flat sizes, so Marina Gate rents are placed by size (estimated) in the right tower,
-    # except layouts the tower has sold fewer than MIN_SUPPORT times, which stay at project level.
-    assert rep.rents_project == 8 * 80 and 0.7 * 2 * 80 < rep.rents_estimated < 2 * 80
+    # except layouts the tower has sold fewer than MIN_SUPPORT_IN_PROJECT times, which stay at project level.
+    assert rep.rents_project == 8 * 80 and 0.7 * 2 * 80 < rep.rents_estimated <= 2 * 80
     assert rep.rents_linked == 6 * 80 + rep.rents_estimated
     truth = json.loads((out / "rents_truth.json").read_text())
     with conn.cursor() as cur:
