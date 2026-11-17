@@ -14,21 +14,21 @@ import psycopg
 # (table, where clause on the source; %(codes)s and %(years)s are filled in). Order respects foreign keys.
 PLAN: list[tuple[str, str]] = [
     ("communities", "true"),
-    ("projects", "community_id in (select id from communities where dm_code = any(%(codes)s))"),
-    ("dld_projects", "community_id in (select id from communities where dm_code = any(%(codes)s))"),
-    ("buildings", "community_id in (select id from communities where dm_code = any(%(codes)s))"),
-    ("building_aliases", "community_id in (select id from communities where dm_code = any(%(codes)s))"),
+    ("projects", "community_id in (select id from communities where %(all_struct)s or dm_code = any(%(codes)s))"),
+    ("dld_projects", "community_id in (select id from communities where %(all_struct)s or dm_code = any(%(codes)s))"),
+    ("buildings", "community_id in (select id from communities where %(all_struct)s or dm_code = any(%(codes)s))"),
+    ("building_aliases", "community_id in (select id from communities where %(all_struct)s or dm_code = any(%(codes)s))"),
     ("building_images", "approved and building_id in (select b.id from buildings b join communities c on c.id = b.community_id "
-                        "where c.dm_code = any(%(codes)s))"),
+                        "where %(all_struct)s or c.dm_code = any(%(codes)s))"),
     ("building_summary", "building_id in (select b.id from buildings b join communities c on c.id = b.community_id "
-                         "where c.dm_code = any(%(codes)s))"),
+                         "where %(all_struct)s or c.dm_code = any(%(codes)s))"),
     ("community_summary", "true"),
     ("community_metrics", "true"),
     ("pois", "active"),
-    ("transactions", "community_id in (select id from communities where dm_code = any(%(codes)s)) "
+    ("transactions", "community_id in (select id from communities where dm_code = any(%(detail)s)) "
                      "and txn_date > now() - make_interval(years => %(years)s)"),
-    ("rent_contracts", "community_id in (select id from communities where dm_code = any(%(codes)s)) "
-                       "and start_date > now() - make_interval(years => %(years)s)"),
+    ("rent_contracts", "community_id in (select id from communities where dm_code = any(%(detail)s)) "
+                       "and start_date > now() - make_interval(years => %(rent_years)s)"),
 ]
 
 
@@ -47,7 +47,18 @@ def _columns(conn, table: str) -> list[str]:
         return [r[0] for r in cur.fetchall()]
 
 
-def run(source, target, codes: list[str], years: int = 10) -> PushReport:
+def plan_params(codes: list[str], years: int = 10, detail: list[str] | None = None,
+                rent_years: int | None = None, all_structure: bool = False) -> dict:
+    """Query parameters for PLAN. `codes` choose which communities get buildings, aliases and summaries
+    (all of them when `all_structure`); `detail` (default: `codes`) chooses which get sale and rent rows."""
+    return {"codes": codes, "years": years, "all_struct": all_structure,
+            "detail": codes if detail is None else detail,
+            "rent_years": years if rent_years is None else rent_years}
+
+
+def run(source, target, codes: list[str], years: int = 10, detail: list[str] | None = None,
+        rent_years: int | None = None, all_structure: bool = False) -> PushReport:
+    params = plan_params(codes, years, detail, rent_years, all_structure)
     rep = PushReport()
     with target.cursor() as tcur:
         # Hosted databases cap one statement at about two minutes; the big copies need longer. A connection
@@ -57,7 +68,7 @@ def run(source, target, codes: list[str], years: int = 10) -> PushReport:
     for table, where in PLAN:
         cols = [c for c in _columns(target, table) if c in set(_columns(source, table))]
         col_sql = ", ".join(f'"{c}"' for c in cols)
-        where_sql = psycopg.ClientCursor(source).mogrify(where, {"codes": codes, "years": years})
+        where_sql = psycopg.ClientCursor(source).mogrify(where, params)
         n = 0
         with source.cursor() as scur, target.cursor() as tcur:
             with scur.copy(f"copy (select {col_sql} from {table} where {where_sql}) to stdout") as out, \

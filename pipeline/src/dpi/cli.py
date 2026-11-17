@@ -70,7 +70,11 @@ def main(argv: list[str] | None = None) -> int:
     pp.add_argument("--target-env", default="HOSTED_DATABASE_URL",
                     help="environment variable holding the target connection string (never pass it on the command line)")
     pp.add_argument("--communities", default="392,681,346", help="DM codes whose sales and rents are copied")
-    pp.add_argument("--years", type=int, default=10)
+    pp.add_argument("--years", type=int, default=10, help="years of sales (and of rents unless --rent-years)")
+    pp.add_argument("--rent-years", type=int, default=None, help="years of rents (default: --years)")
+    pp.add_argument("--all-structure", action="store_true",
+                    help="copy buildings, aliases and summaries for every community; sales and rents "
+                         "still only for --communities")
     hl = sub.add_parser("hosted-login",
                         help="Make a hosted-database login whose password stays in pipeline/.env.hosted")
     hl.add_argument("--role", required=True, help="e.g. dpi_push (uploads) or dpi_web (the website, read-only)")
@@ -231,7 +235,8 @@ def main(argv: list[str] | None = None) -> int:
             raise SystemExit(f"{args.target_env} is not set.")
         codes = [c.strip() for c in args.communities.split(",") if c.strip()]
         with connect() as src, psycopg.connect(target_url) as dst:
-            print(push_public.run(src, dst, codes, args.years).render())
+            print(push_public.run(src, dst, codes, args.years, rent_years=args.rent_years,
+                                   all_structure=args.all_structure).render())
     elif args.cmd == "hosted-login":
         _hosted_login(args)
     return 0
