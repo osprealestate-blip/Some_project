@@ -17,6 +17,7 @@ import BuildingGallery from "@/components/BuildingGallery";
 import DataBadge from "@/components/DataBadge";
 import SchoolSummary from "@/components/SchoolSummary";
 import AboutNumbers from "@/components/AboutNumbers";
+import PrintButton from "@/components/PrintButton";
 import BuyChecklist from "@/components/BuyChecklist";
 import ActivityExplainer from "@/components/ActivityExplainer";
 import ComparableSales from "@/components/ComparableSales";
@@ -109,7 +110,7 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
         {b.floors ? ` · ${b.floors} floors` : ""}
         {b.unit_count ? ` · ${count(b.unit_count)} units` : ""}
       </p>
-      {!panel && <p className="mt-1 text-sm"><Link className="link" href={`/compare?ids=${b.slug}`}>Compare with other buildings</Link></p>}
+      {!panel && <p className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm"><Link className="link" href={`/compare?ids=${b.slug}`}>Compare with other buildings</Link><PrintButton /></p>}
       <AtAGlance
         verdict={verdict}
         tiles={[
@@ -272,6 +273,7 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
         </section>
       )}
 
+      <p className="hidden text-xs print:block">Printed from the building page for {b.name_en}, {b.community}. Data from DLD open data to {day(periodEnd)}. Estimate based on DLD data. Not a valuation or financial advice.</p>
       <BuyChecklist offPlan={offPlan} sales12m={all?.sale_count_12m ?? 0} rentLevel={noRent ? null : rentLevel ?? null} rentCount={all?.rent_count_12m ?? 0} hasCompletionYear={b.completion_year != null} />
 
       <AboutNumbers periodEnd={periodEnd} saleCount={all?.sale_count_12m} rentCount={all?.rent_count_12m} rentLevel={rentLevel} offPlan={offPlan} />
