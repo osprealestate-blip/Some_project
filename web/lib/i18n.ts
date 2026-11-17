@@ -26,7 +26,7 @@ export const makeT = (lang: Lang): T => (text, vars) => translate(lang, text, va
 
 /** Pages whose text is fully translated. Elsewhere the page stays English and left-to-right, under a notice. */
 export function isTranslatedPath(pathname: string): boolean {
-  return pathname === "/map" || pathname.startsWith("/map/");
+  return pathname === "/" || pathname === "/map" || pathname.startsWith("/map/");
 }
 
 /** Legend rows are built from numbers ("Under AED 1,000", "AED 1,000 to AED 1,500"): translate the frame, keep the numbers. */

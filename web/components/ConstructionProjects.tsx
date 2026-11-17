@@ -1,4 +1,5 @@
 import SourceNote from "@/components/SourceNote";
+import SupplyTimeline from "@/components/SupplyTimeline";
 import { count, day, pct } from "@/lib/format";
 import { handoverSummary, type ConstructionProject } from "@/lib/queries";
 
@@ -22,6 +23,7 @@ export default function ConstructionProjects({ rows }: { rows: ConstructionProje
         and {by("PENDING")} pending registration. {s.dueNext12m} have a date in the next 12 months,
         {s.overdue > 0 ? ` ${s.overdue} are past their recorded date,` : ""} {s.undated} have no date on file.
       </p>
+      <SupplyTimeline rows={rows} />
       <ul className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
         {shown.map((r, i) => (
           <li key={`${r.name}-${i}`} className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-3">

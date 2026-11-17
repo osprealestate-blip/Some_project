@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { Currency } from "@/config/currency";
 import { MAX_COMPARE, type CompareFigures, compareHref, rentBasis } from "@/lib/compare";
+import { describeChange, readStore, update, writeStore, type Store } from "@/lib/whatChanged";
 import { favouritesCsv, favouritesHref, readFavourites, writeFavourites } from "@/lib/favourites";
 import { count, formatPsf, formatShortPrice, pct } from "@/lib/format";
 
@@ -16,6 +17,7 @@ export default function FavouritesList({ figures, urlSlugs, missing, currency }:
   const router = useRouter();
   const [ready, setReady] = useState(false);
   const [saved, setSaved] = useState<string[]>([]);
+  const [store, setStore] = useState<Store>({});
 
   useEffect(() => {
     const stored = readFavourites();
@@ -23,6 +25,17 @@ export default function FavouritesList({ figures, urlSlugs, missing, currency }:
     setReady(true);
     if (stored.join(",") !== urlSlugs.join(",")) router.replace(favouritesHref(stored));
   }, [urlSlugs, router]);
+
+  // Remember each saved building's figures per data date, in this browser only, to describe what changed since the date before.
+  useEffect(() => {
+    if (!ready) return;
+    const next = readStore();
+    for (const f of figures) {
+      if (f.periodEnd && saved.includes(f.slug)) next[f.slug] = update(next[f.slug], { periodEnd: f.periodEnd, sales12m: f.sales12m, psf: f.psf, rent: f.rent });
+    }
+    writeStore(next);
+    setStore(next);
+  }, [ready, figures, saved]);
 
   function remove(slug: string) {
     const next = saved.filter((s) => s !== slug);
@@ -69,6 +82,7 @@ export default function FavouritesList({ figures, urlSlugs, missing, currency }:
       )}
       <div className="mt-5 flex flex-wrap items-center gap-3">
         <button type="button" onClick={download} disabled={shown.length === 0} className="min-h-9 rounded-lg border border-[var(--border)] px-3 text-sm font-medium hover:bg-[var(--panel)] disabled:opacity-50">Download CSV</button>
+        <span className="text-xs text-[var(--muted)]">Changes show here after new data is loaded. Kept in this browser only.</span>
         {shown.length >= 2 && <Link className="link text-sm" href={compareHref(shown.slice(0, MAX_COMPARE).map((f) => f.slug))}>Compare {Math.min(shown.length, MAX_COMPARE)} of these side by side</Link>}
       </div>
       <div className="mt-4 overflow-x-auto">
@@ -91,6 +105,10 @@ export default function FavouritesList({ figures, urlSlugs, missing, currency }:
                 <th scope="row" className="py-2 pe-3 text-start font-normal">
                   <Link className="link font-medium" href={`/building/${f.slug}`}>{f.name}</Link>
                   <div className="text-xs text-[var(--muted)]">{f.community}</div>
+                  {(() => {
+                    const d = describeChange(store[f.slug]);
+                    return d ? <div className="mt-1 text-xs"><span className="text-[var(--muted)]">Since data to {store[f.slug].base!.periodEnd}:</span> {d.join(" ")}</div> : null;
+                  })()}
                 </th>
                 <td className="py-2 pe-3 tabular-nums">{formatShortPrice(f.medianPrice, currency)}<div className="text-xs text-[var(--muted)]">{f.sales12m == null ? "" : `${count(f.sales12m)} sales`}</div></td>
                 <td className="py-2 pe-3 tabular-nums">{formatPsf(f.psf, currency)}<div className="text-xs text-[var(--muted)]">{pct(f.psfChange, 1, true)} on a year earlier</div></td>

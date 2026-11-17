@@ -98,7 +98,47 @@ export async function dataFreshness(): Promise<{ period_end: string | null; sour
   );
 }
 
+/** Newest date in each public file, for the freshness line. Each part is optional so one missing table never hides the rest. */
+export async function freshnessStamps(): Promise<{ salesTo: string | null; rentsTo: string | null; projectsAsOf: string | null }> {
+  const get = async (sql: string) => (await one<{ d: string | null }>(sql).catch(() => null))?.d ?? null;
+  const [salesTo, rentsTo, projectsAsOf] = await Promise.all([
+    get("select max(period_end)::text as d from community_summary"),
+    get("select max(start_date)::text as d from rent_contracts where start_date <= (select max(txn_date) from transactions)"),
+    get("select max(source_date)::text as d from dld_projects"),
+  ]);
+  return { salesTo, rentsTo, projectsAsOf };
+}
+
+/** Communities that have at least one building page, for the "more areas" list. Counts only. */
+export async function areasWithBuildings(): Promise<{ dm_code: string; name: string; buildings: number; sales: number }[]> {
+  return query(
+    `select c.dm_code, coalesce(c.name_common, c.name_official) as name, count(b.id)::int as buildings,
+            coalesce((select sale_count_12m from community_summary s where s.community_id = c.id and s.rooms = -1), 0)::int as sales
+       from communities c join buildings b on b.community_id = c.id and b.match_confidence >= $1
+      where c.dm_code is not null group by c.id order by sales desc, name limit 150`,
+    [MIN_CONFIDENCE],
+  );
+}
+
 // ---------- communities ----------
+
+/** Areas that have sales figures, for the area-comparison picker. */
+export async function areasWithFigures(): Promise<{ dm_code: string; name: string; sales: number }[]> {
+  return query(
+    `select c.dm_code, coalesce(c.name_common, c.name_official) as name, s.sale_count_12m::int as sales
+       from communities c join community_summary s on s.community_id = c.id and s.rooms = -1
+      where c.dm_code is not null and s.sale_count_12m > 0 order by name limit 300`,
+  );
+}
+
+/** Community summary rows for the given area codes (all-bedroom row plus per-bedroom yields). */
+export async function summariesForCodes(codes: string[]): Promise<{ code: string; name: string; rows: CommunitySummary[] }[]> {
+  if (!codes.length) return [];
+  const cs = await query<{ id: number; dm_code: string; name: string }>(
+    "select id, dm_code, coalesce(name_common, name_official) as name from communities where dm_code = any($1)", [codes]);
+  const out = await Promise.all(cs.map(async (c) => ({ code: c.dm_code, name: c.name, rows: await communitySummaries(c.id) })));
+  return codes.map((k) => out.find((o) => o.code === k)).filter((o): o is NonNullable<typeof o> => !!o);
+}
 
 export async function launchCommunities(): Promise<(Community & { summary: CommunitySummary | null; buildings: number })[]> {
   const rows = await query<Community & { summary: CommunitySummary | null; buildings: number }>(
@@ -210,6 +250,24 @@ export async function buildingSeries(b: Building): Promise<{ sales: SeriesPoint[
     ({ period: p.period, count: p.count, value: p.count >= 3 ? p.value : null });
   return { sales: sales.map(thin), rents: rents.map(thin), rentLevel };
 }
+
+/** Sales, median price per sq ft, off-plan count and median size for the last 12 months and the 12 before. Counts and medians only. */
+export async function activityPeriods(buildingId: number): Promise<{ now: PeriodRow; prev: PeriodRow }> {
+  const rows = await query<PeriodRow & { p: string }>(
+    `with n as (select max(txn_date) as d from transactions)
+     select case when t.txn_date > n.d - interval '12 months' then 'now' else 'prev' end as p,
+            count(*)::int as sales, percentile_cont(0.5) within group (order by t.price_psf) as "medianPsf",
+            count(*) filter (where t.off_plan)::int as "offPlan", percentile_cont(0.5) within group (order by t.size_sqft) as "medianSize"
+       from transactions t, n
+      where t.building_id = $1 and t.excluded is null and t.property_type = any($2) and t.txn_date > n.d - interval '24 months'
+      group by 1`,
+    [buildingId, SALE_TYPES],
+  );
+  const empty: PeriodRow = { sales: 0, medianPsf: null, offPlan: 0, medianSize: null };
+  const get = (k: string) => rows.find((r) => r.p === k) ?? empty;
+  return { now: get("now"), prev: get("prev") };
+}
+type PeriodRow = { sales: number; medianPsf: number | null; offPlan: number; medianSize: number | null };
 
 /** Latest counted sales: market fields only (no unit numbers, no parties). */
 export async function recentSales(id: number, limit = 15): Promise<RecentSale[]> {

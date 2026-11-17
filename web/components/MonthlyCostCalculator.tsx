@@ -6,6 +6,7 @@ import Term from "@/components/Term";
 import { type Currency, DEFAULT_CURRENCY, getConversionNote } from "@/config/currency";
 import { DEFAULT_COST_CONFIG } from "@/config/costs";
 import { calculateMonthlyCosts } from "@/lib/costs";
+import { rentScenarios } from "@/lib/rentScenarios";
 import { formatAedWithConverted, pct, roomsLabel } from "@/lib/format";
 import type { Summary } from "@/lib/queries";
 import { SOURCES } from "@/lib/sources";
@@ -56,7 +57,7 @@ export default function MonthlyCostCalculator({
     return s.trim() === "" || !Number.isFinite(n) ? undefined : n;
   };
   const priceNum = num(price);
-  const res = calculateMonthlyCosts({
+  const costInputs = {
     purchasePrice: priceNum ?? null,
     downPaymentPct: num(downPct),
     mortgageRatePct: num(rate),
@@ -68,7 +69,9 @@ export default function MonthlyCostCalculator({
     maintenancePsf: num(maint),
     vacancyPct: num(vacancy),
     annualRent: row?.rent_median_12m ?? null,
-  });
+  };
+  const res = calculateMonthlyCosts(costInputs);
+  const scenarios = rentScenarios(costInputs);
   const money = (n: number | null | undefined) => formatAedWithConverted(n, currency);
   const conversionNote = getConversionNote(currency);
   const rentNote = row?.rent_level ? RENT_NOTE[row.rent_level] : undefined;
@@ -160,6 +163,28 @@ export default function MonthlyCostCalculator({
               ? <>Median {roomsLabel(row.rooms).toLowerCase()} rent {money(row.rent_median_12m)} a year, less service charge, divided by the price. {rentNote}</>
               : "No recent rent contracts for this bedroom type, so no yield."}
           </p>
+
+          {scenarios && (
+            <details className="mt-3 text-sm">
+              <summary className="cursor-pointer font-medium">What if the rent is lower?</summary>
+              <div className="mt-2 overflow-x-auto">
+                <table className="w-full whitespace-nowrap text-sm tabular-nums [&_td]:pe-3 [&_th]:pe-3">
+                  <thead className="text-xs text-[var(--muted)]">
+                    <tr className="border-b border-[var(--border)]"><th className="py-1 text-start font-medium">Rent</th><th className="py-1 text-end font-medium"><Term id="gross-yield">Gross yield</Term></th><th className="py-1 text-end font-medium">Net yield</th><th className="py-1 text-end font-medium">Cash left a year</th><th className="py-1 text-end font-medium">Cash on cash</th></tr>
+                  </thead>
+                  <tbody>
+                    {scenarios.map((r) => (
+                      <tr key={r.label} className="border-b border-[var(--border)]">
+                        <td className="py-1.5">{r.label}</td><td className="py-1.5 text-end">{pct(r.grossYield)}</td><td className="py-1.5 text-end">{pct(r.netYield)}</td>
+                        <td className="py-1.5 text-end">{money(r.annualCashFlow)}</td><td className="py-1.5 text-end">{pct(r.cashOnCash)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="mt-1 text-xs text-[var(--muted)]">Gross yield is rent over price. Net yield also takes off empty time, service charge and upkeep. Cash on cash is the yearly cash left after mortgage payments, over the cash needed to buy. Only the rent changes between rows; every cost is your assumption. A what-if, not a forecast.</p>
+            </details>
+          )}
 
           <details className="mt-3 text-sm">
             <summary className="cursor-pointer font-medium">Cash needed to buy</summary>
