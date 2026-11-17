@@ -169,6 +169,26 @@ def test_odd_records_are_set_aside_and_cleared_on_rerun(conn):
         assert split == total and towers >= 3
 
 
+def test_rents_starting_after_the_file_date_are_set_aside(conn):
+    from dpi.metrics import outliers
+
+    with conn.transaction(force_rollback=True), conn.cursor() as cur:
+        cur.execute("select max(source_date) from rent_contracts")
+        cut = cur.fetchone()[0]
+        cur.execute("select community_id, project_id from rent_contracts where project_id is not null limit 1")
+        community, project = cur.fetchone()
+        for ref, offset in (("soon", 20), ("far", 400), ("year2034", 2900)):
+            cur.execute("""insert into rent_contracts (source, source_ref, source_date, community_id, project_id, start_date,
+                             annual_rent, size_sqft, rooms) values ('test', %s, %s, %s, %s, %s + %s, 80000, 700, 1)""",
+                        (ref, cut, community, project, cut, offset))
+        rep = outliers.flag(cur)
+        cur.execute("select source_ref, excluded from rent_contracts where source in ('test') and source_ref in ('soon','far','year2034')")
+        got = dict(cur.fetchall())
+        assert got["soon"] != outliers.FUTURE_RULE
+        assert got["far"] == outliers.FUTURE_RULE and got["year2034"] == outliers.FUTURE_RULE
+        assert rep.future_rents >= 2
+
+
 def test_more_towers_placed_and_approximate_positions_rebuilt(conn):
     from dpi.matching import osm
 

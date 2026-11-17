@@ -51,6 +51,10 @@ importer never reads them). It empties those tables on the target first, so it c
    pipeline/.venv/bin/dpi push-public            # --communities 392,681,346 --years 10 by default
    ```
 
+More communities later, without emptying the hosted tables: `dpi push-public --add --communities ... --dry-run`
+first, then without `--dry-run`; after `dpi compute-metrics`, `dpi push-public --summaries-only` refreshes only
+the figure tables. See `docs/push-remaining-communities.md`.
+
 ## Hand-checking a launch area (M7)
 
 1. Open `/community/392` (then 681, 346) and go down the building list.

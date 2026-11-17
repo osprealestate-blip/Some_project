@@ -78,6 +78,9 @@ def main(argv: list[str] | None = None) -> int:
     pp.add_argument("--add", action="store_true",
                     help="only add sales and rents for --communities; nothing is emptied. Per community the old "
                          "rows are replaced, so a re-run after an interruption is safe")
+    pp.add_argument("--summaries-only", action="store_true",
+                    help="replace only building_summary, community_summary and community_metrics on the target "
+                         "(run after compute-metrics); nothing else is touched or emptied")
     pp.add_argument("--dry-run", action="store_true", help="with --add: print row counts and the size estimate only")
     pp.add_argument("--force-size", action="store_true", help="with --add: run even above 90%% of 500 MB")
     hl = sub.add_parser("hosted-login",
@@ -236,6 +239,10 @@ def main(argv: list[str] | None = None) -> int:
         if not target_url:
             raise SystemExit(f"{args.target_env} is not set.")
         codes = [c.strip() for c in args.communities.split(",") if c.strip()]
+        if args.summaries_only:
+            with connect() as src, psycopg.connect(target_url) as dst:
+                print(push_public.run_summaries(src, dst))
+            return 0
         if args.add:
             with connect() as src, psycopg.connect(target_url) as dst:
                 print(push_public.run_add(src, dst, codes, args.years, args.rent_years or args.years,

@@ -104,3 +104,25 @@ def test_rematch_updates_only_resolvable_areas():
     conn = _FakeConn(["MARSA DUBAI", "Nowhere"])
     assert rematch_communities(conn, resolver()) == {"transactions": 10, "rent_contracts": 10}
     assert conn.cur.updates == [("transactions", (1, "MARSA DUBAI")), ("rent_contracts", (1, "MARSA DUBAI"))]
+
+
+def test_future_cutoff_is_the_file_date_plus_31_days():
+    from dpi.importers.dld import exclusion
+
+    file_day = date(2026, 11, 2)
+    args = ("rent", 500, 60000)
+    assert exclusion(*args, date(2026, 12, 2), file_day) is None            # 30 days after: still allowed
+    assert exclusion(*args, date(2026, 12, 4), file_day) == "future_date"   # 32 days after
+    assert exclusion(*args, date(2028, 3, 1), file_day) == "future_date"
+    assert exclusion(*args, date(2034, 1, 1), file_day) == "future_date"
+
+
+def test_default_cutoff_ignores_the_day_the_import_runs(tmp_path):
+    # No `today` given: the file's own date (2 Nov 2026) is the cut-off, not the wall clock.
+    f = tmp_path / "r.csv"
+    src = (FIX / "rent_sample.csv").read_text(encoding="utf-8").splitlines()
+    f.write_text("\n".join(src), encoding="utf-8")
+    rep = Report()
+    with open(f, encoding="utf-8") as fh:
+        rows = list(parse_rows(fh, "rent", resolver(), date(2000, 1, 1), rep))  # file dated 2000: every real date is "future"
+    assert rows and all(r["excluded"] in ("future_date", "too_small", "price_too_low", "multi_unit") for r in rows)

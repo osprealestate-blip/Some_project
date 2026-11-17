@@ -10,6 +10,9 @@ Rules (also on the About page):
 - Sales (apartments): compared with the median price per sq ft of the same tower in the same year when it has
   5+ counted sales, else with the community in that year. Flagged below 40% or above 250% of the tower median,
   or below 25% or above 400% of the community median (communities mix very different towers).
+- Dates: a sale or rent that starts more than 31 days after the newest DLD file's date (`source_date`) cannot
+  have happened yet, so it is set aside as `future_date` (rent contracts with start dates in 2028 or 2034 are
+  typos). The importer applies the same rule to new files; this run catches rows loaded under the older rule.
 - Rents (with a bedroom count): compared with the median rent for the same bedroom type (4+ grouped) in the
   same project in the same year when there are 5+ contracts, else the community. Flagged below a third or
   above three times that median.
@@ -20,6 +23,8 @@ from dataclasses import dataclass
 
 SALE_RULE = "price_outlier"
 RENT_RULE = "rent_outlier"
+FUTURE_RULE = "future_date"
+FUTURE_TOLERANCE_DAYS = 31  # same as the importer
 MIN_GROUP = 5
 SALE_BAND_TOWER = (0.40, 2.50)
 SALE_BAND_COMMUNITY = (0.25, 4.00)
@@ -75,13 +80,23 @@ update rent_contracts r set excluded = %(rule)s from odd where r.id = odd.id
 """
 
 
+_FUTURE = """
+update {table} set excluded = %(rule)s
+where excluded is null and {col} > (select max(source_date) from {table}) + %(days)s * interval '1 day'
+"""
+
+
 @dataclass
 class OutlierReport:
     sales: int = 0
     rents: int = 0
+    future_sales: int = 0
+    future_rents: int = 0
 
     def render(self) -> str:
-        return f"odd records set aside: {self.sales} sales ({SALE_RULE}), {self.rents} rents ({RENT_RULE})"
+        return (f"odd records set aside: {self.sales} sales ({SALE_RULE}), {self.rents} rents ({RENT_RULE}); "
+                f"newly set aside as {FUTURE_RULE} (start after newest file date + {FUTURE_TOLERANCE_DAYS} days): "
+                f"{self.future_sales} sales, {self.future_rents} rents")
 
 
 def flag(cur) -> OutlierReport:
@@ -89,6 +104,11 @@ def flag(cur) -> OutlierReport:
     rep = OutlierReport()
     cur.execute("update transactions set excluded = null where excluded = %s", (SALE_RULE,))
     cur.execute("update rent_contracts set excluded = null where excluded = %s", (RENT_RULE,))
+    # Before the outlier rules, so impossible dates never feed the medians.
+    cur.execute(_FUTURE.format(table="transactions", col="txn_date"), {"rule": FUTURE_RULE, "days": FUTURE_TOLERANCE_DAYS})
+    rep.future_sales = cur.rowcount
+    cur.execute(_FUTURE.format(table="rent_contracts", col="start_date"), {"rule": FUTURE_RULE, "days": FUTURE_TOLERANCE_DAYS})
+    rep.future_rents = cur.rowcount
     cur.execute(_SALES, {"min": MIN_GROUP, "rule": SALE_RULE, "tlo": SALE_BAND_TOWER[0], "thi": SALE_BAND_TOWER[1],
                          "clo": SALE_BAND_COMMUNITY[0], "chi": SALE_BAND_COMMUNITY[1]})
     rep.sales = cur.rowcount
