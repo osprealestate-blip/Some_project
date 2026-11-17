@@ -17,6 +17,7 @@ import BuildingGallery from "@/components/BuildingGallery";
 import DataBadge from "@/components/DataBadge";
 import SchoolSummary from "@/components/SchoolSummary";
 import AboutNumbers from "@/components/AboutNumbers";
+import ActivityExplainer from "@/components/ActivityExplainer";
 import ComparableSales from "@/components/ComparableSales";
 import RentEvidence from "@/components/RentEvidence";
 import CoverageNotice from "@/components/CoverageNotice";
@@ -29,7 +30,7 @@ import { getServerCurrency } from "@/lib/currency";
 import { hasDatabase } from "@/lib/db";
 import { count, day, formatMoney, formatPsf, formatShortPrice, pct, roomsLabel, sqft } from "@/lib/format";
 import {
-  buildingBySlug, buildingImages, freshnessStamps, buildingSeries, buildingSummaries, communitySummaries, isOffPlanOnly, nearbyPlaces, nearestFacilities, offPlanRentEstimate, schoolRatingCounts,
+  activityPeriods, buildingBySlug, buildingImages, freshnessStamps, buildingSeries, buildingSummaries, communitySummaries, isOffPlanOnly, nearbyPlaces, nearestFacilities, offPlanRentEstimate, schoolRatingCounts,
   recentSales, siblingBuildings,
 } from "@/lib/queries";
 import { buildingVerdict } from "@/lib/verdict";
@@ -73,6 +74,7 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
   ]);
   const all = summaries.find((s) => s.rooms === -1);
   const noRent = all?.rent_median_12m == null && series.rentLevel == null;
+  const periods = await activityPeriods(b.id).catch(() => null);
   const unfinished = await isOffPlanOnly(b.id); // every sale in 24 months was off-plan
   const offPlan = noRent && unfinished;
   const offPlanRents = offPlan ? await offPlanRentEstimate(b) : [];
@@ -205,6 +207,7 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
       </Section>
 
       <Section id="history" title="History" adv>
+        {periods && <div className="mb-4"><ActivityExplainer {...periods} /></div>}
         <div className={`grid gap-6 [&>*]:min-w-0 ${panel ? "" : "lg:grid-cols-2"}`}>
           <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
             <LineChart title="Median sale price per sq ft, by quarter" points={series.sales} unit="psf" countLabel="sales" currency={currency} />
