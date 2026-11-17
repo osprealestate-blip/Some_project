@@ -39,7 +39,7 @@ export async function GET() {
           return { type: "Feature", geometry: JSON.parse(r.footprint), properties };
         }),
       },
-      { headers: { "Cache-Control": "public, max-age=300" } },
+      { headers: { "Cache-Control": "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400" } },
     );
   } catch {
     return NextResponse.json({ type: "FeatureCollection", features: [] }, { status: 500 });
