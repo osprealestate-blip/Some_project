@@ -38,7 +38,7 @@ def main(argv: list[str] | None = None) -> int:
     pb.add_argument("--nominatim", action="store_true",
                     help="look up still-unplaced towers by name in OpenStreetMap's search (1 request a second, cached)")
     pb.add_argument("--nominatim-cache", type=Path, default=Path("data/clean/nominatim_cache.json"))
-    ip = sub.add_parser("import-projects", help="DLD Projects file: developer, status, % completed, dates (off-plan facts)")
+    ip = sub.add_parser("import-projects", help="DLD Projects file: developer, status, %% completed, dates (off-plan facts)")
     ip.add_argument("path", type=Path)
     ip.add_argument("--source-date", type=date.fromisoformat, default=None,
                     help="date of the export (YYYY-MM-DD); read from the file name when left out")
@@ -97,8 +97,6 @@ def main(argv: list[str] | None = None) -> int:
             total, launch = communities.load(conn, args.path)
         print(f"communities: {total} rows, {launch} launch")
     elif args.cmd == "import-dld":
-        from datetime import date
-
         from dpi.db import connect
         from dpi.importers import dld
 
@@ -191,7 +189,6 @@ def main(argv: list[str] | None = None) -> int:
             print(rents.backtest(conn).render())
     elif args.cmd == "load-pois":
         import json
-        from datetime import date
 
         from dpi.db import connect
         from dpi.load import pois
