@@ -17,6 +17,7 @@ import BuildingGallery from "@/components/BuildingGallery";
 import DataBadge from "@/components/DataBadge";
 import SchoolSummary from "@/components/SchoolSummary";
 import AboutNumbers from "@/components/AboutNumbers";
+import BuyChecklist from "@/components/BuyChecklist";
 import ActivityExplainer from "@/components/ActivityExplainer";
 import ComparableSales from "@/components/ComparableSales";
 import RentEvidence from "@/components/RentEvidence";
@@ -270,6 +271,8 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
           </ul>
         </section>
       )}
+
+      <BuyChecklist offPlan={offPlan} sales12m={all?.sale_count_12m ?? 0} rentLevel={noRent ? null : rentLevel ?? null} rentCount={all?.rent_count_12m ?? 0} hasCompletionYear={b.completion_year != null} />
 
       <AboutNumbers periodEnd={periodEnd} saleCount={all?.sale_count_12m} rentCount={all?.rent_count_12m} rentLevel={rentLevel} offPlan={offPlan} />
 
