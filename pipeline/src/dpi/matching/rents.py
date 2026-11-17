@@ -17,6 +17,10 @@ from datetime import date
 TOLERANCE_SQFT = 1  # sizes within +-1 sq ft count as the same layout
 MAX_SIZE_SQFT = 1_000_000  # the rent files hold typos above this, some too big for an integer; never a flat
 MIN_SUPPORT = 6  # sales of that exact layout in that tower before a rent is placed there (backtest: 87% right)
+# When the rent names its project, only that project's towers compete, so fewer sales are enough. Checked on the
+# hosted data (sales since 2025 placed from earlier sales in multi-tower projects): 3 sales -> 95.1% right
+# (1,961 of 2,061), 6 sales -> 96.8% right (1,564 of 1,615). Without a project the stricter MIN_SUPPORT stays.
+MIN_SUPPORT_IN_PROJECT = 3
 
 # Exact sizes per building and bedroom count, from counted apartment sales.
 _FINGERPRINTS = """
@@ -50,7 +54,8 @@ join _fp f on f.community_id = r.community_id and f.rooms = r.rooms and f.k = ca
 where {where} and r.size_sqft > 0 and r.rooms is not null
   and (r.project_id is null or f.project_id = r.project_id {ignore_project})
 group by r.id
-having count(distinct f.building_id) = 1 and sum(f.n) >= {min_support}
+having count(distinct f.building_id) = 1
+  and sum(f.n) >= case when bool_or(r.project_id is null) then {min_support} else {min_support_project} end
 """
 
 
@@ -59,7 +64,7 @@ def estimate(cur) -> int:
     cur.execute("update rent_contracts set building_id = null, building_match = null where building_match = 'size'")
     _fingerprints(cur)
     sql = _UNIQUE_FIT.format(where="r.building_id is null and r.excluded is null", ignore_project="", max_size=MAX_SIZE_SQFT,
-                            min_support=MIN_SUPPORT)
+                            min_support=MIN_SUPPORT, min_support_project=MIN_SUPPORT_IN_PROJECT)
     cur.execute(f"update rent_contracts r set building_id = u.building_id, building_match = 'size' "
                 f"from ({sql}) u where r.id = u.id")
     return cur.rowcount
@@ -125,7 +130,7 @@ def backtest(conn, cutoff: date = date(2025, 1, 1)) -> Backtest:
         # 2. Rents whose tower is known exactly, predicted as if their project were unknown.
         _fingerprints(cur)
         sql = _UNIQUE_FIT.format(where="r.building_match = 'project' and r.excluded is null", ignore_project="or true",
-                                 max_size=MAX_SIZE_SQFT, min_support=MIN_SUPPORT)
+                                 max_size=MAX_SIZE_SQFT, min_support=MIN_SUPPORT, min_support_project=MIN_SUPPORT)
         cur.execute(f"create temp table _pred on commit drop as {sql}")
         cur.execute("""
             select (select count(*) from rent_contracts where building_match = 'project' and excluded is null
