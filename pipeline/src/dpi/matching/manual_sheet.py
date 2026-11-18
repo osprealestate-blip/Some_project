@@ -17,6 +17,8 @@ LNG_RANGE = (54.9, 55.6)
 SHEET = "Towers"
 HEADERS = ["Building ID", "Building name", "Community", "Developer", "Sales (3y)", "Rents (1y)",
            "Latitude", "Longitude", "Notes", "Slug (do not edit)"]
+STATUS_HEADER = "Status"
+STATUSES = ["Ready", "Off plan", "Commercial", "Hotel", "Other"]
 SEED_COLUMNS = ["slug", "lat", "lng", "note"]
 SAME_SPOT_M = 5.0  # two different towers this close are almost surely a copy-paste slip
 
@@ -31,7 +33,9 @@ INSTRUCTIONS = [
     "4. Order matters: Google Maps gives latitude first, then longitude. Dubai latitude is about 24.8 to 25.4. "
     "Dubai longitude is about 54.9 to 55.6. Do not swap them.",
     "5. Skip any tower you cannot identify with confidence. Leave its cells empty. Use Notes for anything worth remembering.",
-    "6. Do not edit, sort away or delete the Building ID and Slug columns. Save the file, then send it back.",
+    "6. If there is a Status column, pick Ready, Off plan, Commercial, Hotel or Other from the dropdown when you know it. "
+    "It is pre-filled only where the database knows the building is commercial or a hotel.",
+    "7. Do not edit, sort away or delete the Building ID and Slug columns. Save the file, then send it back.",
     "",
     "What happens next: the importer checks each row (inside Dubai, latitude and longitude not swapped, no duplicates), "
     "adds the good ones to db/seeds/manual_positions.csv and prints a report of everything it skipped and why.",
@@ -39,8 +43,9 @@ INSTRUCTIONS = [
 ]
 
 
-def write_sheet(rows: list[dict], path: Path) -> None:
-    """rows: id, slug, name, community, developer, sales, rents (busiest first)."""
+def write_sheet(rows: list[dict], path: Path, with_status: bool = False) -> None:
+    """rows: id, slug, name, community, developer, sales, rents (busiest first), and status when with_status.
+    With with_status a Status column (dropdown) follows Rents; it is pre-filled only when a row carries a status."""
     from openpyxl import Workbook
     from openpyxl.formatting.rule import FormulaRule
     from openpyxl.styles import Alignment, Font, PatternFill
@@ -57,33 +62,43 @@ def write_sheet(rows: list[dict], path: Path) -> None:
             c.font = Font(bold=True, size=14)
 
     ws = wb.create_sheet(SHEET)
-    ws.append(HEADERS)
+    heads = HEADERS[:6] + ([STATUS_HEADER] if with_status else []) + HEADERS[6:]
+    ws.append(heads)
     for r in rows:
-        ws.append([r["id"], r["name"], r["community"], r["developer"], r["sales"], r["rents"], None, None, None, r["slug"]])
+        mid = [r.get("status") or None] if with_status else []
+        ws.append([r["id"], r["name"], r["community"], r["developer"], r["sales"], r["rents"], *mid, None, None, None, r["slug"]])
+    L = {h: chr(65 + i) for i, h in enumerate(heads)}  # header -> column letter
     head_fill = PatternFill("solid", fgColor="1F3A5F")
     for c in ws[1]:
         c.font = Font(bold=True, color="FFFFFF")
         c.fill = head_fill
         c.alignment = Alignment(vertical="center", wrap_text=True)
     ws.freeze_panes = "C2"
-    ws.auto_filter.ref = f"A1:{chr(64 + len(HEADERS))}{len(rows) + 1}"
-    for col, w in zip("ABCDEFGHIJ", [11, 38, 26, 26, 11, 11, 16, 16, 34, 34]):
-        ws.column_dimensions[col].width = w
+    ws.auto_filter.ref = f"A1:{chr(64 + len(heads))}{len(rows) + 1}"
+    widths = {"Building ID": 11, "Building name": 38, "Community": 26, "Developer": 26, "Sales (3y)": 11, "Rents (1y)": 11,
+              STATUS_HEADER: 14, "Latitude": 16, "Longitude": 16, "Notes": 34, "Slug (do not edit)": 34}
+    for h, col in L.items():
+        ws.column_dimensions[col].width = widths[h]
     entry = PatternFill("solid", fgColor="FFF8DC")
     last = len(rows) + 1
     for r in range(2, last + 1):
-        for col in "GHI":
-            ws[f"{col}{r}"].fill = entry
-        ws[f"J{r}"].font = Font(color="888888")
+        for h in ("Latitude", "Longitude", "Notes") + ((STATUS_HEADER,) if with_status else ()):
+            ws[f"{L[h]}{r}"].fill = entry
+        ws[f"{L['Slug (do not edit)']}{r}"].font = Font(color="888888")
     # Highlight numbers outside Dubai (and a pasted "lat, long" text is left alone: the importer splits it).
     red = PatternFill("solid", bgColor="FFC7CE")
+    a, o = L["Latitude"], L["Longitude"]
     ws.conditional_formatting.add(
-        f"G2:G{last}", FormulaRule(formula=[f"AND(ISNUMBER(G2),OR(G2<{LAT_RANGE[0]},G2>{LAT_RANGE[1]}))"], fill=red))
+        f"{a}2:{a}{last}", FormulaRule(formula=[f"AND(ISNUMBER({a}2),OR({a}2<{LAT_RANGE[0]},{a}2>{LAT_RANGE[1]}))"], fill=red))
     ws.conditional_formatting.add(
-        f"H2:H{last}", FormulaRule(formula=[f"AND(ISNUMBER(H2),OR(H2<{LNG_RANGE[0]},H2>{LNG_RANGE[1]}))"], fill=red))
+        f"{o}2:{o}{last}", FormulaRule(formula=[f"AND(ISNUMBER({o}2),OR({o}2<{LNG_RANGE[0]},{o}2>{LNG_RANGE[1]}))"], fill=red))
+    if with_status:
+        dv = DataValidation(type="list", formula1='"' + ",".join(STATUSES) + '"', allow_blank=True)
+        ws.add_data_validation(dv)
+        dv.add(f"{L[STATUS_HEADER]}2:{L[STATUS_HEADER]}{last}")
     note = DataValidation(type="textLength", operator="lessThanOrEqual", formula1="200", allow_blank=True)
     ws.add_data_validation(note)
-    note.add(f"I2:I{last}")
+    note.add(f"{L['Notes']}2:{L['Notes']}{last}")
     path.parent.mkdir(parents=True, exist_ok=True)
     wb.save(path)
 
@@ -121,6 +136,46 @@ def parse_pair(lat_cell, lng_cell) -> tuple[float, float] | None:
     return lat, lng
 
 
+def _is_na(v) -> bool:
+    return isinstance(v, str) and bool(re.match(r"\s*(not\s+ava|n/?a\b|unknown|none\b|-+\s*$)", v, re.I))
+
+
+FAR_KM = 5.0
+
+
+def _warn(entries: list[Entry], rep: Report) -> None:
+    """Things that are probably typos but could be right, so a person decides: shared exact latitude or longitude,
+    and two towers of the same community far apart."""
+    for i, a in enumerate(entries):
+        for b in entries[i + 1:]:
+            if a.lng == b.lng or a.lat == b.lat:
+                which = "longitude" if a.lng == b.lng else "latitude"
+                for x, y in ((a, b), (b, a)):
+                    rep.warnings.append((x.row, x.name or x.slug, f"same {which} to 6 decimals as {y.name or y.slug} (row {y.row}); "
+                                                                  "a copy-paste slip is possible"))
+    by_comm: dict[str, list[Entry]] = {}
+    for e in entries:
+        if e.community:
+            by_comm.setdefault(e.community, []).append(e)
+    for comm, es in by_comm.items():
+        if len(es) < 2:
+            continue
+        if len(es) == 2:
+            km = _metres((es[0].lat, es[0].lng), (es[1].lat, es[1].lng)) / 1000
+            far = es if km > FAR_KM else []
+            for x in far:
+                y = es[1] if x is es[0] else es[0]
+                rep.warnings.append((x.row, x.name or x.slug, f"{km:.1f} km from {y.name or y.slug} although both are in {comm}; check it"))
+            continue
+        lats = sorted(e.lat for e in es)
+        lngs = sorted(e.lng for e in es)
+        mid = (lats[len(es) // 2], lngs[len(es) // 2])
+        for e in es:
+            km = _metres((e.lat, e.lng), mid) / 1000
+            if km > FAR_KM:
+                rep.warnings.append((e.row, e.name or e.slug, f"{km:.1f} km from the middle of the other {comm} towers you filled; check it"))
+
+
 def _in(v: float, rng: tuple[float, float]) -> bool:
     return rng[0] <= v <= rng[1]
 
@@ -140,6 +195,7 @@ class Entry:
     lng: float
     note: str = ""
     swapped: bool = False
+    community: str = ""
 
 
 @dataclass
@@ -148,6 +204,8 @@ class Report:
     applied: list[Entry] = field(default_factory=list)
     unchanged: list[str] = field(default_factory=list)
     problems: list[tuple[int, str, str]] = field(default_factory=list)  # (sheet row, building, reason)
+    skipped: list[tuple[int, str, str]] = field(default_factory=list)   # person wrote "not available" etc.
+    warnings: list[tuple[int, str, str]] = field(default_factory=list)  # applied or applicable, but check by eye
 
     def render(self) -> str:
         out = [f"Rows with a position typed in: {self.filled}",
@@ -156,8 +214,14 @@ class Report:
         if fixed:
             out.append(f"  of which latitude and longitude were swapped and fixed: {len(fixed)}")
         out.append(f"Already in manual_positions.csv with the same position: {len(self.unchanged)}")
-        out.append(f"Skipped: {len(self.problems)}")
+        out.append(f"Marked 'not available' by you (left alone): {len(self.skipped)}")
+        for row, who, why in self.skipped:
+            out.append(f"  row {row}: {who}")
+        out.append(f"Rejected: {len(self.problems)}")
         for row, who, why in self.problems:
+            out.append(f"  row {row}: {who}: {why}")
+        out.append(f"Check by eye (not blocked): {len(self.warnings)}")
+        for row, who, why in self.warnings:
             out.append(f"  row {row}: {who}: {why}")
         return "\n".join(out)
 
@@ -172,6 +236,9 @@ def read_sheet(path: Path, fix_swapped: bool = False) -> tuple[list[Entry], Repo
     head = [str(h).strip() if h is not None else "" for h in next(it)]
     try:
         ix = {k: head.index(k) for k in ("Building name", "Latitude", "Longitude", "Notes", "Slug (do not edit)")}
+        for opt in ("Community", STATUS_HEADER):
+            if opt in head:
+                ix[opt] = head.index(opt)
     except ValueError as e:
         raise SystemExit(f"Missing column in {path}: {e}")
     rep = Report()
@@ -181,6 +248,9 @@ def read_sheet(path: Path, fix_swapped: bool = False) -> tuple[list[Entry], Repo
         slug = str(row[ix["Slug (do not edit)"]] or "").strip()
         name = str(row[ix["Building name"]] or "").strip()
         who = name or slug or "(no name)"
+        if _is_na(row[ix["Latitude"]]) or _is_na(row[ix["Longitude"]]):
+            rep.skipped.append((n, who, "not available"))
+            continue
         try:
             pair = parse_pair(row[ix["Latitude"]], row[ix["Longitude"]])
         except ValueError as e:
@@ -206,8 +276,13 @@ def read_sheet(path: Path, fix_swapped: bool = False) -> tuple[list[Entry], Repo
                                          f"(latitude {LAT_RANGE[0]}-{LAT_RANGE[1]}, longitude {LNG_RANGE[0]}-{LNG_RANGE[1]})"))
             continue
         note = str(row[ix["Notes"]] or "").strip()
-        good.append(Entry(n, slug, name, round(lat, 6), round(lng, 6), note, swapped))
-    return _drop_duplicates(good, rep), rep
+        status = str(row[ix[STATUS_HEADER]] or "").strip() if STATUS_HEADER in ix else ""
+        note = "; ".join(x for x in (status, note) if x)
+        comm = str(row[ix["Community"]] or "").strip() if "Community" in ix else ""
+        good.append(Entry(n, slug, name, round(lat, 6), round(lng, 6), note, swapped, comm))
+    kept = _drop_duplicates(good, rep)
+    _warn(kept, rep)
+    return kept, rep
 
 
 def _drop_duplicates(entries: list[Entry], rep: Report) -> list[Entry]:
@@ -268,7 +343,7 @@ def apply(sheet: Path, seed: Path, fix_swapped: bool = False, overwrite: bool = 
         if seed.exists():
             with open(seed, encoding="utf-8-sig", newline="") as fh:
                 lines = [r for r in csv.DictReader(fh) if r.get("slug", "").strip() not in replace]
-        lines += [{"slug": e.slug, "lat": f"{e.lat:.6f}", "lng": f"{e.lng:.6f}", "note": e.note or "placed by hand (sheet)"}
+        lines += [{"slug": e.slug, "lat": f"{e.lat:.6f}", "lng": f"{e.lng:.6f}", "note": "; ".join(x for x in (e.note, "user-supplied") if x)}
                   for e in new]
         seed.parent.mkdir(parents=True, exist_ok=True)
         with open(seed, "w", encoding="utf-8", newline="") as fh:

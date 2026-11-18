@@ -47,9 +47,9 @@ def test_applies_valid_rows_and_formats(tmp_path: Path) -> None:
     assert rep.problems == []
     rows = seed.read_text(encoding="utf-8").splitlines()
     assert rows[0] == "slug,lat,lng,note"
-    assert "tower-1,25.180000,55.260000,next to the mall" in rows
-    assert "tower-2,25.080500,55.140300,placed by hand (sheet)" in rows
-    assert "tower-3,25.190000,55.270000,placed by hand (sheet)" in rows
+    assert "tower-1,25.180000,55.260000,next to the mall; user-supplied" in rows
+    assert "tower-2,25.080500,55.140300,user-supplied" in rows
+    assert "tower-3,25.190000,55.270000,user-supplied" in rows
     assert ms.read_seed(seed)["tower-2"] == (25.0805, 55.1403)  # the placer's own reader accepts it
     from dpi.matching.osm import read_manual
     assert {r["slug"] for r in read_manual(seed)} == {"tower-1", "tower-2", "tower-3"}
@@ -123,3 +123,29 @@ def test_wrong_workbook(tmp_path: Path) -> None:
     Workbook().save(p)
     with pytest.raises(SystemExit):
         ms.read_sheet(p)
+
+
+def test_degree_signs_not_available_and_warnings(tmp_path: Path) -> None:
+    sheet = _sheet(tmp_path, {1: ("25.039082\u00b0 ", "55.19059\u00b0", "offplan"), 2: ("not available", None, None),
+                              3: ("not avaialable", None, None), 4: (25.2, 55.19059, None), 5: (25.05, 55.0, None)})
+    rep = ms.apply(sheet, tmp_path / "seed.csv", dry_run=True)
+    assert [e.slug for e in rep.applied] == ["tower-1", "tower-4", "tower-5"]
+    assert len(rep.skipped) == 2 and rep.problems == []
+    assert any("same longitude" in w[2] for w in rep.warnings)
+    assert any("km from" in w[2] for w in rep.warnings)  # all towers share one community in the fixture
+
+
+def test_status_sheet_roundtrip(tmp_path: Path) -> None:
+    rows = [dict(ROWS[0], status="Commercial"), dict(ROWS[1], status=None)]
+    p = tmp_path / "s.xlsx"
+    ms.write_sheet(rows, p, with_status=True)
+    wb = load_workbook(p)
+    ws = wb[ms.SHEET]
+    heads = [c.value for c in ws[1]]
+    assert heads[6] == "Status" and ws["G2"].value == "Commercial" and ws["G3"].value is None
+    assert [v.formula1 for v in ws.data_validations.dataValidation if v.type == "list"] == ['"Ready,Off plan,Commercial,Hotel,Other"']
+    ws[f"H2"], ws[f"I2"], ws["G3"], ws["H3"], ws["I3"] = 25.2, 55.3, "Off plan", 25.3, 55.4
+    wb.save(p)
+    rep = ms.apply(p, tmp_path / "seed.csv")
+    assert [e.note for e in rep.applied] == ["Commercial", "Off plan"]
+    assert "tower-2,25.300000,55.400000,Off plan; user-supplied" in (tmp_path / "seed.csv").read_text()
