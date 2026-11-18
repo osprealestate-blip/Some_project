@@ -136,6 +136,22 @@ def parse_pair(lat_cell, lng_cell) -> tuple[float, float] | None:
     return lat, lng
 
 
+_SUFFIX = re.compile(r"(?:[\s\-]+(?:tower|building|block|bldg)\b)?[\s\-]+(?:[a-z]|\d{1,3})$")
+
+
+def complex_stem(name: str) -> str:
+    """'Sobha Orbis Tower A' and 'Sobha Orbis Tower B' share the stem 'sobha orbis'; 'Azizi Venice 14-building A' and
+    'Azizi Venice 6 - Building A' share 'azizi venice'. A name with no tower/number suffix is its own stem.
+    A stem of fewer than two words (e.g. 'tower') says nothing, so it is returned empty."""
+    t = re.sub(r"\s+", " ", name.lower().strip())
+    for _ in range(3):
+        n = _SUFFIX.sub("", t).strip(" -")
+        if n == t:
+            break
+        t = n
+    return t if len(t.split()) >= 2 else ""
+
+
 def _is_na(v) -> bool:
     return isinstance(v, str) and bool(re.match(r"\s*(not\s+ava|n/?a\b|unknown|none\b|-+\s*$)", v, re.I))
 
@@ -148,7 +164,7 @@ def _warn(entries: list[Entry], rep: Report) -> None:
     and two towers of the same community far apart."""
     for i, a in enumerate(entries):
         for b in entries[i + 1:]:
-            if a.lng == b.lng or a.lat == b.lat:
+            if (a.lng == b.lng or a.lat == b.lat) and not (a.complex_key and a.complex_key == b.complex_key):
                 which = "longitude" if a.lng == b.lng else "latitude"
                 for x, y in ((a, b), (b, a)):
                     rep.warnings.append((x.row, x.name or x.slug, f"same {which} to 6 decimals as {y.name or y.slug} (row {y.row}); "
@@ -196,6 +212,8 @@ class Entry:
     note: str = ""
     swapped: bool = False
     community: str = ""
+    complex_key: str = ""
+    shared: bool = False  # same spot as another tower of the same complex, on purpose
 
 
 @dataclass
@@ -214,6 +232,9 @@ class Report:
         if fixed:
             out.append(f"  of which latitude and longitude were swapped and fixed: {len(fixed)}")
         out.append(f"Already in manual_positions.csv with the same position: {len(self.unchanged)}")
+        shared = [e for e in self.applied if e.shared]
+        if shared:
+            out.append(f"  of which several towers of one complex share a location (on purpose): {len(shared)}")
         out.append(f"Marked 'not available' by you (left alone): {len(self.skipped)}")
         for row, who, why in self.skipped:
             out.append(f"  row {row}: {who}")
@@ -236,7 +257,7 @@ def read_sheet(path: Path, fix_swapped: bool = False) -> tuple[list[Entry], Repo
     head = [str(h).strip() if h is not None else "" for h in next(it)]
     try:
         ix = {k: head.index(k) for k in ("Building name", "Latitude", "Longitude", "Notes", "Slug (do not edit)")}
-        for opt in ("Community", STATUS_HEADER):
+        for opt in ("Community", STATUS_HEADER, "Complex"):
             if opt in head:
                 ix[opt] = head.index(opt)
     except ValueError as e:
@@ -279,7 +300,10 @@ def read_sheet(path: Path, fix_swapped: bool = False) -> tuple[list[Entry], Repo
         status = str(row[ix[STATUS_HEADER]] or "").strip() if STATUS_HEADER in ix else ""
         note = "; ".join(x for x in (status, note) if x)
         comm = str(row[ix["Community"]] or "").strip() if "Community" in ix else ""
-        good.append(Entry(n, slug, name, round(lat, 6), round(lng, 6), note, swapped, comm))
+        explicit = str(row[ix["Complex"]] or "").strip().lower() if "Complex" in ix else ""
+        stem = complex_stem(name)
+        ckey = f"{explicit}|{comm}" if explicit else (f"{stem}|{comm}" if stem else "")
+        good.append(Entry(n, slug, name, round(lat, 6), round(lng, 6), note, swapped, comm, ckey))
     kept = _drop_duplicates(good, rep)
     _warn(kept, rep)
     return kept, rep
@@ -298,15 +322,18 @@ def _drop_duplicates(entries: list[Entry], rep: Report) -> list[Entry]:
             keep.append(es[0])
             for e in es[1:]:
                 rep.problems.append((e.row, e.name or slug, f"duplicate of row {es[0].row} (same position), ignored"))
-    # different towers at (almost) the same spot
+    # different towers at (almost) the same spot: fine inside one complex, a likely slip between different projects
     bad: set[str] = set()
     for i, a in enumerate(keep):
         for b in keep[i + 1:]:
             if _metres((a.lat, a.lng), (b.lat, b.lng)) < SAME_SPOT_M:
+                if a.complex_key and a.complex_key == b.complex_key:
+                    a.shared = b.shared = True
+                    continue
                 bad.update((a.slug, b.slug))
                 for x, y in ((a, b), (b, a)):
                     rep.problems.append((x.row, x.name or x.slug,
-                                         f"same spot as another tower (row {y.row}, {y.name or y.slug}); neither applied"))
+                                         f"same spot as another tower of a different project (row {y.row}, {y.name or y.slug}); neither applied"))
     return [e for e in keep if e.slug not in bad]
 
 
@@ -343,7 +370,7 @@ def apply(sheet: Path, seed: Path, fix_swapped: bool = False, overwrite: bool = 
         if seed.exists():
             with open(seed, encoding="utf-8-sig", newline="") as fh:
                 lines = [r for r in csv.DictReader(fh) if r.get("slug", "").strip() not in replace]
-        lines += [{"slug": e.slug, "lat": f"{e.lat:.6f}", "lng": f"{e.lng:.6f}", "note": "; ".join(x for x in (e.note, "user-supplied") if x)}
+        lines += [{"slug": e.slug, "lat": f"{e.lat:.6f}", "lng": f"{e.lng:.6f}", "note": "; ".join(x for x in (e.note, "shared complex location" if e.shared else "", "user-supplied") if x)}
                   for e in new]
         seed.parent.mkdir(parents=True, exist_ok=True)
         with open(seed, "w", encoding="utf-8", newline="") as fh:

@@ -149,3 +149,63 @@ def test_status_sheet_roundtrip(tmp_path: Path) -> None:
     rep = ms.apply(p, tmp_path / "seed.csv")
     assert [e.note for e in rep.applied] == ["Commercial", "Off plan"]
     assert "tower-2,25.300000,55.400000,Off plan; user-supplied" in (tmp_path / "seed.csv").read_text()
+
+
+@pytest.mark.parametrize("a,b", [("Sobha Orbis Tower A", "Sobha Orbis Tower B"), ("Samana Barari Views", "Samana Barari Views 2"),
+                                 ("Azizi Venice 14-building A", "Azizi Venice 6 - Building A"), ("Skyhills Residences - 1", "Skyhills Residences - 2"),
+                                 ("Address Residences Zabeel Tower 4", "Address Residences Zabeel Tower 1")])
+def test_complex_stem_groups_towers(a: str, b: str) -> None:
+    assert ms.complex_stem(a) == ms.complex_stem(b) != ""
+
+
+@pytest.mark.parametrize("name", ["Tower 1", "Mag 330", "Montiva", "Binghatti Elite", "310 Riverside Crescent"])
+def test_complex_stem_not_over_eager(name: str) -> None:
+    other = {"310 Riverside Crescent": "330 Riverside Crescent"}.get(name, "Tower 2")
+    assert ms.complex_stem(name) == "" or ms.complex_stem(name) != ms.complex_stem(other)
+
+
+def test_same_complex_may_share_a_spot(tmp_path: Path) -> None:
+    p = tmp_path / "s.xlsx"
+    rows = [{"id": 1, "slug": "orbis-a", "name": "Sobha Orbis Tower A", "community": "Al Hebiah First", "developer": "", "sales": 5, "rents": 0},
+            {"id": 2, "slug": "orbis-b", "name": "Sobha Orbis Tower B", "community": "Al Hebiah First", "developer": "", "sales": 4, "rents": 0},
+            {"id": 3, "slug": "other-x", "name": "Other Place Tower B", "community": "Al Hebiah First", "developer": "", "sales": 3, "rents": 0},
+            {"id": 4, "slug": "third-y", "name": "Third Thing", "community": "Al Hebiah First", "developer": "", "sales": 2, "rents": 0}]
+    ms.write_sheet(rows, p)
+    wb = load_workbook(p)
+    ws = wb[ms.SHEET]
+    for r, (la, ln) in zip(range(2, 6), [(25.048247, 55.246708)] * 3 + [(25.048247, 55.246708)]):
+        ws[f"G{r}"], ws[f"H{r}"] = la, ln
+    wb.save(p)
+    seed = tmp_path / "seed.csv"
+    rep = ms.apply(p, seed)
+    # A and B share a complex: both kept. Other Place and Third Thing are different projects at the same spot as everyone: none kept.
+    assert rep.applied == [] or {e.slug for e in rep.applied} <= {"orbis-a", "orbis-b"}
+    assert sum("different project" in x[2] for x in rep.problems) >= 2
+    ws[f"G4"], ws[f"H4"], ws["G5"], ws["H5"] = 25.1, 55.1, 25.2, 55.2
+    wb.save(p)
+    rep = ms.apply(p, seed)
+    assert {e.slug for e in rep.applied} == {"orbis-a", "orbis-b", "other-x", "third-y"}
+    text = seed.read_text()
+    assert "orbis-a,25.048247,55.246708,shared complex location; user-supplied" in text
+    assert "orbis-b,25.048247,55.246708,shared complex location; user-supplied" in text
+    assert "other-x,25.100000,55.100000,user-supplied" in text
+    assert not any("same longitude" in w[2] and "Orbis" in w[1] for w in rep.warnings)
+
+
+def test_explicit_complex_column(tmp_path: Path) -> None:
+    from openpyxl import Workbook
+    p = tmp_path / "c.xlsx"
+    wb = Workbook()
+    ws = wb.active
+    ws.title = ms.SHEET
+    ws.append(["Building name", "Community", "Complex", "Latitude", "Longitude", "Notes", "Slug (do not edit)"])
+    ws.append(["Alpha", "X", "Park Estate", 25.2, 55.3, None, "alpha"])
+    ws.append(["Beta Residences", "X", "park estate", 25.2, 55.3, None, "beta"])
+    wb.save(p)
+    rep = ms.apply(p, tmp_path / "seed.csv", dry_run=True)
+    assert len(rep.applied) == 2 and rep.problems == [] and all(e.shared for e in rep.applied)
+
+
+def test_ambiguous_text_is_rejected(tmp_path: Path) -> None:
+    rep = ms.apply(_sheet(tmp_path, {1: ("same location as the other", None, None)}), tmp_path / "seed.csv", dry_run=True)
+    assert rep.applied == [] and "cannot read" in rep.problems[0][2]
