@@ -9,6 +9,7 @@ from __future__ import annotations
 import csv
 import math
 import re
+import urllib.parse
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -18,6 +19,7 @@ SHEET = "Towers"
 HEADERS = ["Building ID", "Building name", "Community", "Developer", "Sales (3y)", "Rents (1y)",
            "Latitude", "Longitude", "Notes", "Slug (do not edit)"]
 STATUS_HEADER = "Status"
+LINK_HEADERS = ["Search in Google Maps", "Search in 2GIS"]
 STATUSES = ["Ready", "Off plan", "Commercial", "Hotel", "Other"]
 SEED_COLUMNS = ["slug", "lat", "lng", "note"]
 SAME_SPOT_M = 5.0  # two different towers this close are almost surely a copy-paste slip
@@ -33,7 +35,9 @@ INSTRUCTIONS = [
     "4. Order matters: Google Maps gives latitude first, then longitude. Dubai latitude is about 24.8 to 25.4. "
     "Dubai longitude is about 54.9 to 55.6. Do not swap them.",
     "5. Skip any tower you cannot identify with confidence. Leave its cells empty. Use Notes for anything worth remembering.",
-    "6. If there is a Status column, pick Ready, Off plan, Commercial, Hotel or Other from the dropdown when you know it. "
+    "6. If there are Search in Google Maps / Search in 2GIS columns, click the link to open a search for the tower name, "
+    "community and Dubai. If the tower is not found, search it by hand and use what you find.",
+    "6b. If there is a Status column, pick Ready, Off plan, Commercial, Hotel or Other from the dropdown when you know it. "
     "It is pre-filled only where the database knows the building is commercial or a hotel.",
     "7. Do not edit, sort away or delete the Building ID and Slug columns. Save the file, then send it back.",
     "",
@@ -43,9 +47,10 @@ INSTRUCTIONS = [
 ]
 
 
-def write_sheet(rows: list[dict], path: Path, with_status: bool = False) -> None:
+def write_sheet(rows: list[dict], path: Path, with_status: bool = False, with_links: bool = False) -> None:
     """rows: id, slug, name, community, developer, sales, rents (busiest first), and status when with_status.
-    With with_status a Status column (dropdown) follows Rents; it is pre-filled only when a row carries a status."""
+    With with_links two columns open a Google Maps and a 2GIS search for name + community + Dubai (plain URLs a
+    person clicks; nothing is fetched). With with_status a Status column (dropdown) follows Rents; it is pre-filled only when a row carries a status."""
     from openpyxl import Workbook
     from openpyxl.formatting.rule import FormulaRule
     from openpyxl.styles import Alignment, Font, PatternFill
@@ -62,11 +67,19 @@ def write_sheet(rows: list[dict], path: Path, with_status: bool = False) -> None
             c.font = Font(bold=True, size=14)
 
     ws = wb.create_sheet(SHEET)
-    heads = HEADERS[:6] + ([STATUS_HEADER] if with_status else []) + HEADERS[6:]
+    heads = HEADERS[:6] + ([STATUS_HEADER] if with_status else []) + (LINK_HEADERS if with_links else []) + HEADERS[6:]
     ws.append(heads)
     for r in rows:
         mid = [r.get("status") or None] if with_status else []
+        mid += [None, None] if with_links else []
         ws.append([r["id"], r["name"], r["community"], r["developer"], r["sales"], r["rents"], *mid, None, None, None, r["slug"]])
+        if with_links:
+            q = urllib.parse.quote(f"{r['name']} {r['community']} Dubai".strip())
+            for h, url in ((LINK_HEADERS[0], f"https://www.google.com/maps/search/?api=1&query={q}"),
+                           (LINK_HEADERS[1], f"https://2gis.ae/dubai/search/{q}")):
+                c = ws.cell(row=ws.max_row, column=heads.index(h) + 1, value=h.replace("Search in ", ""))
+                c.hyperlink = url
+                c.font = Font(color="0563C1", underline="single")
     L = {h: chr(65 + i) for i, h in enumerate(heads)}  # header -> column letter
     head_fill = PatternFill("solid", fgColor="1F3A5F")
     for c in ws[1]:
@@ -76,7 +89,7 @@ def write_sheet(rows: list[dict], path: Path, with_status: bool = False) -> None
     ws.freeze_panes = "C2"
     ws.auto_filter.ref = f"A1:{chr(64 + len(heads))}{len(rows) + 1}"
     widths = {"Building ID": 11, "Building name": 38, "Community": 26, "Developer": 26, "Sales (3y)": 11, "Rents (1y)": 11,
-              STATUS_HEADER: 14, "Latitude": 16, "Longitude": 16, "Notes": 34, "Slug (do not edit)": 34}
+              STATUS_HEADER: 14, "Search in Google Maps": 20, "Search in 2GIS": 16, "Latitude": 16, "Longitude": 16, "Notes": 34, "Slug (do not edit)": 34}
     for h, col in L.items():
         ws.column_dimensions[col].width = widths[h]
     entry = PatternFill("solid", fgColor="FFF8DC")

@@ -209,3 +209,18 @@ def test_explicit_complex_column(tmp_path: Path) -> None:
 def test_ambiguous_text_is_rejected(tmp_path: Path) -> None:
     rep = ms.apply(_sheet(tmp_path, {1: ("same location as the other", None, None)}), tmp_path / "seed.csv", dry_run=True)
     assert rep.applied == [] and "cannot read" in rep.problems[0][2]
+
+
+def test_link_columns(tmp_path: Path) -> None:
+    rows = [dict(ROWS[0], name="Sobha Orbis Tower A", community="Al Hebiah First", status=None)]
+    p = tmp_path / "s.xlsx"
+    ms.write_sheet(rows, p, with_status=True, with_links=True)
+    ws = load_workbook(p)[ms.SHEET]
+    heads = [c.value for c in ws[1]]
+    assert heads[7:9] == ["Search in Google Maps", "Search in 2GIS"] and heads[-1] == "Slug (do not edit)"
+    g, d = ws.cell(2, 8).hyperlink.target, ws.cell(2, 9).hyperlink.target
+    assert g == "https://www.google.com/maps/search/?api=1&query=Sobha%20Orbis%20Tower%20A%20Al%20Hebiah%20First%20Dubai"
+    assert d == "https://2gis.ae/dubai/search/Sobha%20Orbis%20Tower%20A%20Al%20Hebiah%20First%20Dubai"
+    ws["J2"], ws["K2"] = 25.05, 55.24  # Latitude, Longitude follow the links
+    ws.parent.save(p)
+    assert ms.apply(p, tmp_path / "seed.csv", dry_run=True).applied[0].slug == "tower-1"
