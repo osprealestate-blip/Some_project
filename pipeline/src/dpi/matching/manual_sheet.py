@@ -172,9 +172,18 @@ def _is_na(v) -> bool:
 FAR_KM = 5.0
 
 
+def _decimals(v: float) -> int:
+    t = f"{v:.6f}".rstrip("0")
+    return len(t.split(".")[1]) if "." in t else 0
+
+
 def _warn(entries: list[Entry], rep: Report) -> None:
     """Things that are probably typos but could be right, so a person decides: shared exact latitude or longitude,
     and two towers of the same community far apart."""
+    for e in entries:
+        if _decimals(e.lat) <= 3 and _decimals(e.lng) <= 3:
+            rep.warnings.append((e.row, e.name or e.slug, f"({e.lat}, {e.lng}) has only 3 decimals or fewer, so it is only "
+                                                          "accurate to about 100 m; check it"))
     for i, a in enumerate(entries):
         for b in entries[i + 1:]:
             if (a.lng == b.lng or a.lat == b.lat) and not (a.complex_key and a.complex_key == b.complex_key):
@@ -335,18 +344,38 @@ def _drop_duplicates(entries: list[Entry], rep: Report) -> list[Entry]:
             keep.append(es[0])
             for e in es[1:]:
                 rep.problems.append((e.row, e.name or slug, f"duplicate of row {es[0].row} (same position), ignored"))
-    # different towers at (almost) the same spot: fine inside one complex, a likely slip between different projects
+    # Towers at (almost) the same spot are grouped. Fine inside one complex; a group mixing different projects is
+    # most likely an area point pasted for many towers, so none of it is applied (one report line per tower).
+    parent = list(range(len(keep)))
+
+    def find(i: int) -> int:
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    for i, a_ in enumerate(keep):
+        for j in range(i + 1, len(keep)):
+            if _metres((a_.lat, a_.lng), (keep[j].lat, keep[j].lng)) < SAME_SPOT_M:
+                parent[find(i)] = find(j)
+    groups: dict[int, list[Entry]] = {}
+    for i, e in enumerate(keep):
+        groups.setdefault(find(i), []).append(e)
     bad: set[str] = set()
-    for i, a in enumerate(keep):
-        for b in keep[i + 1:]:
-            if _metres((a.lat, a.lng), (b.lat, b.lng)) < SAME_SPOT_M:
-                if a.complex_key and a.complex_key == b.complex_key:
-                    a.shared = b.shared = True
-                    continue
-                bad.update((a.slug, b.slug))
-                for x, y in ((a, b), (b, a)):
-                    rep.problems.append((x.row, x.name or x.slug,
-                                         f"same spot as another tower of a different project (row {y.row}, {y.name or y.slug}); neither applied"))
+    for g in groups.values():
+        if len(g) < 2:
+            continue
+        keys = {e.complex_key or e.slug for e in g}
+        if len(keys) == 1 and g[0].complex_key:
+            for e in g:
+                e.shared = True
+            continue
+        for e in g:
+            bad.add(e.slug)
+            others = len(g) - 1
+            rep.problems.append((e.row, e.name or e.slug,
+                                 f"same spot as {others} other tower{'s' if others != 1 else ''} "
+                                 f"({len(keys)} different projects at ({e.lat}, {e.lng})); looks like one area point, none applied"))
     return [e for e in keep if e.slug not in bad]
 
 

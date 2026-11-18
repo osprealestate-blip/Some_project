@@ -180,7 +180,7 @@ def test_same_complex_may_share_a_spot(tmp_path: Path) -> None:
     rep = ms.apply(p, seed)
     # A and B share a complex: both kept. Other Place and Third Thing are different projects at the same spot as everyone: none kept.
     assert rep.applied == [] or {e.slug for e in rep.applied} <= {"orbis-a", "orbis-b"}
-    assert sum("different project" in x[2] for x in rep.problems) >= 2
+    assert sum("area point" in x[2] for x in rep.problems) >= 2
     ws[f"G4"], ws[f"H4"], ws["G5"], ws["H5"] = 25.1, 55.1, 25.2, 55.2
     wb.save(p)
     rep = ms.apply(p, seed)
