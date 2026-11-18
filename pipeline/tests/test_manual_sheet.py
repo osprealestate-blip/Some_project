@@ -224,3 +224,10 @@ def test_link_columns(tmp_path: Path) -> None:
     ws["J2"], ws["K2"] = 25.05, 55.24  # Latitude, Longitude follow the links
     ws.parent.save(p)
     assert ms.apply(p, tmp_path / "seed.csv", dry_run=True).applied[0].slug == "tower-1"
+
+
+def test_auto_generated_coordinates_are_refused(tmp_path: Path) -> None:
+    p = _sheet(tmp_path, {1: (25.2, 55.27, "[geocode] unique jittered around community centroid"), 2: (25.21, 55.28, "")})
+    entries, rep = ms.read_sheet(p)
+    assert [e.slug for e in entries] == ["tower-2"]
+    assert any("auto-generated" in why for _, _, why in rep.problems)

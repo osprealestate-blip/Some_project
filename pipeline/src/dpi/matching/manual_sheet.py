@@ -22,6 +22,8 @@ STATUS_HEADER = "Status"
 LINK_HEADERS = ["Search in Google Maps", "Search in 2GIS"]
 STATUSES = ["Ready", "Off plan", "Commercial", "Hotel", "Other"]
 SEED_COLUMNS = ["slug", "lat", "lng", "note"]
+# Notes that mark filler coordinates (a geocoder or a script, not a person looking at the map).
+AUTO_NOTE_TAGS = ("[geocode]", "jittered", "centroid")
 SAME_SPOT_M = 5.0  # two different towers this close are almost surely a copy-paste slip
 
 INSTRUCTIONS = [
@@ -319,6 +321,10 @@ def read_sheet(path: Path, fix_swapped: bool = False) -> tuple[list[Entry], Repo
                                          f"(latitude {LAT_RANGE[0]}-{LAT_RANGE[1]}, longitude {LNG_RANGE[0]}-{LNG_RANGE[1]})"))
             continue
         note = str(row[ix["Notes"]] or "").strip()
+        if any(t in note.lower() for t in AUTO_NOTE_TAGS):
+            rep.problems.append((n, who, f"note says the coordinates were auto-generated ({note[:60]!r}); "
+                                         "only hand-placed positions are accepted"))
+            continue
         status = str(row[ix[STATUS_HEADER]] or "").strip() if STATUS_HEADER in ix else ""
         note = "; ".join(x for x in (status, note) if x)
         comm = str(row[ix["Community"]] or "").strip() if "Community" in ix else ""
