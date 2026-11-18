@@ -66,6 +66,13 @@ def main(argv: list[str] | None = None) -> int:
     lp.add_argument("--source-date", required=True, help="YYYY-MM-DD of the files (or of the OSM download)")
     sub.add_parser("rematch-communities",
                    help="Fill the community for stored sales and rents that have none, using the latest name fixes")
+    ip = sub.add_parser("import-positions",
+                        help="Read a filled-in towers Excel sheet and add the valid positions to db/seeds/manual_positions.csv")
+    ip.add_argument("sheet", type=Path)
+    ip.add_argument("--seed", type=Path, default=Path("db/seeds/manual_positions.csv"))
+    ip.add_argument("--fix-swapped", action="store_true", help="apply rows whose latitude and longitude are swapped, the right way round")
+    ip.add_argument("--overwrite", action="store_true", help="replace a position already in the seed file")
+    ip.add_argument("--dry-run", action="store_true", help="check and report only, write nothing")
     pp = sub.add_parser("push-public", help="Copy the public tables the web app reads to a hosted database")
     pp.add_argument("--target-env", default="HOSTED_DATABASE_URL",
                     help="environment variable holding the target connection string (never pass it on the command line)")
@@ -251,6 +258,16 @@ def main(argv: list[str] | None = None) -> int:
         with connect() as src, psycopg.connect(target_url) as dst:
             print(push_public.run(src, dst, codes, args.years, rent_years=args.rent_years,
                                    all_structure=args.all_structure).render())
+    elif args.cmd == "import-positions":
+        from dpi.matching import manual_sheet
+
+        rep = manual_sheet.apply(args.sheet, args.seed, fix_swapped=args.fix_swapped, overwrite=args.overwrite,
+                                 dry_run=args.dry_run)
+        print(rep.render())
+        if rep.applied and not args.dry_run:
+            print(f"Written to {args.seed}. Next: dpi place-buildings ... (manual positions always win), then push-public.")
+        elif args.dry_run:
+            print("Dry run: nothing written.")
     elif args.cmd == "hosted-login":
         _hosted_login(args)
     return 0
