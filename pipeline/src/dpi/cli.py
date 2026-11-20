@@ -38,6 +38,11 @@ def main(argv: list[str] | None = None) -> int:
     pb.add_argument("--nominatim", action="store_true",
                     help="look up still-unplaced towers by name in OpenStreetMap's search (1 request a second, cached)")
     pb.add_argument("--nominatim-cache", type=Path, default=Path("data/clean/nominatim_cache.json"))
+    ur = sub.add_parser("unplaced-report", help="List buildings with no map position, busiest first, to place by hand (read-only)")
+    ur.add_argument("--out", type=Path, default=Path("data/clean/unplaced_buildings.csv"))
+    ur.add_argument("--limit", type=int, default=300)
+    ur.add_argument("--communities", default="", help="DM codes (comma separated, empty = all)")
+    sub.add_parser("rent-gaps", help="Why rent contracts have no building, in groups (read-only)")
     ip = sub.add_parser("import-projects", help="DLD Projects file: developer, status, %% completed, dates (off-plan facts)")
     ip.add_argument("path", type=Path)
     ip.add_argument("--source-date", type=date.fromisoformat, default=None,
@@ -149,6 +154,21 @@ def main(argv: list[str] | None = None) -> int:
                     args.save_osm.write_text(json.dumps(data), encoding="utf-8")
             lookup = osm.Nominatim(args.nominatim_cache) if args.nominatim else None
             print(osm.place(conn, data, args.manual, codes, lookup).render())
+    elif args.cmd == "unplaced-report":
+        from dpi.db import connect
+        from dpi.matching import gaps
+
+        codes = [c.strip() for c in args.communities.split(",") if c.strip()]
+        with connect() as conn:
+            rows = gaps.unplaced_rows(conn, args.limit, codes or None)
+        gaps.write_unplaced(rows, args.out)
+        print(f"{len(rows)} unplaced buildings written to {args.out} (fill lat and lng, then copy rows into db/seeds/manual_positions.csv)")
+    elif args.cmd == "rent-gaps":
+        from dpi.db import connect
+        from dpi.matching import gaps
+
+        with connect() as conn:
+            print(gaps.render_rent_gaps(gaps.rent_gap_rows(conn)))
     elif args.cmd == "import-projects":
         from dpi.db import connect
         from dpi.importers import projects
