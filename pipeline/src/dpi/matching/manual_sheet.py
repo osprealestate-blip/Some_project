@@ -237,6 +237,7 @@ class Entry:
     swapped: bool = False
     community: str = ""
     complex_key: str = ""
+    geocoded: bool = False  # position came from a geocoder, labelled approximate
     shared: bool = False  # same spot as another tower of the same complex, on purpose
 
 
@@ -271,7 +272,7 @@ class Report:
         return "\n".join(out)
 
 
-def read_sheet(path: Path, fix_swapped: bool = False) -> tuple[list[Entry], Report]:
+def read_sheet(path: Path, fix_swapped: bool = False, allow_geocoded: bool = False) -> tuple[list[Entry], Report]:
     from openpyxl import load_workbook
 
     wb = load_workbook(path, read_only=True, data_only=True)
@@ -321,17 +322,24 @@ def read_sheet(path: Path, fix_swapped: bool = False) -> tuple[list[Entry], Repo
                                          f"(latitude {LAT_RANGE[0]}-{LAT_RANGE[1]}, longitude {LNG_RANGE[0]}-{LNG_RANGE[1]})"))
             continue
         note = str(row[ix["Notes"]] or "").strip()
-        if any(t in note.lower() for t in AUTO_NOTE_TAGS):
+        auto = any(t in note.lower() for t in AUTO_NOTE_TAGS)
+        geocoded = auto and allow_geocoded and "[geocode]" in note.lower() and not any(
+            t in note.lower() for t in AUTO_NOTE_TAGS if t != "[geocode]")
+        if auto and not geocoded:
             rep.problems.append((n, who, f"note says the coordinates were auto-generated ({note[:60]!r}); "
                                          "only hand-placed positions are accepted"))
             continue
+        if geocoded:
+            note = "geocoded, approximate (not hand-placed)" + ("; area-level only" if "area-level" in note.lower() else "")
         status = str(row[ix[STATUS_HEADER]] or "").strip() if STATUS_HEADER in ix else ""
         note = "; ".join(x for x in (status, note) if x)
         comm = str(row[ix["Community"]] or "").strip() if "Community" in ix else ""
         explicit = str(row[ix["Complex"]] or "").strip().lower() if "Complex" in ix else ""
         stem = complex_stem(name)
         ckey = f"{explicit}|{comm}" if explicit else (f"{stem}|{comm}" if stem else "")
-        good.append(Entry(n, slug, name, round(lat, 6), round(lng, 6), note, swapped, comm, ckey))
+        if geocoded and "area-level" in str(row[ix["Notes"]] or "").lower():
+            rep.warnings.append((n, who, "area-level geocode: the building was not found individually, so this is an area guess"))
+        good.append(Entry(n, slug, name, round(lat, 6), round(lng, 6), note, swapped, comm, ckey, geocoded=geocoded))
     kept = _drop_duplicates(good, rep)
     _warn(kept, rep)
     return kept, rep
@@ -398,8 +406,9 @@ def read_seed(path: Path) -> dict[str, tuple[float, float]]:
         return out
 
 
-def apply(sheet: Path, seed: Path, fix_swapped: bool = False, overwrite: bool = False, dry_run: bool = False) -> Report:
-    entries, rep = read_sheet(sheet, fix_swapped)
+def apply(sheet: Path, seed: Path, fix_swapped: bool = False, overwrite: bool = False, dry_run: bool = False,
+          allow_geocoded: bool = False) -> Report:
+    entries, rep = read_sheet(sheet, fix_swapped, allow_geocoded)
     existing = read_seed(seed)
     new: list[Entry] = []
     for e in entries:
@@ -418,7 +427,7 @@ def apply(sheet: Path, seed: Path, fix_swapped: bool = False, overwrite: bool = 
         if seed.exists():
             with open(seed, encoding="utf-8-sig", newline="") as fh:
                 lines = [r for r in csv.DictReader(fh) if r.get("slug", "").strip() not in replace]
-        lines += [{"slug": e.slug, "lat": f"{e.lat:.6f}", "lng": f"{e.lng:.6f}", "note": "; ".join(x for x in (e.note, "shared complex location" if e.shared else "", "user-supplied") if x)}
+        lines += [{"slug": e.slug, "lat": f"{e.lat:.6f}", "lng": f"{e.lng:.6f}", "note": "; ".join(x for x in (e.note, "shared complex location" if e.shared else "", "geocoded" if e.geocoded else "user-supplied") if x)}
                   for e in new]
         seed.parent.mkdir(parents=True, exist_ok=True)
         with open(seed, "w", encoding="utf-8", newline="") as fh:

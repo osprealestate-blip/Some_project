@@ -231,3 +231,16 @@ def test_auto_generated_coordinates_are_refused(tmp_path: Path) -> None:
     entries, rep = ms.read_sheet(p)
     assert [e.slug for e in entries] == ["tower-2"]
     assert any("auto-generated" in why for _, _, why in rep.problems)
+
+
+def test_allow_geocoded_is_opt_in_and_labels_rows(tmp_path: Path) -> None:
+    p = _sheet(tmp_path, {1: (25.2, 55.27, "[geocode] Google Maps resolution: z17 high-confidence"),
+                          2: (25.21, 55.28, "[geocode] jittered around community centroid"),
+                          3: (25.22, 55.29, "[geocode] z12 medium-confidence (area-level)")})
+    assert ms.apply(p, tmp_path / "off.csv", dry_run=True).applied == []  # default: all refused
+    seed = tmp_path / "on.csv"
+    rep = ms.apply(p, seed, allow_geocoded=True)
+    assert sorted(e.slug for e in rep.applied) == ["tower-1", "tower-3"]  # jittered/centroid still refused
+    assert any(why for r, _, why in rep.warnings if "area-level" in why)
+    text = seed.read_text(encoding="utf-8")
+    assert "geocoded" in text and "user-supplied" not in text
