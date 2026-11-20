@@ -3,7 +3,7 @@
 ## Where a building was a dead end on the map
 - Priced buildings (rows in `buildings` with a position and confidence >= 0.5) were already clickable, even with 0 sales.
 - The grey buildings (OpenStreetMap outlines in the OpenFreeMap tiles, `base-3d` layer) only lifted on hover; a click did nothing.
-- Hosted DB, 2026-11-20 (Supabase query): 4,913 buildings, 1,553 with a position (osm 1,082, project 222, manual 106, site 93, search 50), 3,360 with none. The unplaced hold 254,754 of the 440,585 sales on record. Those have pages (search, community lists) but no dot; no position is invented for them. The 3,388 hand positions from PR 106 are not in this database yet (only 106 `manual` rows): push them to hosted if they were meant to be live.
+- Hosted DB, 2026-11-20 (Supabase query): 4,913 buildings, 1,553 with a position (osm 1,082, project 222, manual 106, site 93, search 50), 3,360 with none. The unplaced hold 254,754 of the 440,585 sales on record. Those have pages (search, community lists) but no dot; no position is invented for them. The hosted DB holds 106 `manual` positions, which matches `db/seeds/manual_positions.csv` (107 lines with header). PR 107 deleted the other 3,282 rows from PR 106's sheet because they were auto-generated points jittered around community centres, not real tower positions; nothing was lost by a wrong DATABASE_URL.
 
 ## What changed
 Clicking a grey building opens a small "no data yet" card: community (point-in-polygon on Dubai Municipality boundaries via `/api/place`), position, OSM height when the tile has one, a plain statement that no sales or rent records are linked, and a link to the community page. No figures are shown. Arabic first pass added.
@@ -15,3 +15,6 @@ Clicking a grey building opens a small "no data yet" card: community (point-in-p
 - Economic indicators of real estate activities 2007-2024: output, employees, value added in unclear units. Skip.
 - Housing units JSON (2023): older version of the housing units file. Skip.
 None of these can fill a building's figures.
+
+## Added to /market-context
+Housing units (flats, villas 2019-2025) and buildings under construction (Mar and Sep 2026) as Dubai-wide sections with source, date and unit caveats.

@@ -109,3 +109,18 @@ export const UNIT_SALES_BY_QUARTER = {
  "2019 Q3": 7294,
  "2019 Q4": 9031
 } as const;
+
+// Dubai Pulse downloads dated 2026-11-20. Dubai-wide totals only, no building or area key.
+// Housing units by type: Flat and Villa, urban and rural added together, end of each year as published.
+export const HOUSING_UNITS = {
+  Flat: { "2019": 542604, "2020": 581166, "2021": 617896, "2022": 639029, "2023": 661452, "2024": 712675, "2025": 802274 },
+  Villa: { "2019": 120545, "2020": 130535, "2021": 138526, "2022": 144560, "2023": 152039, "2024": 162928, "2025": 175285 },
+} as Record<"Flat" | "Villa", Record<string, number>>;
+export const HOUSING_UNITS_ALL_TYPES_2025 = 1001545;
+
+// Buildings under construction by type, monthly. Latest month in the file and the one before it.
+// The file has no April, May or June 2026 rows; they are not filled in.
+export const UNDER_CONSTRUCTION = {
+  "2026-09": { "Residential apartments": 101668, "Investment villas": 12195, "Private villas": 8631, "Multi-storey buildings": 1378, "Stores": 6272, "Industrial buildings": 933, "Public buildings": 1058 },
+  "2026-03": { "Residential apartments": 89632, "Investment villas": 12164, "Private villas": 9451, "Multi-storey buildings": 1279, "Stores": 5924, "Industrial buildings": 820, "Public buildings": 1035 },
+} as Record<string, Record<string, number>>;
