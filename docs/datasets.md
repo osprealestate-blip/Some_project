@@ -129,3 +129,11 @@ parties or transaction references are shown, and nothing links a row to a person
 `notspecified` in this repo's notes, so **reuse terms for showing transaction rows are not confirmed**. Owner action: confirm the wording on
 the Dubai Pulse dataset page (or ask DLD) before launch. If the answer is no, the list can be cut to aggregates without other changes
 (`ComparableSales` in `web/components`).
+
+## Rent placement by unit size (2026-11-17)
+
+Rents that name a project but not the tower are placed by exact unit size against that project's towers. Because only the
+project's own towers compete, 3 earlier sales of the layout are now enough (was 6). Rents with no project still need 6.
+Checked on the hosted data (apartment sales since 2025 placed from earlier sales, multi-tower projects only): 3 sales gives
+the right tower 95.1% of the time (1,961 of 2,061 picks) against 96.8% at 6 sales (1,564 of 1,615), and places about 28% more.
+Placed rents stay marked `size` and shown as "Estimated from unit size". Re-run `dpi match-buildings` to apply.
