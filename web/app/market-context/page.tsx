@@ -1,6 +1,6 @@
 import SourceNote from "@/components/SourceNote";
 import { count } from "@/lib/format";
-import { FDI_REAL_ESTATE, SECTOR, UNIT_SALES_BY_QUARTER } from "@/lib/marketContextData";
+import { FDI_REAL_ESTATE, HOUSING_UNITS, HOUSING_UNITS_ALL_TYPES_2025, SECTOR, UNDER_CONSTRUCTION, UNIT_SALES_BY_QUARTER } from "@/lib/marketContextData";
 import { indexToFirst, quarterGaps } from "@/lib/marketContext";
 import { pageMetadata } from "@/lib/seo";
 
@@ -77,6 +77,40 @@ export default function Page() {
         <h2 className="text-base font-semibold">Units sold, by quarter</h2>
         <Bars rows={quarters} />
         <SourceNote source={SRC} date="2026-10-26">Real Estate Transactions, Emirate of Dubai: number of unit sales per quarter, 2019 onward.{gaps.length ? ` ${gaps.join(", ")} ${gaps.length === 1 ? "is" : "are"} missing from the file and left blank.` : ""} Our own building and area figures are counted from DLD transaction records and will not match these totals exactly.</SourceNote>
+      </section>
+
+      <section className="mt-8">
+        <h2 className="text-base font-semibold">Homes in Dubai, all of Dubai (not per building)</h2>
+        <table className="mt-2 w-full text-sm tabular-nums">
+          <thead><tr className="text-[var(--muted)]"><th scope="col" className="py-1 text-start font-normal">Year</th><th scope="col" className="py-1 text-end font-normal">Flats</th><th scope="col" className="py-1 text-end font-normal">Villas</th></tr></thead>
+          <tbody>
+            {Object.keys(HOUSING_UNITS.Flat).map((y) => (
+              <tr key={y} className="border-b border-[var(--border)]">
+                <th scope="row" className="py-1 text-start font-normal text-[var(--muted)]">{y}</th>
+                <td className="py-1 text-end">{HOUSING_UNITS.Flat[y].toLocaleString("en-US")}</td>
+                <td className="py-1 text-end">{HOUSING_UNITS.Villa[y].toLocaleString("en-US")}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <SourceNote source={SRC} date="2026-11-20">Housing Units by Type and Urban/Rural, 2011 to 2025, urban and rural added together. Counts of housing units, whatever their use; they are not homes for sale or rent. All housing types together came to {count(HOUSING_UNITS_ALL_TYPES_2025)} in 2025 (flats and villas are about 98% of that). Dubai-wide only: the file has no building or area breakdown.</SourceNote>
+      </section>
+
+      <section className="mt-8">
+        <h2 className="text-base font-semibold">Under construction, all of Dubai (not per building)</h2>
+        <table className="mt-2 w-full text-sm tabular-nums">
+          <thead><tr className="text-[var(--muted)]"><th scope="col" className="py-1 text-start font-normal">Type</th><th scope="col" className="py-1 text-end font-normal">Mar 2026</th><th scope="col" className="py-1 text-end font-normal">Sep 2026</th></tr></thead>
+          <tbody>
+            {Object.keys(UNDER_CONSTRUCTION["2026-09"]).map((k) => (
+              <tr key={k} className="border-b border-[var(--border)]">
+                <th scope="row" className="py-1 text-start font-normal text-[var(--muted)]">{k}</th>
+                <td className="py-1 text-end">{UNDER_CONSTRUCTION["2026-03"][k].toLocaleString("en-US")}</td>
+                <td className="py-1 text-end">{UNDER_CONSTRUCTION["2026-09"][k].toLocaleString("en-US")}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <SourceNote source={SRC} date="2026-11-20">Buildings Under Construction by Type, monthly. Shown as published: the file titles the apartment and store rows as numbers (of units) and the others as buildings, and does not say more, so do not add the rows together. April to June 2026 are not in the file and are left out. This says how much is being built across Dubai, not when any building will finish.</SourceNote>
       </section>
 
       <section className="mt-8 rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4 text-sm">
