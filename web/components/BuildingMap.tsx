@@ -32,6 +32,8 @@ import { fetchRoute } from "@/lib/routeClient";
 import { labelPoint, routeLines, type RouteMap } from "@/lib/routeLines";
 import { minutesLabel, type RouteMode } from "@/lib/routing";
 import MapControls from "./MapControls";
+import PlaceCard, { type Place } from "./PlaceCard";
+import { tileHeight } from "@/lib/place";
 
 type Props = {
   focus?: { lng: number; lat: number } | null;
@@ -195,6 +197,8 @@ export default function BuildingMap({
 
   const [noWebgl, setNoWebgl] = useState(false);
   const [raw, setRaw] = useState<Collection | null>(null);
+  // A grey (OpenStreetMap) building the visitor clicked: not in our database, so it opens the "no data yet" card.
+  const [place, setPlace] = useState<Place | null>(null);
   const [settings, setSettings] = useState<MapSettings>(DEFAULT_SETTINGS);
   const [theme, setTheme] = useState<ThemeId>(DEFAULT_THEME);
   const [hidden, setHidden] = useState<number[]>([]);
@@ -482,7 +486,7 @@ export default function BuildingMap({
         if (leaveTimer) { clearTimeout(leaveTimer); leaveTimer = null; }
         setHover(null);
         popup.remove();
-        map.getCanvas().style.cursor = "";
+        map.getCanvas().style.cursor = "pointer"; // opens the "no data yet" card
         setBaseHover(base, e.lngLat);
         return;
       }
@@ -501,8 +505,20 @@ export default function BuildingMap({
           setHover(null);
           popup.remove();
         }
+        // A grey building: no record in our database, but it still opens a card that says so.
+        const base = map.getLayer("base-3d") ? map.queryRenderedFeatures(e.point, { layers: ["base-3d"] })[0] : undefined;
+        if (base) {
+          setBaseHover(base, e.lngLat);
+          setPlace({ lng: e.lngLat.lng, lat: e.lngLat.lat, height: tileHeight(base.properties?.render_height) });
+          if (cardMode && new URLSearchParams(window.location.search).has("building")) {
+            panelPushed.current = false;
+            setHiddenFor(null);
+            window.history.replaceState(null, "", mapUrl(null));
+          }
+        } else setPlace(null);
         return;
       }
+      setPlace(null);
       if (cardMode) {
         popup.remove();
         select(p.slug, true);
@@ -982,6 +998,7 @@ export default function BuildingMap({
           onCompare={toggleCompare}
         />
       )}
+      {place && !selected && <PlaceCard place={place} onClose={() => setPlace(null)} />}
       {cardMode && selected && cardHidden && (
         <div role="status" className="dpi-glass dpi-enter fixed inset-x-3 bottom-[5.5rem] z-40 mx-auto flex max-w-md items-center gap-2 rounded-2xl p-2 ps-3 md:bottom-28 md:max-w-sm">
           <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-full bg-cyan-400 ring-2 ring-cyan-200" />

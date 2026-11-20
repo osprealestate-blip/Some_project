@@ -490,4 +490,13 @@ export const AR: Record<string, string> = {
   "Data confidence": "موثوقية البيانات",
   "Year on year": "على أساس سنوي",
   "Data confidence counts how many sales the figures rest on: Strong is 15 or more in 12 months, Limited is 5 to 14, Low is under 5. It measures how much data there is, not the quality of the building.": "تعتمد موثوقية البيانات على عدد عمليات البيع التي تستند إليها الأرقام: قوية إذا بلغت 15 أو أكثر خلال 12 شهراً، ومحدودة من 5 إلى 14، ومنخفضة إذا كانت أقل من 5. وهي تقيس كمية البيانات وليس جودة المبنى.",
+  // building with no data yet (first pass, for native review)
+  "Building with no data yet": "مبنى بلا بيانات بعد",
+  "Dubai": "دبي",
+  "No data yet": "لا توجد بيانات بعد",
+  "We have no sales or rent records linked to this building yet, so we show no prices, yields or rents for it.": "ليس لدينا بعد سجلات بيع أو إيجار مرتبطة بهذا المبنى، لذلك لا نعرض له أسعاراً أو عوائد أو إيجارات.",
+  "Position": "الموقع",
+  "Height (approx.)": "الارتفاع (تقريبي)",
+  "Outline: OpenStreetMap contributors via OpenFreeMap. Community: Dubai Municipality.": "المخطط: مساهمو OpenStreetMap عبر OpenFreeMap. المنطقة: بلدية دبي.",
+  "See buildings in {area}": "اطّلع على المباني في {area}",
 };
