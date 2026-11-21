@@ -23,6 +23,10 @@ import ActivityExplainer from "@/components/ActivityExplainer";
 import ComparableSales from "@/components/ComparableSales";
 import RentEvidence from "@/components/RentEvidence";
 import CoverageNotice from "@/components/CoverageNotice";
+import EvidenceProfile from "@/components/EvidenceProfile";
+import RentVsBuy from "@/components/RentVsBuy";
+import { evidenceProfile } from "@/lib/evidenceProfile";
+import { rentVsBuyRows } from "@/lib/rentVsBuy";
 import { EMPTY_TEXT, evidenceState } from "@/lib/coverage";
 import Stat from "@/components/Stat";
 import ViewToggle from "@/components/ViewToggle";
@@ -34,7 +38,7 @@ import { hasDatabase } from "@/lib/db";
 import { count, day, formatMoney, formatPsf, formatShortPrice, pct, roomsLabel, sqft } from "@/lib/format";
 import {
   activityPeriods, buildingBySlug, buildingImages, freshnessStamps, buildingSeries, buildingSummaries, communitySummaries, isOffPlanOnly, nearbyPlaces, nearestFacilities, offPlanRentEstimate, schoolRatingCounts,
-  recentSales, siblingBuildings,
+  recentSales, salePriceRanges, siblingBuildings,
 } from "@/lib/queries";
 import { buildingVerdict } from "@/lib/verdict";
 import { SOURCES } from "@/lib/sources";
@@ -96,6 +100,12 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
     communityPsf: communityAll?.sale_median_psf_12m ?? null, communityYield: communityAll?.gross_yield ?? null,
   });
   const placed = b.lng != null && b.lat != null;
+  const evidence = evidenceProfile({
+    sales12m: all?.sale_count_12m, rent: { rentLevel, rentCount: all?.rent_count_12m, communityRent: communityAll?.rent_median_12m ?? null, offPlan },
+    geomSource: placed ? b.geom_source : null, floors: b.floors, unitCount: b.unit_count, completionYear: b.completion_year,
+  });
+  const priceRanges = await salePriceRanges(b.id, periodEnd).catch(() => []);
+  const rentVsBuy = rentVsBuyRows(summaries, priceRanges);
 
   return (
     <main className={panel ? "p-4 sm:p-5" : "mx-auto max-w-5xl p-4 sm:p-6"}>
@@ -142,6 +152,8 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
         </p>
       )}
       {noRent && !offPlan && (all?.sale_count_12m ?? 0) > 0 && <p className="mt-2 text-sm text-[var(--muted)]">{EMPTY_TEXT.noRents}</p>}
+      <RentVsBuy rows={rentVsBuy} periodEnd={periodEnd} currency={currency} />
+      <EvidenceProfile rows={evidence} />
       <ViewToggle />
 
       <section aria-label="Key figures" className={`mt-4 grid grid-cols-2 gap-3 ${panel ? "" : "sm:grid-cols-3 lg:grid-cols-5"}`}>

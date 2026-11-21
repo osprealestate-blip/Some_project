@@ -217,6 +217,21 @@ export async function buildingSummaries(id: number): Promise<Summary[]> {
   );
 }
 
+/** Middle half of sale prices (25th to 75th percentile) per bedroom type, same 12-month window and filters as building_summary. */
+export async function salePriceRanges(buildingId: number, periodEnd: string | null): Promise<{ rooms: number; count: number; p25: number; p75: number }[]> {
+  if (!periodEnd) return [];
+  return query<{ rooms: number; count: number; p25: number; p75: number }>(
+    `select least(rooms, 4)::int as rooms, count(*)::int as count,
+            percentile_cont(0.25) within group (order by price)::float8 as p25,
+            percentile_cont(0.75) within group (order by price)::float8 as p75
+       from transactions
+      where building_id = $1 and excluded is null and property_type = any($2) and rooms is not null
+        and txn_date > $3::date - interval '12 months' and txn_date <= $3::date
+      group by 1 order by 1`,
+    [buildingId, SALE_TYPES, periodEnd.slice(0, 10)],
+  );
+}
+
 /** Quarterly median price per sq ft (sales) and annual rent (building rents, or the project's when the
  *  building has none), last eight years. Quarters with fewer than 3 deals are left empty. */
 export type RentLevel = "building" | "estimated" | "project" | null;
