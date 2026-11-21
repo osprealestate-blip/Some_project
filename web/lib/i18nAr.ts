@@ -28,7 +28,6 @@ export const AR: Record<string, string> = {
   "data as of": "البيانات حتى",
   "Understand Dubai, building by building": "افهم دبي، مبنىً بمبنى",
   "Registered Dubai Land Department sales and rent contracts for each building. Not asking prices, not listings. Free, no login.": "مبيعات وعقود إيجار مسجلة لدى دائرة الأراضي والأملاك في دبي لكل مبنى. ليست أسعار طلب ولا إعلانات. مجاني وبدون تسجيل.",
-  "Search a building or area": "ابحث عن مبنى أو منطقة",
   "Where do you want to start?": "من أين تريد أن تبدأ؟",
   "Explore buildings": "استكشف المباني",
   "See every building on a 3D map, coloured by price, rent or yield.": "شاهد كل مبنى على خريطة ثلاثية الأبعاد، ملوّنة حسب السعر أو الإيجار أو العائد.",
