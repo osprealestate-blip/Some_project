@@ -71,6 +71,12 @@ def main(argv: list[str] | None = None) -> int:
     lp.add_argument("--source-date", required=True, help="YYYY-MM-DD of the files (or of the OSM download)")
     sub.add_parser("rematch-communities",
                    help="Fill the community for stored sales and rents that have none, using the latest name fixes")
+    gc = sub.add_parser("group-complexes", help="Group sibling towers (A/B, 1/2) into complexes, set master communities, "
+                                                "and propose shared approximate positions. Dry run unless --apply / --write-positions")
+    gc.add_argument("--apply", action="store_true", help="save complex_key, complex_name and master_community on buildings")
+    gc.add_argument("--write-positions", action="store_true", help="append approximate rows for unplaced siblings to the seed file")
+    gc.add_argument("--worklist", type=Path, help="write a CSV of complexes with no pin yet: one lookup places every tower in it")
+    gc.add_argument("--seed", type=Path, default=Path("db/seeds/manual_positions.csv"))
     ip = sub.add_parser("import-positions",
                         help="Read a filled-in towers Excel sheet and add the valid positions to db/seeds/manual_positions.csv")
     ip.add_argument("sheet", type=Path)
@@ -281,6 +287,11 @@ def main(argv: list[str] | None = None) -> int:
         with connect() as src, psycopg.connect(target_url) as dst:
             print(push_public.run(src, dst, codes, args.years, rent_years=args.rent_years,
                                    all_structure=args.all_structure).render())
+    elif args.cmd == "group-complexes":
+        from dpi.db import connect
+        from dpi.matching import complexes
+        with connect() as conn:
+            print(complexes.run(conn, args.seed, args.apply, args.write_positions, args.worklist))
     elif args.cmd == "import-positions":
         from dpi.matching import manual_sheet
 
