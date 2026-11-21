@@ -1,6 +1,5 @@
 import Link from "next/link";
 import SearchBox from "@/components/SearchBox";
-import HeroSearch from "@/components/HeroSearch";
 import HeroSkyline from "@/components/HeroSkyline";
 import { compactCount, homeStats } from "@/lib/homeStats";
 import { getT } from "@/lib/lang";
@@ -27,10 +26,10 @@ async function loadCards() {
 type EntryCard = { title: string; href: string; blurb: string };
 
 const ENTRY_CARDS: EntryCard[] = [
-  { title: "I'm buying", href: "/buy", blurb: "Compare an asking price with recent sales in the same building." },
-  { title: "I'm investing", href: "/invest", blurb: "Yields, price per sq ft and trends by area and building." },
-  { title: "I own a property", href: "/own", blurb: "Look up your building and check the rent increase at renewal." },
-  { title: "I'm renting", href: "/rent", blurb: "Fair rents by building and bedrooms, and the legal renewal limit." },
+  { title: "Explore buildings", href: "/map", blurb: "See every building on a 3D map, coloured by price, rent or yield." },
+  { title: "Compare", href: "/compare", blurb: "Put up to four buildings side by side on registered prices and rents." },
+  { title: "Understand investment", href: "/invest", blurb: "Yields, price per sq ft and trends by area and building." },
+  { title: "Research a building", href: "/tools/fair-price", blurb: "Check an asking price against recent registered sales in the same building." },
 ];
 
 export default async function Home() {
@@ -55,9 +54,9 @@ export default async function Home() {
           <div className="relative px-4 pb-6 pt-10 sm:px-8 sm:pt-14 lg:pb-8">
             <div className="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-end">
               <div>
-                <h1 className="max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl lg:text-5xl">{t("Find your Dubai home, building by building")}</h1>
+                <h1 className="max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl lg:text-5xl">{t("Understand Dubai, building by building")}</h1>
                 <p className="mt-3 max-w-xl text-base text-white/90 sm:text-lg">
-                  {t("Real Dubai Land Department sales and rents for each building, so you can see what a home is worth before you call anyone. Free, no login.")}
+                  {t("Registered Dubai Land Department sales and rent contracts for each building. Not asking prices, not listings. Free, no login.")}
                 </p>
               </div>
               {statItems ? (
@@ -70,13 +69,10 @@ export default async function Home() {
                 <p className="max-w-56 rounded-lg bg-white/15 px-3 py-2 text-sm">{t("Limited information available. Figures appear once the data is loaded.")}</p>
               )}
             </div>
-            <div className="mt-8"><HeroSearch /></div>
-            <div className="mt-4 text-[var(--fg)]">
-              <SearchBox placeholder={t("Or search a building or area, e.g. “Princess Tower”")} autoFocus={false} />
+            <div className="mt-8 text-[var(--fg)]">
+              <SearchBox placeholder={t("Search a building or area")} autoFocus={false} />
             </div>
-            <p className="mt-4 flex flex-wrap gap-x-5 gap-y-1 text-sm font-medium">
-              <Link href="/map" className="inline-flex min-h-11 items-center underline underline-offset-4">{t("Explore the 3D map")}</Link>
-              <Link href="/tools/fair-price" className="inline-flex min-h-11 items-center underline underline-offset-4">{t("Check a price")}</Link>
+            <p className="mt-2 text-sm font-medium">
               <Link href="/off-plan" className="inline-flex min-h-11 items-center underline underline-offset-4">{t("Off-plan projects")}</Link>
             </p>
           </div>
@@ -85,7 +81,7 @@ export default async function Home() {
       </section>
 
       <section className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
-        <h2 className="mb-4 text-base font-semibold">{t("What do you want to do?")}</h2>
+        <h2 className="mb-4 text-base font-semibold">{t("Where do you want to start?")}</h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {ENTRY_CARDS.map((card) => (
             <Link key={card.title} href={card.href} className="flex min-h-24 flex-col justify-center rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4 transition-colors hover:border-[var(--accent)] focus-visible:border-[var(--accent)]">
