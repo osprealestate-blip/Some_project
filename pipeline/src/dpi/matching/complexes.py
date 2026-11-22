@@ -114,9 +114,16 @@ def run(conn, seed, apply: bool, write_positions: bool, worklist=None) -> str:
     from pathlib import Path
 
     cur = conn.execute(
-        "select b.slug, b.name_en, c.dm_code, st_y(st_centroid(b.geom)), st_x(st_centroid(b.geom)) "
+        "select b.slug, b.name_en, c.dm_code, st_y(st_centroid(b.geom)), st_x(st_centroid(b.geom)), c.name_official "
         "from buildings b left join communities c on c.id = b.community_id")
-    rows = [Row(s, n or "", d, la, ln) for s, n, d, la, ln in cur.fetchall()]
+    fetched = cur.fetchall()
+    rows = [Row(s, n or "", d, la, ln) for s, n, d, la, ln, _ in fetched]
+    from collections import Counter
+
+    from dpi.matching.master_communities import assign
+    masters = {s: assign(n or "", d, area) for s, n, d, _la, _ln, area in fetched}
+    per = Counter(m for m, _ in masters.values())
+    basis = Counter(b for _, b in masters.values())
     groups, far = detect(rows)
     seed = Path(seed)
     have = {r["slug"] for r in csv.DictReader(l for l in seed.open(encoding="utf-8") if not l.startswith("#"))} if seed.exists() else set()
@@ -127,9 +134,11 @@ def run(conn, seed, apply: bool, write_positions: bool, worklist=None) -> str:
              f"Same name stem but far apart (kept separate): {len(far)} groups, {sum(len(g.members) for g in far)} buildings",
              f"Unplaced siblings that can share a complex position: {len(props)}",
              f"Complexes with no placed tower yet (need one pin): {sum(1 for g in groups if not g.placed)}"]
-    for code, name in MASTER_COMMUNITIES.items():
-        mem = [r for r in rows if r.dm_code == code]
-        lines.append(f"{name}: {len(mem)} buildings, {sum(r.placed for r in mem)} placed, "
+    lines.append(f"Master communities: {len(per) - (None in per)} named; basis name {basis['name']}, area {basis['area']}, "
+                 f"official-area fallback {basis['official']}, unassigned {per[None]}")
+    for name, n in per.most_common():
+        mem = [r for r in rows if masters[r.slug][0] == name]
+        lines.append(f"  {name or '(none)'}: {n} buildings, {sum(r.placed for r in mem)} placed, "
                      f"{sum(1 for r in mem if r.slug in inside)} in complexes")
     if worklist:
         todo = sorted((g for g in groups if not g.placed), key=lambda g: (-len(g.members), g.key))
@@ -142,9 +151,8 @@ def run(conn, seed, apply: bool, write_positions: bool, worklist=None) -> str:
     if apply:
         with conn.transaction():
             conn.execute("update buildings set complex_key = null, complex_name = null")
-            conn.execute("update buildings b set master_community = case c.dm_code when '392' then 'Dubai Marina' "
-                         "when '681' then 'Jumeirah Village Circle (JVC)' when '346' then 'Business Bay' end "
-                         "from communities c where c.id = b.community_id")
+            conn.cursor().executemany("update buildings set master_community = %s, master_community_source = %s where slug = %s",
+                                      [(m, b, slug) for slug, (m, b) in masters.items()])
             for g in groups:
                 conn.execute("update buildings set complex_key = %s, complex_name = %s where slug = any(%s)",
                              (g.key, g.name, [m.slug for m in g.members]))
