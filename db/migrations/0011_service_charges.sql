@@ -18,11 +18,19 @@ create table if not exists building_service_charges (
   source_date    date not null
 );
 alter table building_service_charges enable row level security;
-revoke all on building_service_charges from anon, authenticated;
 
 -- 0008-era public tables that had no row-level security: close them to the public API keys (the web app reads
 -- through its own role, which is unaffected). Already applied to the hosted database on 2026-11-22.
 alter table if exists building_images enable row level security;
 alter table if exists dld_projects enable row level security;
-revoke all on building_images from anon, authenticated;
-revoke all on dld_projects from anon, authenticated;
+
+-- Supabase's public API roles exist only on the hosted database; plain Postgres (local, CI) has none.
+do $$
+declare r text;
+begin
+  foreach r in array array['anon', 'authenticated'] loop
+    if exists (select 1 from pg_roles where rolname = r) then
+      execute format('revoke all on building_service_charges, building_images, dld_projects from %I', r);
+    end if;
+  end loop;
+end $$;
