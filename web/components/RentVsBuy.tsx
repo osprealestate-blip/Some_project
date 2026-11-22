@@ -3,10 +3,11 @@ import SourceNote from "@/components/SourceNote";
 import type { Currency } from "@/config/currency";
 import { formatAedWithConverted, formatShortPrice, roomsLabel } from "@/lib/format";
 import { ASSUMPTIONS, type RentVsBuyRow } from "@/lib/rentVsBuy";
+import type { ServiceCharge } from "@/lib/serviceCharge";
 import { SOURCES } from "@/lib/sources";
 
 /** Rent beside the cost of owning, per bedroom type. Shows its starting assumptions and takes no side. */
-export default function RentVsBuy({ rows, periodEnd, currency }: { rows: RentVsBuyRow[]; periodEnd: string | null; currency: Currency }) {
+export default function RentVsBuy({ rows, periodEnd, currency, serviceCharge }: { rows: RentVsBuyRow[]; periodEnd: string | null; currency: Currency; serviceCharge?: ServiceCharge }) {
   const money = (n: number | null) => (n == null ? "Not available" : formatAedWithConverted(n, currency));
   const first = rows.find((r) => r.cashUpfront != null);
   return (
@@ -38,14 +39,14 @@ export default function RentVsBuy({ rows, periodEnd, currency }: { rows: RentVsB
             ))}
           </ul>
           <p className="mt-2 text-xs text-[var(--muted)]">
-            * Mortgage plus service charge, at the typical price for the type. Starting assumptions, general and changeable, not facts about this building:{" "}
-            {ASSUMPTIONS.downPaymentPct}% down, {ASSUMPTIONS.mortgageRatePct}% interest, {ASSUMPTIONS.termYears} years, service charge AED {ASSUMPTIONS.serviceChargePsf} per sq ft a year.
+            * Mortgage plus service charge, at the typical price for the type. Starting assumptions, general and changeable:{" "}
+            {ASSUMPTIONS.downPaymentPct}% down, {ASSUMPTIONS.mortgageRatePct}% interest, {ASSUMPTIONS.termYears} years. Service charge: {serviceCharge ? serviceCharge.label : `AED ${ASSUMPTIONS.serviceChargePsf} per sq ft a year, assumed`}.
             {first?.cashUpfront != null && <> Buying also needs cash up front (down payment and fees), about {formatAedWithConverted(first.cashUpfront, currency)} for {roomsLabel(first.rooms).toLowerCase()} here. Utilities, upkeep and price changes are not included.</>}
           </p>
           <p className="mt-1 text-xs text-[var(--muted)]">
             We do not say which is better; that depends on your plans. <Link className="link" href="#ownership-costs">Change the assumptions in the monthly cost calculator</Link>.
           </p>
-          <SourceNote source={`${SOURCES.dldSales}; ${SOURCES.dldRents}`} date={periodEnd} estimate>
+          <SourceNote source={serviceCharge?.kind === "building" ? `${SOURCES.dldSales}; ${SOURCES.dldRents}; ${SOURCES.dldServiceCharges}` : `${SOURCES.dldSales}; ${SOURCES.dldRents}`} date={periodEnd} estimate>
             Rent and price are 12-month medians; the price range is the 25th to 75th percentile of apartment sales in this building.
           </SourceNote>
         </>

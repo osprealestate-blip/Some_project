@@ -1,5 +1,6 @@
 "use client";
 
+import type { ServiceCharge } from "@/lib/serviceCharge";
 import { useState } from "react";
 import SourceNote from "@/components/SourceNote";
 import Term from "@/components/Term";
@@ -23,10 +24,12 @@ export default function MonthlyCostCalculator({
   rows,
   periodEnd,
   currency = DEFAULT_CURRENCY,
+  serviceCharge,
 }: {
   rows: Summary[];
   periodEnd: string | null;
   currency?: Currency;
+  serviceCharge?: ServiceCharge;
 }) {
   const types = rows.filter((r) => r.rooms >= 0 && r.sale_median_price_12m != null);
   const busiest = [...types].sort((a, b) => b.sale_count_12m - a.sale_count_12m)[0];
@@ -38,7 +41,7 @@ export default function MonthlyCostCalculator({
   const [downPct, setDownPct] = useState(String(DEFAULT_COST_CONFIG.downPaymentPct));
   const [rate, setRate] = useState(String(DEFAULT_COST_CONFIG.mortgageRatePct));
   const [term, setTerm] = useState(String(DEFAULT_COST_CONFIG.termYears));
-  const [scPsf, setScPsf] = useState(String(DEFAULT_COST_CONFIG.serviceChargePsf));
+  const [scPsf, setScPsf] = useState(String(serviceCharge?.psf ?? DEFAULT_COST_CONFIG.serviceChargePsf));
   const [agency, setAgency] = useState(String(DEFAULT_COST_CONFIG.agencyFeePct));
   const [maint, setMaint] = useState(String(DEFAULT_COST_CONFIG.maintenancePsf));
   const [vacancy, setVacancy] = useState(String(DEFAULT_COST_CONFIG.vacancyPct));
@@ -122,6 +125,7 @@ export default function MonthlyCostCalculator({
           </label>
           <label className="font-medium"><Term id="service-charge">Service charge</Term> (AED per sq ft a year)
             <input type="number" min={0} step={1} value={scPsf} onChange={(e) => setScPsf(e.target.value)} className={inputCls} />
+            {serviceCharge && <span className="mt-0.5 block text-xs font-normal text-[var(--muted)]">Starts at: {serviceCharge.label}. You can change it.</span>}
           </label>
           <label className="font-medium">Agent fee (% of price)
             <input type="number" min={0} max={10} step={0.5} value={agency} onChange={(e) => setAgency(e.target.value)} className={inputCls} />
@@ -202,8 +206,8 @@ export default function MonthlyCostCalculator({
         <p className="mt-4 text-sm text-[var(--muted)]">Enter a purchase price to see the monthly cost.</p>
       )}
 
-      <SourceNote source={`${SOURCES.dldSales}; ${SOURCES.dldRents}`} date={periodEnd} estimate>
-        Starting price, size and rent are 12-month medians for the bedroom type. Mortgage rate, agent fee, service charge, upkeep, empty time and utilities are general assumptions, not this building&apos;s figures. Utilities are left out of the yield because a tenant normally pays them.{conversionNote ? ` ${conversionNote}` : ""}
+      <SourceNote source={serviceCharge?.kind === "building" ? `${SOURCES.dldSales}; ${SOURCES.dldRents}; ${SOURCES.dldServiceCharges}` : `${SOURCES.dldSales}; ${SOURCES.dldRents}`} date={periodEnd} estimate>
+        Starting price, size and rent are 12-month medians for the bedroom type. Mortgage rate, agent fee, upkeep, empty time and utilities are general assumptions, not this building&apos;s figures.{serviceCharge?.kind === "building" ? " The service charge starts at this building\u2019s filed budget." : " The service charge is an assumption."} Utilities are left out of the yield because a tenant normally pays them.{conversionNote ? ` ${conversionNote}` : ""}
       </SourceNote>
     </div>
   );

@@ -22,6 +22,8 @@ PLAN: list[tuple[str, str]] = [
                         "where %(all_struct)s or c.dm_code = any(%(codes)s))"),
     ("building_summary", "building_id in (select b.id from buildings b join communities c on c.id = b.community_id "
                          "where %(all_struct)s or c.dm_code = any(%(codes)s))"),
+    ("building_service_charges", "complete and building_id in (select b.id from buildings b join communities c on c.id = b.community_id "
+                                 "where %(all_struct)s or c.dm_code = any(%(codes)s))"),
     ("community_summary", "true"),
     ("community_metrics", "true"),
     ("pois", "active"),

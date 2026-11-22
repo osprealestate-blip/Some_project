@@ -36,13 +36,13 @@ export const ASSUMPTIONS = {
 const MIN_SALES = 3;
 const MIN_RENTS = 3;
 
-export function rentVsBuyRows(summaries: Summary[], ranges: PriceRange[]): RentVsBuyRow[] {
+export function rentVsBuyRows(summaries: Summary[], ranges: PriceRange[], serviceChargePsf: number = ASSUMPTIONS.serviceChargePsf): RentVsBuyRow[] {
   return summaries
     .filter((s) => s.rooms >= 0 && s.sale_count_12m >= MIN_SALES && s.sale_median_price_12m != null)
     .map((s) => {
       const range = ranges.find((r) => r.rooms === s.rooms && r.count >= MIN_SALES) ?? null;
       const size = s.sale_median_size_12m ?? null;
-      const c = calculateMonthlyCosts({ purchasePrice: s.sale_median_price_12m, sizeSqft: size, ...ASSUMPTIONS });
+      const c = calculateMonthlyCosts({ purchasePrice: s.sale_median_price_12m, sizeSqft: size, ...ASSUMPTIONS, serviceChargePsf });
       const hasRent = s.rent_median_12m != null && s.rent_count_12m >= MIN_RENTS;
       return {
         rooms: s.rooms,
