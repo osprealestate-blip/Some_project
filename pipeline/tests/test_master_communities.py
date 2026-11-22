@@ -24,3 +24,7 @@ def test_discovery_gardens_clusters_only_in_jabal_ali_first() -> None:
     assert mc.assign("Med 64", "591", "Jabal Ali First") == ("Discovery Gardens", "name")
     assert mc.assign("Con 109", "591", "Jabal Ali First")[0] == "Discovery Gardens"
     assert mc.assign("Con 109", "681", "Al Barsha South Fourth")[0] == "Jumeirah Village Circle (JVC)"
+
+
+def test_azizi_venice_is_one_community() -> None:
+    assert mc.assign("Azizi Venice 14-building A", "521", "Madinat Al Mataar") == ("Azizi Venice", "name")
