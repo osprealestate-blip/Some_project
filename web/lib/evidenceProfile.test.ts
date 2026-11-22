@@ -10,6 +10,11 @@ describe("evidenceProfile", () => {
     expect([r.sales.level, r.rents.level, r.position.level, r.characteristics.level]).toEqual(["Available", "Available", "Available", "Available"]);
     expect(r.service.level).toBe("Not available");
   });
+  it("marks service charges Available, with year and source, when a filed figure is matched", () => {
+    const r = by({ ...base, serviceCharge: { psf: 17.9, year: 2026 } });
+    expect(r.service.level).toBe("Available");
+    expect(r.service.detail).toMatch(/17\.90.*2026.*DLD/);
+  });
   it("says Not available where data is missing", () => {
     const r = by({ sales12m: 0, rent: { rentLevel: null, rentCount: 0 }, geomSource: null, floors: null, unitCount: null, completionYear: null });
     expect([r.sales.level, r.rents.level, r.position.level, r.characteristics.level]).toEqual(Array(4).fill("Not available"));

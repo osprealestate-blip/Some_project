@@ -47,6 +47,11 @@ def main(argv: list[str] | None = None) -> int:
     ip.add_argument("path", type=Path)
     ip.add_argument("--source-date", type=date.fromisoformat, default=None,
                     help="date of the export (YYYY-MM-DD); read from the file name when left out")
+    sc = sub.add_parser("import-service-charges", help="DLD Owners Association Service Charges CSV (Data Dubai) onto buildings")
+    sc.add_argument("path", type=Path)
+    sc.add_argument("--source-date", required=True, help="YYYY-MM-DD, the date the file was downloaded")
+    sc.add_argument("--review-out", type=Path, default=Path("data/clean/service_charge_review.csv"))
+    sc.add_argument("--reviewed", type=Path, default=None, help="the review CSV with accept = y on the rows to link")
     im = sub.add_parser("import-images", help="Bulk building photos from a manifest CSV (stored hidden until approved)")
     im.add_argument("manifest", type=Path)
     im.add_argument("--approve", action="store_true", help="make the imported images visible straight away")
@@ -191,6 +196,13 @@ def main(argv: list[str] | None = None) -> int:
                     raise SystemExit("Give --source-date YYYY-MM-DD (no date in the file name).")
                 sd = date.fromisoformat(m.group(1))
             print(projects.import_pipeline(conn, args.path, _resolver(conn), sd))
+    elif args.cmd == "import-service-charges":
+        from dpi.db import connect
+        from dpi.importers import service_charges
+
+        with connect() as conn:
+            print(service_charges.import_file(conn, args.path, args.source_date, args.review_out, args.reviewed).render())
+        print(f"Review candidates: {args.review_out} (put y in the accept column, then re-run with --reviewed {args.review_out})")
     elif args.cmd == "import-images":
         from dpi import images
         from dpi.db import connect

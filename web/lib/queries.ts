@@ -1,5 +1,6 @@
 /** Every SQL query the web app runs. Only market fields are selected; public tables hold no personal data.
  *  Dates come back as ISO text, counts as integers. Figures follow the rules in pipeline/src/dpi/metrics. */
+import type { BuildingServiceCharge, CommunityServiceCharge } from "./serviceCharge";
 import type { SchoolRatingRow } from "@/lib/schoolSummary";
 import { one, query } from "./db";
 import type { Comparables } from "./fairPrice";
@@ -726,4 +727,29 @@ export async function matchCoverage(communityId: number): Promise<MatchCoverage 
            and r.start_date > (select max(start_date) from rent_contracts) - interval '12 months') as rents_linked`,
     [communityId, SALE_TYPES, MIN_CONFIDENCE],
   );
+}
+
+
+// ---------- service charges ----------
+
+/** The building's filed service charge (DLD Owners Association Service Charges), only when the figure is complete and current. */
+export async function buildingServiceCharge(buildingId: number): Promise<BuildingServiceCharge | null> {
+  const rows = await query<BuildingServiceCharge>(
+    `select psf_total::float8 as psf, ac_psf::float8 as ac_psf, budget_year, assoc_name, source_date::text as source_date
+       from building_service_charges where building_id = $1 and complete`,
+    [buildingId],
+  );
+  return rows[0] ?? null;
+}
+
+/** Median filed charge across buildings in one community, for buildings with no figure of their own. */
+export async function communityServiceCharge(communityId: number | null): Promise<CommunityServiceCharge | null> {
+  if (communityId == null) return null;
+  const rows = await query<CommunityServiceCharge>(
+    `select percentile_cont(0.5) within group (order by s.psf_total)::float8 as median, count(*)::int as n
+       from building_service_charges s join buildings b on b.id = s.building_id
+      where b.community_id = $1 and s.complete`,
+    [communityId],
+  );
+  return rows[0] && rows[0].n > 0 ? rows[0] : null;
 }

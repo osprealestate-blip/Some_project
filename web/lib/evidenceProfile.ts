@@ -13,6 +13,8 @@ export type EvidenceInput = {
   floors: number | null | undefined;
   unitCount: number | null | undefined;
   completionYear: number | null | undefined;
+  /** The building's filed service charge, when matched and complete. */
+  serviceCharge?: { psf: number; year: number } | null;
 };
 
 /** Positions taken straight from a map source or placed by hand are exact; the rest are borrowed from a neighbour or an area. */
@@ -45,8 +47,11 @@ export function evidenceProfile(i: EvidenceInput): EvidenceRow[] {
     : APPROX_POSITION[src] ? { id: "position", label: "Map position", level: "Partial", detail: `Approximate, taken from ${APPROX_POSITION[src]}.` }
     : { id: "position", label: "Map position", level: "Not available", detail: "Not placed on the map yet." };
 
-  // We hold no building-level service-charge data. Cost figures use a flat, changeable assumption instead.
-  const service: EvidenceRow = { id: "service", label: "Service charges", level: "Not available", detail: "No real figure for this building. Cost figures use an assumed rate you can change." };
+  // Filed budget from DLD where the building is matched to its owners association; otherwise a labelled assumption.
+  const sc = i.serviceCharge;
+  const service: EvidenceRow = sc
+    ? { id: "service", label: "Service charges", level: "Available", detail: `AED ${sc.psf.toFixed(2)} per sq ft a year, ${sc.year} approved budget (DLD).` }
+    : { id: "service", label: "Service charges", level: "Not available", detail: "No filed figure matched to this building. Cost figures use an assumed rate you can change." };
 
   const known = [
     i.floors ? `${i.floors} floors` : null,

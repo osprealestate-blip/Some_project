@@ -16,6 +16,10 @@ describe("rentVsBuyRows", () => {
     expect(r.priceLow).toBe(900_000);
     expect(r.priceHigh).toBe(1_100_000);
   });
+  it("uses the building's own service charge when given", () => {
+    const [r] = rentVsBuyRows([s({})], [], 20);
+    expect(r.monthlyServiceCharge).toBeCloseTo((20 * 700) / 12, 0);
+  });
   it("leaves rent empty without 3 contracts instead of guessing", () => {
     const [r] = rentVsBuyRows([s({ rent_count_12m: 2 })], []);
     expect(r.monthlyRent).toBeNull();

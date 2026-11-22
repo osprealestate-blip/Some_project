@@ -4,6 +4,7 @@ export const DISCLAIMER = "Estimate based on DLD data. Not a valuation or financ
 export const SOURCES = {
   dldSales: "Dubai Land Department sales transactions (Dubai Pulse open data)",
   dldRents: "Dubai Land Department Ejari rent contracts (Dubai Pulse open data)",
+  dldServiceCharges: "Dubai Land Department Owners Association Service Charges (RERA-approved budgets, Data Dubai open data)",
   osm: "© OpenStreetMap contributors (ODbL)",
   khda: "KHDA school directory",
   dha: "DHA Sheryan facility directory",
