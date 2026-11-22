@@ -102,7 +102,10 @@ def main(argv: list[str] | None = None) -> int:
     pp.add_argument("--summaries-only", action="store_true",
                     help="replace only building_summary, community_summary and community_metrics on the target "
                          "(run after compute-metrics); nothing else is touched or emptied")
-    pp.add_argument("--dry-run", action="store_true", help="with --add: print row counts and the size estimate only")
+    pp.add_argument("--buildings-only", action="store_true",
+                    help="update only building positions and complex columns on the target by id (applies "
+                         "migrations 0009 and 0010 there if missing); nothing is emptied, sales and rents untouched")
+    pp.add_argument("--dry-run", action="store_true", help="with --add or --buildings-only: print row counts and the size estimate only")
     pp.add_argument("--force-size", action="store_true", help="with --add: run even above 90%% of 500 MB")
     hl = sub.add_parser("hosted-login",
                         help="Make a hosted-database login whose password stays in pipeline/.env.hosted")
@@ -275,6 +278,10 @@ def main(argv: list[str] | None = None) -> int:
         if not target_url:
             raise SystemExit(f"{args.target_env} is not set.")
         codes = [c.strip() for c in args.communities.split(",") if c.strip()]
+        if args.buildings_only:
+            with connect() as src, psycopg.connect(target_url) as dst:
+                print(push_public.run_buildings(src, dst, dry_run=args.dry_run))
+            return 0
         if args.summaries_only:
             with connect() as src, psycopg.connect(target_url) as dst:
                 print(push_public.run_summaries(src, dst))

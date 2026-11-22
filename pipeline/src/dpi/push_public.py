@@ -202,3 +202,61 @@ def run_add(source, target, codes: list[str], years: int = 3, rent_years: int = 
         c.execute("analyze rent_contracts")
     target.commit()
     return f"Added {len(done)} community/table copies.\n" + report
+
+
+BUILDING_COLUMNS = ["geom", "geom_source", "complex_key", "complex_name", "master_community", "master_community_source"]
+BUILDING_MIGRATIONS = ["0009_complexes.sql", "0010_master_community_source.sql"]
+
+
+def run_buildings(source, target, migrations_dir=None, dry_run: bool = False) -> str:
+    """Update only the position and complex columns of buildings already on the target, matched by id.
+    Nothing is truncated or deleted, and sales, rents and summaries are untouched, so the size barely changes.
+    Applies migrations 0009 and 0010 on the target first if it lacks them (both are idempotent).
+    Buildings missing on the target are skipped and counted."""
+    from pathlib import Path
+
+    mdir = Path(migrations_dir) if migrations_dir else Path(__file__).resolve().parents[3] / "db" / "migrations"
+    with target.cursor() as c:
+        c.execute("select count(*), count(*) filter (where geom is not null) from buildings")
+        before_n, before_placed = c.fetchone()
+        c.execute("select count(*) from information_schema.columns where table_name = 'buildings' "
+                  "and column_name = any(%s)", (BUILDING_COLUMNS[2:],))
+        have_cols = c.fetchone()[0]
+    target.commit()
+    with source.cursor() as c:
+        c.execute("select count(*), count(*) filter (where geom is not null) from buildings")
+        src_n, src_placed = c.fetchone()
+    head = (f"target buildings {before_n:,} ({before_placed:,} placed); source {src_n:,} ({src_placed:,} placed); "
+            f"target has {have_cols} of 4 complex columns")
+    if dry_run:
+        return "DRY RUN, nothing written.\n" + head
+    with target.cursor() as c:
+        c.execute("set statement_timeout = 0")
+        if have_cols < 4:
+            for name in BUILDING_MIGRATIONS:
+                c.execute((mdir / name).read_text(encoding="utf-8"))
+                c.execute("create table if not exists schema_migrations "
+                          "(name text primary key, applied_at timestamptz default now())")
+                c.execute("insert into schema_migrations (name) values (%s) on conflict do nothing", (name,))
+        cols = ["id"] + BUILDING_COLUMNS
+        col_sql = ", ".join(f'"{x}"' for x in cols)
+        c.execute("create temp table _bpos (id integer primary key, geom geometry, geom_source text, complex_key text, "
+                  "complex_name text, master_community text, master_community_source text) on commit drop")
+        with source.cursor() as scur:
+            with scur.copy(f"copy (select {col_sql} from buildings) to stdout") as out,                     c.copy(f"copy _bpos ({col_sql}) from stdin") as inp:
+                for chunk in out:
+                    inp.write(chunk)
+        c.execute("update buildings b set geom = p.geom, geom_source = p.geom_source, complex_key = p.complex_key, "
+                  "complex_name = p.complex_name, master_community = p.master_community, "
+                  "master_community_source = p.master_community_source from _bpos p where p.id = b.id")
+        updated = c.rowcount
+        c.execute("select count(*) from _bpos p where not exists (select 1 from buildings b where b.id = p.id)")
+        skipped = c.fetchone()[0]
+        c.execute("select count(*), count(*) filter (where geom is not null) from buildings")
+        after_n, after_placed = c.fetchone()
+    target.commit()
+    with target.cursor() as c:
+        c.execute("analyze buildings")
+    target.commit()
+    return (f"{head}\nupdated {updated:,} buildings, skipped {skipped:,} not on the target.\n"
+            f"target buildings now {after_n:,} ({after_placed:,} placed).")

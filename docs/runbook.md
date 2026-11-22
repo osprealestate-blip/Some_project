@@ -51,6 +51,11 @@ importer never reads them). It empties those tables on the target first, so it c
    pipeline/.venv/bin/dpi push-public            # --communities 392,681,346 --years 10 by default
    ```
 
+New building positions or complexes only: `dpi push-public --buildings-only --dry-run`, then without `--dry-run`. It updates
+`geom`, `geom_source` and the complex and master-community columns of buildings already on the target, by id, and applies
+migrations 0009 and 0010 there if missing. Nothing is emptied; sales, rents and summaries are untouched. Do not use the plain
+`push-public` for this: it empties every hosted table and refills sales and rents for the launch areas only.
+
 More communities later, without emptying the hosted tables: `dpi push-public --add --communities ... --dry-run`
 first, then without `--dry-run`; after `dpi compute-metrics`, `dpi push-public --summaries-only` refreshes only
 the figure tables. See `docs/push-remaining-communities.md`.

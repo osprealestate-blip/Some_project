@@ -94,3 +94,11 @@ def test_add_skips_future_dated_rows_and_summaries_touch_only_figure_tables():
     with pytest.raises(SystemExit):
         push_public.run_summaries(_FakeConn(), dst)
     assert not any(q.lstrip().lower().startswith(("delete", "truncate")) for q in dst.log)
+
+
+def test_buildings_only_pushes_position_and_complex_columns_only():
+    from dpi import push_public
+
+    assert push_public.BUILDING_COLUMNS == ["geom", "geom_source", "complex_key", "complex_name",
+                                            "master_community", "master_community_source"]
+    assert push_public.BUILDING_MIGRATIONS == ["0009_complexes.sql", "0010_master_community_source.sql"]
