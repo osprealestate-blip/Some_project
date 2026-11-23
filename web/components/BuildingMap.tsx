@@ -58,7 +58,12 @@ const CYAN = "#22d3ee";
 const DPI_LAYERS = ["dpi-3d", "dpi-3d-approx", "dpi-columns", "dpi-columns-minor"];
 /** Adaptive density: zoomed far out only buildings with this many sales (12 months) get a column, so the city stays readable. */
 const BUSY_SALES = 10;
-const MINOR_FROM_ZOOM = 12.8;
+const MINOR_FROM_ZOOM = 11.8;
+/** Zoom range where the zoomed-out blocks hand over to real 3D shapes. Below BLOCK_FULL_ZOOM only blocks show; from
+ *  SHAPE_FULL_ZOOM up only 3D shapes. Kept below FIT_MIN_ZOOM so the Nearby zoom-out still shows shapes. */
+const BLOCK_FULL_ZOOM = 11.5;
+const SHAPE_FULL_ZOOM = 12.3;
+const BLOCK_END_ZOOM = 12.5;
 const DPI_SOURCES = ["dpi-footprints", "dpi-columns"];
 const COLUMN_HALF_M = 55; // zoomed-out stand-in for each building: a 110 m square column
 /** A square polygon of half-side `half` metres around a point. */
@@ -643,14 +648,14 @@ export default function BuildingMap({
         id,
         type: "fill-extrusion",
         source: "dpi-footprints",
-        minzoom: 13,
+        minzoom: BLOCK_FULL_ZOOM,
         filter: ["==", ["get", "approx"], approx],
         paint: {
           "fill-extrusion-color": colour,
           "fill-extrusion-height": height,
           "fill-extrusion-base": 0,
           // Fade in as the columns fade out, so zooming in turns each column into its real building.
-          "fill-extrusion-opacity": ["interpolate", ["linear"], ["zoom"], 13, 0, 14, opacity],
+          "fill-extrusion-opacity": ["interpolate", ["linear"], ["zoom"], BLOCK_FULL_ZOOM, 0, SHAPE_FULL_ZOOM, opacity],
           "fill-extrusion-vertical-gradient": true,
         },
       });
@@ -663,12 +668,12 @@ export default function BuildingMap({
           type: "fill-extrusion",
           source: "dpi-columns",
           minzoom,
-          maxzoom: 14.5,
+          maxzoom: BLOCK_END_ZOOM,
           paint: {
             "fill-extrusion-color": colour,
             "fill-extrusion-height": height,
             "fill-extrusion-base": 0,
-            "fill-extrusion-opacity": ["interpolate", ["linear"], ["zoom"], 13.5, 0.95, 14.5, 0],
+            "fill-extrusion-opacity": ["interpolate", ["linear"], ["zoom"], BLOCK_FULL_ZOOM, 0.95, BLOCK_END_ZOOM, 0],
             "fill-extrusion-vertical-gradient": true,
           },
         });
