@@ -27,6 +27,7 @@ import { useLang, useT } from "./LangProvider";
 import type { T } from "@/lib/i18n";
 import { tLegend } from "@/lib/i18n";
 import MapSidebar from "./MapSidebar";
+import { burjBasemapHole, BURJ_BASE_M, BURJ_TIP_M, GLASS, GLASS_HOVER, isBurjKhalifa, landmarkPieces } from "@/lib/landmark3d";
 import { filterLabel, filterParam, parseFilter } from "@/lib/mapFilter";
 import { fetchRoute } from "@/lib/routeClient";
 import { labelPoint, routeLines, type RouteMap } from "@/lib/routeLines";
@@ -55,7 +56,7 @@ const STORE = { settings: "dpi.map.settings", theme: "dpi.map.theme" };
 const CAMERA_KEY = "dpi.map.camera"; // this tab only: where the map was, so Back to map returns there
 const SELECTED_ATTR = "data-building-selected";
 const CYAN = "#22d3ee";
-const DPI_LAYERS = ["dpi-3d", "dpi-3d-approx", "dpi-columns", "dpi-columns-minor"];
+const DPI_LAYERS = ["dpi-3d", "dpi-3d-approx", "dpi-columns", "dpi-columns-minor", "dpi-landmark"];
 /** Adaptive density: zoomed far out only buildings with this many sales (12 months) get a column, so the city stays readable. */
 const BUSY_SALES = 10;
 const MINOR_FROM_ZOOM = 11.8;
@@ -602,7 +603,7 @@ export default function BuildingMap({
         // Same rule as the basemap's own 3D layer: a whole-complex outline (hide_3d) is skipped, because its separate
         // parts are drawn instead. Without this the outline is drawn on top of its towers, and hovering any one of them
         // lifted the whole outline: a slab over its neighbours.
-        filter: ["!", ["has", "hide_3d"]],
+        filter: ["all", ["!", ["has", "hide_3d"]], ["!", burjBasemapHole(55.27439, 25.1972) as ExpressionSpecification]] as FilterSpecification,
         paint: {
           "fill-extrusion-color": t.baseBuilding,
           "fill-extrusion-height": ["coalesce", ["get", "render_height"], 4],
@@ -640,10 +641,12 @@ export default function BuildingMap({
       map.addSource("dpi-columns", { type: "geojson", data: EMPTY, promoteId: "slug" });
       const active: ExpressionSpecification = ["any", ["boolean", ["feature-state", "hover"], false], ["boolean", ["feature-state", "selected"], false]];
       // The selected building turns cyan, whatever the colour scheme, so it is the one thing that cannot be missed.
-      const colour: ExpressionSpecification = ["case", ["boolean", ["feature-state", "selected"], false], CYAN, active, ["get", "_tint"], ["get", "_color"]];
+      const colour: ExpressionSpecification = ["case", ["boolean", ["feature-state", "selected"], false], CYAN,
+        ["boolean", ["get", "landmark"], false], ["case", active, GLASS_HOVER, GLASS],
+        active, ["get", "_tint"], ["get", "_color"]];
       // 4 m above the grey basemap tower: closer than that, the two roofs flicker as red and grey stripes.
       // The hovered or selected building grows 20% taller (and at least 25 m) so it stands out from its neighbours.
-      const height: ExpressionSpecification = ["case", active, ["+", ["*", ["get", "height"], 1.2], 25], ["+", ["get", "height"], 4]];
+      const height: ExpressionSpecification = ["case", ["boolean", ["get", "landmark"], false], ["+", ["get", "height"], 4], active, ["+", ["*", ["get", "height"], 1.2], 25], ["+", ["get", "height"], 4]];
       const extrusion = (id: string, approx: boolean, opacity: number) => map.addLayer({
         id,
         type: "fill-extrusion",
@@ -661,6 +664,21 @@ export default function BuildingMap({
       });
       extrusion("dpi-3d", false, 0.95);
       extrusion("dpi-3d-approx", true, 0.6); // approximate positions: see-through, and said so on the card
+      // Burj Khalifa's upper tiers, bands and mast (see lib/landmark3d.ts). They carry the tower's properties, so
+      // hover and click on them work like on its base. Colour: glass pieces, or cyan when the tower is selected.
+      map.addSource("dpi-landmark", { type: "geojson", data: EMPTY });
+      map.addLayer({
+        id: "dpi-landmark",
+        type: "fill-extrusion",
+        source: "dpi-landmark",
+        minzoom: 13,
+        paint: {
+          "fill-extrusion-color": ["get", "_c"],
+          "fill-extrusion-height": ["get", "lh"],
+          "fill-extrusion-base": ["get", "lb"],
+          "fill-extrusion-opacity": ["interpolate", ["linear"], ["zoom"], 13, 0, 14, 0.97],
+        },
+      });
       // Zoomed out, footprints are too small to see: each building is a coloured column at its position instead.
       for (const [id, minzoom] of [["dpi-columns", 0], ["dpi-columns-minor", MINOR_FROM_ZOOM]] as const) {
         map.addLayer({
@@ -709,10 +727,21 @@ export default function BuildingMap({
     const fp = map.getSource("dpi-footprints") as maplibregl.GeoJSONSource | undefined;
     const cols = map.getSource("dpi-columns") as maplibregl.GeoJSONSource | undefined;
     if (!fp || !cols) return;
-    fp.setData({ type: "FeatureCollection", features: coloured.features } as GeoJSON.FeatureCollection);
+    // Burj Khalifa: its own feature is the full-footprint base tier; the narrowing tiers above it are separate pieces.
+    const pieces: GeoJSON.Feature[] = [];
+    const feats = coloured.features.map((f) => {
+      if (!isBurjKhalifa(f.properties)) return f;
+      pieces.push(...landmarkPieces(f.geometry, f.properties));
+      return { ...f, properties: { ...f.properties, landmark: true, height: BURJ_BASE_M } };
+    });
+    fp.setData({ type: "FeatureCollection", features: feats } as GeoJSON.FeatureCollection);
+    (map.getSource("dpi-landmark") as maplibregl.GeoJSONSource | undefined)?.setData({ type: "FeatureCollection", features: pieces });
     cols.setData({
       type: "FeatureCollection",
-      features: coloured.features.map((f) => ({ type: "Feature", geometry: square(f.properties.lng, f.properties.lat, COLUMN_HALF_M), properties: f.properties })),
+      features: coloured.features.map((f) => {
+        const burj = isBurjKhalifa(f.properties);
+        return { type: "Feature", geometry: square(f.properties.lng, f.properties.lat, COLUMN_HALF_M), properties: burj ? { ...f.properties, landmark: true, height: BURJ_TIP_M } : f.properties };
+      }),
     } as GeoJSON.FeatureCollection);
   }, [coloured, styleGen]);
 
@@ -722,7 +751,7 @@ export default function BuildingMap({
     const notHidden: ExpressionSpecification = ["!", ["in", ["get", "_cls"], ["literal", hidden]]];
     const show: ExpressionSpecification = filterSlugs ? ["all", notHidden, ["in", ["get", "slug"], ["literal", filterSlugs]]] : notHidden;
     for (const id of DPI_LAYERS) {
-      if (!map.getLayer(id)) continue;
+      if (!map.getLayer(id) || id === "dpi-landmark") continue;
       const base: FilterSpecification | null = id === "dpi-columns" ? [">=", ["get", "sales"], BUSY_SALES]
         : id === "dpi-columns-minor" ? ["<", ["get", "sales"], BUSY_SALES]
         : ["==", ["get", "approx"], id === "dpi-3d-approx"];
@@ -750,6 +779,11 @@ export default function BuildingMap({
       if (!map.getSource(src)) continue;
       map.removeFeatureState({ source: src });
       if (selected) map.setFeatureState({ source: src, id: selected }, { selected: true });
+    }
+    // The tower's upper tiers turn cyan with its base when it is the selected building.
+    if (map.getLayer("dpi-landmark")) {
+      const burjSelected = !!selected && !!coloured.features.find((f) => f.properties.slug === selected && isBurjKhalifa(f.properties));
+      map.setPaintProperty("dpi-landmark", "fill-extrusion-color", burjSelected ? CYAN : ["get", "_c"]);
     }
     live.current.hover = null;
   }, [selected, coloured, styleGen]);
