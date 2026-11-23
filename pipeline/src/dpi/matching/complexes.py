@@ -43,6 +43,11 @@ class Group:
     name: str
     members: list[Row]
     spread_m: float  # largest distance from the centre of the placed members; 0 with fewer than two placed
+    strong: bool = False  # every member is a lettered building of a numbered phase ("Azizi Venice 14 - Building A")
+
+    @property
+    def tight(self) -> bool:
+        return self.spread_m <= MAX_SPREAD_M
 
     @property
     def placed(self) -> list[Row]:
@@ -70,25 +75,70 @@ def _title(stem: str) -> str:
     return " ".join(w.capitalize() for w in stem.split())
 
 
+# "Azizi Venice 14-building A", "Azizi Venice 3 -a", "Azizi Venice 14-retails", "Azizi Venice 13 ? Building B":
+# a numbered phase followed by a building letter / retail / podium. The phase number is kept so phases stay apart.
+_PHASE = re.compile(r"^(.*\b\d{1,3})[\s\-]+(?:(?:tower|building|block|bldg)[\s\-]+)?(?:[a-z]|retails?|podiums?)$")
+
+
+def _clean(name: str) -> str:
+    """Odd characters ("13 ? Building A", an encoding slip) become spaces so they do not hide a suffix."""
+    return " ".join(re.sub(r"[^A-Za-z0-9\-\s]", " ", name).split())
+
+
+def phase_stem(name: str) -> tuple[str, bool]:
+    """(stem, strong). strong means a phase number was kept: 'Azizi Venice 14-building A' -> ('azizi venice 14', True).
+    Anything else falls back to complex_stem."""
+    n = " ".join(re.sub(r"[^a-z0-9\-\s]", " ", name.lower()).split())
+    m = _PHASE.match(n)
+    if m and len(m.group(1).split()) >= 2:
+        return m.group(1), True
+    return complex_stem(_clean(name)), False
+
+
+def _spread(g: Group) -> Group:
+    c = g.centre
+    if c:
+        g.spread_m = max(_metres(c, (m.lat, m.lng)) for m in g.placed)  # type: ignore[arg-type]
+    return g
+
+
 def detect(rows: list[Row]) -> tuple[list[Group], list[Group]]:
-    """(complexes, name_siblings_far_apart). A complex has two or more towers with the same stem in the same community."""
-    by: dict[tuple[str, str], list[Row]] = {}
+    """(complexes, name_siblings_far_apart). A complex has two or more towers with the same phase stem in the same community.
+    Phase groups (strong) are always complexes, wherever their placed towers sit; plain name groups must be tight."""
+    by: dict[tuple[str, str], list[tuple[Row, bool]]] = {}
     for r in rows:
-        stem = complex_stem(r.name)
+        stem, strong = phase_stem(r.name)
         if stem:
-            by.setdefault((r.dm_code or "", stem), []).append(r)
+            by.setdefault((r.dm_code or "", stem), []).append((r, strong))
     complexes: list[Group] = []
     far: list[Group] = []
-    for (dm, stem), members in sorted(by.items()):
-        if len(members) < 2:
+    strong_stems = {(dm, stem) for (dm, stem), items in by.items() if len(items) >= 2 and all(st for _, st in items)}
+    for (dm, stem), items in sorted(by.items()):
+        if len(items) < 2:
+            continue
+        # "Azizi Venice 1" and "Azizi Venice 16" (no building letter) are phases of the development, not one complex,
+        # when other towers show the name is a development of numbered phases ("Azizi Venice 14 - Building A").
+        if not all(st for _, st in items) and any(d == dm and ss.startswith(stem + " ") for d, ss in strong_stems):
             continue
         key = f"{dm or 'x'}:{re.sub(r'[^a-z0-9]+', '-', stem).strip('-')}"
-        g = Group(key, _title(stem), members, 0.0)
-        c = g.centre
-        if c:
-            g.spread_m = max(_metres(c, (m.lat, m.lng)) for m in g.placed)  # type: ignore[arg-type]
-        (far if g.spread_m > MAX_SPREAD_M else complexes).append(g)
+        g = _spread(Group(key, _title(stem), [m for m, _ in items], 0.0, all(st for _, st in items)))
+        (complexes if (g.strong or g.tight) else far).append(g)
     return complexes, far
+
+
+def detect_developments(rows: list[Row]) -> list[Group]:
+    """Wider than a complex: every tower sharing a name stem in one community (all Azizi Venice phases), however far apart.
+    Used for the development name, never for positions."""
+    by: dict[tuple[str, str], list[Row]] = {}
+    for r in rows:
+        stem = complex_stem(re.sub(r"[\s\-]+(?:retails?|podiums?)$", " a", _clean(r.name), flags=re.I))
+        if stem:
+            by.setdefault((r.dm_code or "", stem), []).append(r)
+    out = []
+    for (dm, stem), members in sorted(by.items()):
+        if len(members) >= 2:
+            out.append(_spread(Group(f"{dm or 'x'}:{re.sub(r'[^a-z0-9]+', '-', stem).strip('-')}", _title(stem), members, 0.0)))
+    return out
 
 
 def propose_positions(complexes: list[Group], skip_slugs: set[str] = frozenset()) -> list[tuple[str, float, float, str]]:
@@ -97,7 +147,7 @@ def propose_positions(complexes: list[Group], skip_slugs: set[str] = frozenset()
     out = []
     for g in complexes:
         c = g.centre
-        if not c:
+        if not c or not g.tight:
             continue
         n = len(g.placed)
         for m in g.members:
@@ -125,12 +175,14 @@ def run(conn, seed, apply: bool, write_positions: bool, worklist=None) -> str:
     per = Counter(m for m, _ in masters.values())
     basis = Counter(b for _, b in masters.values())
     groups, far = detect(rows)
+    devs = detect_developments(rows)
     seed = Path(seed)
     have = {r["slug"] for r in csv.DictReader(l for l in seed.open(encoding="utf-8") if not l.startswith("#"))} if seed.exists() else set()
     props = propose_positions(groups, have)
     inside = {m.slug for g in groups for m in g.members}
     lines = [f"Buildings: {len(rows)}",
              f"Complexes found: {len(groups)} covering {len(inside)} buildings",
+             f"Developments (all phases sharing a name, any distance): {len(devs)} covering {sum(len(d.members) for d in devs)} buildings",
              f"Same name stem but far apart (kept separate): {len(far)} groups, {sum(len(g.members) for g in far)} buildings",
              f"Unplaced siblings that can share a complex position: {len(props)}",
              f"Complexes with no placed tower yet (need one pin): {sum(1 for g in groups if not g.placed)}"]
@@ -150,16 +202,23 @@ def run(conn, seed, apply: bool, write_positions: bool, worklist=None) -> str:
         lines.append(f"Wrote {len(todo)} complexes with no pin to {worklist}.")
     if apply:
         with conn.transaction():
-            conn.execute("update buildings set complex_key = null, complex_name = null")
+            conn.execute("update buildings set complex_key = null, complex_name = null, development_key = null, development_name = null")
             conn.cursor().executemany("update buildings set master_community = %s, master_community_source = %s where slug = %s",
                                       [(m, b, slug) for slug, (m, b) in masters.items()])
             for g in groups:
                 conn.execute("update buildings set complex_key = %s, complex_name = %s where slug = any(%s)",
                              (g.key, g.name, [m.slug for m in g.members]))
+            for d in devs:
+                conn.execute("update buildings set development_key = %s, development_name = %s where slug = any(%s)",
+                             (d.key, d.name, [m.slug for m in d.members]))
         lines.append("Saved to the database.")
     if write_positions and props:
+        raw = seed.read_bytes() if seed.exists() else b""
+        eol = "\r\n" if b"\r\n" in raw else "\n"   # the seed may be CRLF; keep it, or the diff rewrites every line
         with seed.open("a", encoding="utf-8", newline="") as f:
-            w = csv.writer(f, lineterminator="\n")
+            if raw and not raw.endswith(b"\n"):
+                f.write(eol)
+            w = csv.writer(f, lineterminator=eol)
             for slug, lat, lng, note in props:
                 w.writerow([slug, f"{lat:.6f}", f"{lng:.6f}", note])
         lines.append(f"Appended {len(props)} approximate rows to {seed}.")

@@ -15,6 +15,7 @@ import re
 
 # (master community, whole-word name fragments). Matched against the building name, lower-cased, punctuation -> space.
 NAME_RULES: list[tuple[str, tuple[str, ...]]] = [
+    ("Azizi Venice", ("azizi venice",)),
     ("Expo City", ("expo", "expo city")),
     ("Al Furjan", ("furjan", "al furjan", "azizi amber", "azizi freesia", "azizi plaza", "glamz", "starz", "sparklz",
                    "murano residence", "murano residences")),

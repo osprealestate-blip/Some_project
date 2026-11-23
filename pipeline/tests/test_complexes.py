@@ -29,3 +29,19 @@ def test_same_stem_different_community_not_merged_and_skip_slugs() -> None:
 def test_master_community() -> None:
     assert cx.master_community("392") == "Dubai Marina"
     assert cx.master_community("521") is None and cx.master_community(None) is None
+
+
+def test_azizi_venice_phases_group_even_when_far_apart() -> None:
+    rows = [Row("a", "Azizi Venice 14-building A", "521", 24.837120, 55.140234),
+            Row("e", "Azizi Venice 14-building E", "521", 24.843185, 55.138968),
+            Row("r", "Azizi Venice 14-retails", "521"),
+            Row("b", "Azizi Venice 13 ? Building B", "521", 24.843185, 55.141156),
+            Row("b2", "Azizi Venice 13 ? Building A", "521"),
+            Row("t", "Azizi Venice 16", "521"), Row("o", "Azizi Venice 1", "521")]
+    groups, far = cx.detect(rows)
+    keys = {g.key: sorted(m.slug for m in g.members) for g in groups}
+    assert keys == {"521:azizi-venice-14": ["a", "e", "r"], "521:azizi-venice-13": ["b", "b2"]}
+    assert not far
+    assert cx.propose_positions(groups) == [("b2", 24.843185, 55.141156, cx.propose_positions(groups)[0][3])]  # 13 is tight; 14 is not
+    devs = cx.detect_developments(rows)
+    assert len(devs) == 1 and len(devs[0].members) == 7 and devs[0].name == "Azizi Venice"
