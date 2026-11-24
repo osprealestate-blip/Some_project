@@ -511,10 +511,58 @@ export default function BuildingMap({
     map.getCanvas().addEventListener("mouseleave", () => {
       if (canHover) clearHover();
     });
+    // Several buildings can sit on one spot (towers of one project that only have a shared, approximate position, or a
+    // tower and its podium): the top one would win every click and the rest could never be opened. When a click lands
+    // on such a stack, a short list lets the visitor pick which building they mean.
+    const chooser = new maplibregl.Popup({ closeButton: true, closeOnClick: true, offset: 14, maxWidth: "260px", className: "dpi-popup" });
+    const stackAt = (point: maplibregl.PointLike, top: Props3, layers: string[]): Props3[] => {
+      const seen = new Map<string, Props3>();
+      for (const q of map.queryRenderedFeatures(point, { layers })) {
+        const pr = q.properties as Props3 | undefined;
+        if (!pr || seen.has(pr.slug)) continue;
+        const dx = (pr.lng - top.lng) * 100_900, dy = (pr.lat - top.lat) * 110_574; // metres, good enough at Dubai's latitude
+        if (Math.hypot(dx, dy) <= 30) seen.set(pr.slug, pr);
+      }
+      return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+    };
+    const chooseFrom = (list: Props3[], pick: (p: Props3) => void) => {
+      const el = document.createElement("div");
+      el.className = "dpi-card";
+      const title = document.createElement("div");
+      title.className = "dpi-card-title";
+      title.textContent = tRef.current("{n} buildings here. Choose one.").replace("{n}", String(list.length));
+      el.append(title);
+      const ul = document.createElement("div");
+      ul.style.cssText = "margin-top:6px;display:grid;gap:2px;max-height:200px;overflow:auto";
+      for (const b of list) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.textContent = b.name;
+        btn.style.cssText = "text-align:start;padding:6px 8px;border-radius:6px;font-size:13px;background:var(--grid);cursor:pointer";
+        btn.addEventListener("click", () => { chooser.remove(); pick(b); });
+        ul.append(btn);
+      }
+      el.append(ul);
+      chooser.setLngLat([list[0].lng, list[0].lat]).setDOMContent(el).addTo(map);
+    };
     map.on("click", (e) => {
+      chooser.remove();
       const layers = DPI_LAYERS.filter((l) => map.getLayer(l));
       const f = layers.length ? map.queryRenderedFeatures(e.point, { layers })[0] : undefined;
       const p = f?.properties as Props3 | undefined;
+      if (p && layers.length) {
+        const stack = stackAt(e.point, p, layers);
+        if (stack.length > 1) {
+          setPlace(null);
+          popup.remove();
+          chooseFrom(stack, (b) => {
+            if (cardMode) select(b.slug, true);
+            else if (canHover) open(b.slug);
+            else { setHover(b.slug); show(b, true); }
+          });
+          return;
+        }
+      }
       if (!p) {
         if (!canHover) {
           setHover(null);
@@ -554,6 +602,7 @@ export default function BuildingMap({
 
     return () => {
       popup.remove();
+      chooser.remove();
       map.remove();
       mapRef.current = null;
     };
