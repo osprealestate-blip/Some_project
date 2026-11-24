@@ -35,6 +35,8 @@ services:
       db:
         condition: service_healthy
     environment:
+      # Also needed at run time: pages and sitemap.xml read it per request (the build arg only reaches pages built statically).
+      NEXT_PUBLIC_SITE_URL: https://${SITE_HOST}
       # Read-only login (created by scripts/create-web-role.sh). No TLS inside the private Docker network.
       DATABASE_URL: postgresql://dpi_web:${WEB_DB_PASSWORD:?set WEB_DB_PASSWORD in deploy/.env}@db:5432/dpi?sslmode=disable
       DB_CACHE_SECONDS: ${DB_CACHE_SECONDS:-300}
