@@ -31,7 +31,7 @@ export default async function MapPage() {
   const currency = await getServerCurrency();
   const { t } = await getT();
   return (
-    <main className="relative h-[calc(100dvh-3.5rem-1px)] min-h-[420px] w-full md:h-[calc(100dvh-4rem-1px)]">
+    <main data-map-page className="relative h-[calc(100dvh-3.5rem-1px)] min-h-[420px] w-full md:h-[calc(100dvh-4rem-1px)]">
       <BuildingMap currency={currency} cardMode />
       <h1 className="sr-only">{t("Explore the map")}</h1>
       <MapWelcome />
