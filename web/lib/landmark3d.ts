@@ -3,7 +3,7 @@
  *  The tiers are the building's own footprint shrunk towards its centre: an indicative shape, not a survey. */
 export const GLASS = "#b4c6d4";
 export const GLASS_HOVER = "#d3e2ee";
-export const BAND = "#6c8296";
+export const BAND = "#8ea3b4";
 export const SPIRE = "#e2e9ef";
 export const BURJ_TIP_M = 828;
 /** Height of the full-footprint base tier: the building's own (clickable) feature is drawn this tall. */
@@ -11,7 +11,7 @@ export const BURJ_BASE_M = 190;
 
 /** [base, top, scale of the footprint] */
 const TIERS: [number, number, number][] = [
-  [190, 330, 0.86], [330, 440, 0.72], [440, 520, 0.58], [520, 585, 0.44], [585, 660, 0.26],
+  [190, 330, 0.70], [330, 440, 0.55], [440, 520, 0.41], [520, 585, 0.29], [585, 660, 0.18],
 ];
 const BAND_M = 10;
 const MAST_RADIUS_M = 2.5;
@@ -38,7 +38,7 @@ export function landmarkPieces(
   const shrunk = (k: number): GeoJSON.Geometry => ({ type: "MultiPolygon", coordinates: polys.map((p) => [scaleRing(p[0], c, k)]) });
   for (const [b, t, k] of TIERS) {
     add(shrunk(k), b, t, GLASS);
-    add(shrunk(k * 1.015), t - BAND_M, t, BAND);
+    add(shrunk(k * 1.01), t - BAND_M, t, BAND);
   }
   const d = MAST_RADIUS_M;
   const dLat = d / 111_320, dLng = d / (111_320 * Math.cos((c[1] * Math.PI) / 180));
@@ -48,7 +48,7 @@ export function landmarkPieces(
 
 /** The basemap's own grey Burj Khalifa (its full footprint at full height) would poke out around the narrower tiers,
  *  so tall basemap pieces inside this small box are not drawn. Our tiered tower replaces them. */
-export const BURJ_BOX_HALF_M = 70;
+export const BURJ_BOX_HALF_M = 110;
 export function burjBasemapHole(lng: number, lat: number): unknown[] {
   const dLat = BURJ_BOX_HALF_M / 111_320, dLng = BURJ_BOX_HALF_M / (111_320 * Math.cos((lat * Math.PI) / 180));
   const ring = [[lng - dLng, lat - dLat], [lng + dLng, lat - dLat], [lng + dLng, lat + dLat], [lng - dLng, lat + dLat], [lng - dLng, lat - dLat]];
