@@ -14,6 +14,7 @@ import {
 import { DUBAI_PITCH, LAUNCH_BOUNDS, MAP_ATTRIBUTION, webglAvailable } from "@/lib/mapStyle";
 import { DEFAULT_THEME, THEMES, parseTheme, type ThemeId } from "@/lib/mapThemes";
 import dynamic from "next/dynamic";
+import LoadingSkyline from "./LoadingSkyline";
 import { fetchCard } from "@/lib/cardClient";
 import MapFilterMenu from "./MapFilterMenu";
 import { MAP_COMPARE_MAX as MAX_COMPARE } from "@/lib/mapCompare";
@@ -202,6 +203,7 @@ export default function BuildingMap({
 
   const [noWebgl, setNoWebgl] = useState(false);
   const [raw, setRaw] = useState<Collection | null>(null);
+  const [dataDone, setDataDone] = useState(false); // /api/buildings answered (or failed), so stop the loading skyline
   // A grey (OpenStreetMap) building the visitor clicked: not in our database, so it opens the "no data yet" card.
   const [place, setPlace] = useState<Place | null>(null);
   const [settings, setSettings] = useState<MapSettings>(DEFAULT_SETTINGS);
@@ -539,7 +541,8 @@ export default function BuildingMap({
       .then((geo: Collection | null) => {
         if (geo?.features?.length) setRaw(geo);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setDataDone(true));
 
     return () => {
       popup.remove();
@@ -959,6 +962,11 @@ export default function BuildingMap({
   return (
     <div className="relative h-full w-full" data-map-theme={theme}>
       <div ref={container} className={className} aria-label={t("Map of Dubai buildings")} />
+      {!dataDone && (
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+          <LoadingSkyline label="Loading buildings on the map" className="rounded-2xl bg-[var(--panel)]/90 px-6 py-5 shadow-lg backdrop-blur" />
+        </div>
+      )}
       {legend && (
         <div className={selected ? "contents max-sm:hidden" : "contents"}>
         <MapControls

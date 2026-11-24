@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import SearchBox from "@/components/SearchBox";
 import HeroSkyline from "@/components/HeroSkyline";
@@ -12,7 +13,16 @@ import { launchCommunities } from "@/lib/queries";
 import { change } from "@/lib/stats";
 import { SOURCES } from "@/lib/sources";
 
+import { pageMetadata } from "@/lib/seo";
+import { absoluteUrl, siteUrl } from "@/lib/site";
+
 export const dynamic = "force-dynamic";
+
+export const metadata = pageMetadata({
+  title: "Dubai buildings, prices, rents and yields",
+  description: "Dubai, building by building: registered sale prices, rents and yields from Dubai Land Department data. Free, no login.",
+  path: "/",
+});
 
 async function loadCards() {
   if (!hasDatabase()) return null;
@@ -32,22 +42,45 @@ const ENTRY_CARDS: EntryCard[] = [
   { title: "Research a building", href: "/tools/fair-price", blurb: "Check an asking price against recent registered sales in the same building." },
 ];
 
-export default async function Home() {
+async function StatsBlock() {
   const { t } = await getT();
-  const currency = await getServerCurrency();
-  const conversionNote = getConversionNote(currency);
-  const [cards, stats] = await Promise.all([loadCards(), homeStats()]);
-  const byCode = new Map(cards?.map((c) => [c.dm_code, c]));
-  const asOf = cards?.find((c) => c.summary)?.summary?.period_end ?? null;
-  const statItems = stats && stats.buildings > 0
+  const stats = await homeStats();
+  const items = stats && stats.buildings > 0
     ? [
         { v: compactCount(stats.buildings), l: t("Buildings with figures") },
         { v: compactCount(stats.sales), l: t("Sales on record") },
         { v: compactCount(stats.rents), l: t("Rent contracts on record") },
       ]
     : null;
+  return items ? (
+    <dl className="flex gap-6 lg:gap-8">
+      {items.map((x) => (
+        <div key={x.l}><dd className="text-2xl font-semibold tabular-nums sm:text-3xl">{x.v}</dd><dt className="text-xs text-white/85 sm:text-sm">{x.l}</dt></div>
+      ))}
+    </dl>
+  ) : (
+    <p className="max-w-56 rounded-lg bg-white/15 px-3 py-2 text-sm">{t("Limited information available. Figures appear once the data is loaded.")}</p>
+  );
+}
+
+async function StatsNote() {
+  const { t } = await getT();
+  const stats = await homeStats();
+  if (!stats) return null;
+  return <p className="mx-auto mt-2 max-w-6xl px-1 text-xs text-[var(--muted)]">{t("Counts are DLD records in our database")}{stats.sourceDate ? `, ${t("data as of")} ${day(stats.sourceDate)}` : ""}. {t("Source")}: {SOURCES.dldSales}; {SOURCES.dldRents}.</p>;
+}
+
+export default async function Home() {
+  const { t } = await getT();
+  const currency = await getServerCurrency();
+  const conversionNote = getConversionNote(currency);
+  const cards = await loadCards();
+  const byCode = new Map(cards?.map((c) => [c.dm_code, c]));
+  const asOf = cards?.find((c) => c.summary)?.summary?.period_end ?? null;
+  const jsonLd = { "@context": "https://schema.org", "@type": "WebSite", name: "Dubai building intelligence", url: absoluteUrl("/", siteUrl()), inLanguage: ["en", "ar"] };
   return (
     <main>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <section className="px-3 pt-3 sm:px-6 sm:pt-4">
         <div className="relative mx-auto max-w-6xl overflow-hidden rounded-3xl bg-gradient-to-b from-[#3d6a99] via-[#5a85b2] to-[#4c76a3] text-white">
           <HeroSkyline className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 w-full text-[#1d3a58]/20" />
@@ -59,15 +92,7 @@ export default async function Home() {
                   {t("Registered Dubai Land Department sales and rent contracts for each building. Not asking prices, not listings. Free, no login.")}
                 </p>
               </div>
-              {statItems ? (
-                <dl className="flex gap-6 lg:gap-8">
-                  {statItems.map((x) => (
-                    <div key={x.l}><dd className="text-2xl font-semibold tabular-nums sm:text-3xl">{x.v}</dd><dt className="text-xs text-white/85 sm:text-sm">{x.l}</dt></div>
-                  ))}
-                </dl>
-              ) : (
-                <p className="max-w-56 rounded-lg bg-white/15 px-3 py-2 text-sm">{t("Limited information available. Figures appear once the data is loaded.")}</p>
-              )}
+              <Suspense fallback={<div className="h-12 w-64" aria-hidden="true" />}><StatsBlock /></Suspense>
             </div>
             <div className="mt-8 text-[var(--fg)]">
               <SearchBox placeholder={t("Search a building or area")} autoFocus={false} />
@@ -77,7 +102,7 @@ export default async function Home() {
             </p>
           </div>
         </div>
-        {stats && <p className="mx-auto mt-2 max-w-6xl px-1 text-xs text-[var(--muted)]">{t("Counts are DLD records in our database")}{stats.sourceDate ? `, ${t("data as of")} ${day(stats.sourceDate)}` : ""}. {t("Source")}: {SOURCES.dldSales}; {SOURCES.dldRents}.</p>}
+        <Suspense fallback={null}><StatsNote /></Suspense>
       </section>
 
       <section className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
