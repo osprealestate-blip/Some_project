@@ -55,8 +55,9 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ a
   let asOf: string | null = null;
   if (hasDatabase()) {
     try {
-      [rows, asOf] = await Promise.all([offPlanProjects(code), dataFreshness().then((f) => f.period_end)]);
-    } catch {
+      [rows, asOf] = await Promise.all([offPlanProjects(code), dataFreshness().then((f) => f.period_end).catch(() => null)]);
+    } catch (e) {
+      console.error("off-plan page: could not load projects", e);
       failed = true;
     }
   }
@@ -81,7 +82,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ a
         {chip(q("handover", code), "Completion in the next 12 months", handover)}
       </nav>
       {!hasDatabase() ? <div className="mt-6"><NoData /></div> : failed ? (
-        <p className="mt-6 text-sm text-[var(--muted)]">Off-plan data could not be loaded just now. Please try again in a moment.</p>
+        <p className="mt-6 text-sm text-[var(--muted)]">Off-plan data could not be loaded just now. <Link href={q(handover ? "handover" : null, code)} className="underline hover:text-[var(--accent)]">Try again</Link>.</p>
       ) : hv ? (
         <div className="mt-6 space-y-6">
           <p className="text-sm text-[var(--muted)]">Towers on this list with a completion date on file. Towers with no date are left out, not estimated. The DLD Projects file does not publish how many units are planned, so no unit total is shown.</p>
