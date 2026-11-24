@@ -92,6 +92,13 @@ def main(argv: list[str] | None = None) -> int:
                     help="accept rows whose note carries the [geocode] marker, saved as 'geocoded, approximate' (off by default; "
                          "jittered/centroid notes are still refused)")
     ip.add_argument("--dry-run", action="store_true", help="check and report only, write nothing")
+    pq = sub.add_parser("push-positions", help="Copy building map positions to a hosted database, adding only (dry run by default)")
+    pq.add_argument("--target-env", default="HOSTED_DATABASE_URL",
+                    help="environment variable holding the target connection string (never pass it on the command line)")
+    pq.add_argument("--sources", default="manual", help="comma-separated geom_source values to copy (default: manual)")
+    pq.add_argument("--update-existing", action="store_true",
+                    help="also move hosted positions that differ from ours by more than 1 m (default: only fill empty ones)")
+    pq.add_argument("--apply", action="store_true", help="write the positions; without it nothing is written")
     pp = sub.add_parser("push-public", help="Copy the public tables the web app reads to a hosted database")
     pp.add_argument("--target-env", default="HOSTED_DATABASE_URL",
                     help="environment variable holding the target connection string (never pass it on the command line)")
@@ -299,6 +306,19 @@ def main(argv: list[str] | None = None) -> int:
         with connect() as src, psycopg.connect(target_url) as dst:
             print(push_public.run(src, dst, codes, args.years, rent_years=args.rent_years,
                                    all_structure=args.all_structure).render())
+    elif args.cmd == "push-positions":
+        import psycopg
+
+        from dpi import push_positions
+        from dpi.db import connect
+
+        target_url = os.environ.get(args.target_env)
+        if not target_url:
+            raise SystemExit(f"{args.target_env} is not set.")
+        srcs = tuple(x.strip() for x in args.sources.split(",") if x.strip())
+        with connect() as src, psycopg.connect(target_url) as dst:
+            print(push_positions.run(src, dst, srcs, update_existing=args.update_existing,
+                                     dry_run=not args.apply).render())
     elif args.cmd == "group-complexes":
         from dpi.db import connect
         from dpi.matching import complexes
