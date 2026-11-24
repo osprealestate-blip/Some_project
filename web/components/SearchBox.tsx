@@ -61,7 +61,7 @@ export default function SearchBox({ autoFocus = false, placeholder = "Search a b
     h.kind === "building" ? (mapMode ? mapHref({ building: h.slug }) : `/building/${h.slug}`)
     : h.kind === "facility" ? mapHref({ f: `near:${h.slug}` })
     : h.kind === "developer" ? mapHref({ f: `dev:${h.slug}` })
-    : mapMode ? mapHref({ f: `area:${h.slug}` }) : `/community/${h.slug}`;
+    : mapMode ? mapHref({ f: /^\d+$/.test(h.slug) ? `area:${h.slug}` : `master:${h.slug}` }) : `/community/${h.slug}`;
   const go = (h: Hit) => {
     setOpen(false);
     setQ("");

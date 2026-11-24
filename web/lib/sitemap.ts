@@ -2,6 +2,7 @@
 import type { MetadataRoute } from "next";
 import { LAUNCH_CODES } from "./communities";
 import { query } from "./db";
+import { masterSlug } from "./masterCommunities";
 import { MIN_CONFIDENCE } from "./queries";
 
 /** Pages that do not depend on the database. Search, compare and saved buildings are left out on purpose. */
@@ -10,6 +11,12 @@ export const STATIC_PATHS = ["/", "/map", "/communities", "/buildings", "/tools"
 export function sitemapEntries(base: string, buildingSlugs: string[], communityCodes: readonly string[] = LAUNCH_CODES): MetadataRoute.Sitemap {
   const paths = [...STATIC_PATHS, ...communityCodes.map((c) => `/community/${c}`), ...buildingSlugs.map((s) => `/building/${s}`)];
   return paths.map((p) => ({ url: `${base}${p === "/" ? "" : p}` || base }));
+}
+
+/** A page for every master community that has a visible building. Empty where the column is not loaded. */
+export async function masterCommunitySlugs(): Promise<string[]> {
+  const rows = await query<{ name: string }>("select distinct master_community as name from buildings where master_community is not null and match_confidence >= $1", [MIN_CONFIDENCE]);
+  return rows.map((r) => masterSlug(r.name)).sort();
 }
 
 export async function visibleBuildingSlugs(): Promise<string[]> {

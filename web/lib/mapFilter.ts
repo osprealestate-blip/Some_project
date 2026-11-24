@@ -4,8 +4,8 @@ import { makeT, type T } from "./i18n";
 export const USE_FILTERS = ["residential", "commercial", "mixed"] as const;
 export type UseFilter = (typeof USE_FILTERS)[number];
 
-/** A filter on the map, kept in the URL as ?f=near:metro, ?f=dev:Emaar or ?f=area:392 so a link shares it. */
-export type MapFilter = { type: "near"; value: FacilityId } | { type: "dev"; value: string } | { type: "area"; value: string } | { type: "under"; value: string } | { type: "use"; value: UseFilter };
+/** A filter on the map, kept in the URL as ?f=near:metro, ?f=dev:Emaar or ?f=area:392 or ?f=master:dubai-marina so a link shares it. */
+export type MapFilter = { type: "near"; value: FacilityId } | { type: "dev"; value: string } | { type: "area"; value: string } | { type: "master"; value: string } | { type: "under"; value: string } | { type: "use"; value: UseFilter };
 
 /** Straight-line radius for "near a ...". Short for things you walk to, longer for a hospital or a school. */
 export const NEAR_RADIUS_M: Record<FacilityId, number> = { metro: 800, hospital: 2000, school: 1500, mall: 1500, park: 800 };
@@ -19,6 +19,7 @@ export function parseFilter(raw: string | null): MapFilter | null {
   if (type === "near") return FACILITIES.some((f) => f.id === value) ? { type, value: value as FacilityId } : null;
   if (type === "dev") return { type, value };
   if (type === "area") return /^\d{1,4}$/.test(value) ? { type, value } : null;
+  if (type === "master") return /^[a-z0-9]+(-[a-z0-9]+)*$/.test(value) ? { type, value } : null; // a master community's link name, e.g. azizi-venice
   if (type === "under") return /^\d{5,9}$/.test(value) ? { type, value } : null; // median sale price ceiling in AED
   if (type === "use") return (USE_FILTERS as readonly string[]).includes(value) ? { type, value: value as UseFilter } : null;
   return null;

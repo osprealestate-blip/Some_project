@@ -1,64 +1,49 @@
 import Link from "next/link";
-import LaunchAreaCards from "@/components/LaunchAreaCards";
+import CommunityIndex from "@/components/CommunityIndex";
 import NoData from "@/components/NoData";
 import { getServerCurrency } from "@/lib/currency";
 import { hasDatabase } from "@/lib/db";
-import { LAUNCH_COMMUNITIES } from "@/lib/communities";
-import { areasWithBuildings, launchCommunities } from "@/lib/queries";
-import { isLaunchCommunity } from "@/lib/communities";
-import { count } from "@/lib/format";
+import { day } from "@/lib/format";
+import { getT } from "@/lib/lang";
+import { masterIndex } from "@/lib/masterQueries";
 import { pageMetadata } from "@/lib/seo";
+import { SOURCES } from "@/lib/sources";
 
 export const dynamic = "force-dynamic";
-export const metadata = pageMetadata({ title: 'Communities', description: 'Dubai communities with median sale price, rent and gross yield from Dubai Land Department data.', path: '/communities' });
+export const metadata = pageMetadata({
+  title: "Dubai communities: apartment prices, rents and yields",
+  description: "Every Dubai community with building pages, from Dubai Marina to Dubai South: apartment sale prices, rents and gross yields from Dubai Land Department data.",
+  path: "/communities",
+});
 
-async function loadCards() {
+async function load() {
   if (!hasDatabase()) return null;
-  try {
-    return await launchCommunities();
-  } catch {
-    return null;
-  }
-}
-
-async function loadMore() {
-  if (!hasDatabase()) return [];
-  try {
-    return (await areasWithBuildings()).filter((a) => !isLaunchCommunity(a.dm_code));
-  } catch {
-    return [];
-  }
+  try { return await masterIndex(); } catch { return null; }
 }
 
 export default async function Page() {
+  const { t } = await getT();
   const currency = await getServerCurrency();
-  const cards = await loadCards();
-  const more = await loadMore();
-  const scope = LAUNCH_COMMUNITIES.find((c) => c.scope)?.scope;
+  const data = await load();
   return (
     <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
-      <h1 className="text-2xl font-semibold">Communities</h1>
+      <h1 className="text-2xl font-semibold">{t("Communities")}</h1>
       <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[var(--muted)]">
-        Three areas are checked by hand first: Dubai Marina, JVC and Business Bay. Sales and rents for the rest of Dubai are loaded, and more areas get their own pages as they are checked.
+        {t("Every community with building pages. Dubai Marina, JVC and Business Bay were checked by hand; the others are matched automatically from DLD names and are labelled so.")}
       </p>
-      {cards && cards.length > 0 ? <LaunchAreaCards cards={cards} currency={currency} title="Areas covered today" /> : <div className="mt-6"><NoData /></div>}
-      <p className="mt-4 text-sm"><Link className="link" href="/communities/compare">Compare areas side by side</Link></p>
-      {more.length > 0 && (
-        <section className="mt-10">
-          <h2 className="text-base font-semibold">More areas with building pages ({more.length})</h2>
-          <p className="mt-1 max-w-2xl text-sm text-[var(--muted)]">Matched automatically from DLD names and <strong className="font-medium text-[var(--fg)]">not yet hand-checked</strong>. Treat building names and map positions as unconfirmed. Sales counts are apartment sales in the last 12 months.</p>
-          <ul className="mt-3 grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2 lg:grid-cols-3">
-            {more.map((a) => (
-              <li key={a.dm_code} className="flex justify-between gap-3 border-b border-[var(--border)] py-1.5">
-                <Link className="link" href={`/community/${a.dm_code}`}>{a.name}</Link>
-                <span className="tabular-nums text-[var(--muted)]">{count(a.buildings)} bldgs · {count(a.sales)} sales</span>
-              </li>
-            ))}
-          </ul>
-          <p className="mt-2 text-xs text-[var(--muted)]">Source: DLD open data. Areas without building pages are not listed; their sales and rents are still loaded where the data was pushed.</p>
-        </section>
+      {data && data.rows.length > 0 ? (
+        <div className="mt-5">
+          <CommunityIndex rows={data.rows} currency={currency} figures={data.figures} />
+          <p className="mt-4 text-xs text-[var(--muted)]">
+            {t("Source")}: {t(SOURCES.dldSales)}; {t(SOURCES.dldRents)}{data.periodEnd ? `, ${t("data to {date}", { date: day(data.periodEnd) })}` : ""}. {t("Median figures for apartments, last 12 months. Rents are contracts tied to a community's buildings or projects.")}
+          </p>
+        </div>
+      ) : (
+        <div className="mt-6"><NoData /></div>
       )}
-      {scope && <p className="mt-4 max-w-2xl text-xs text-[var(--muted)]">Dubai Marina: {scope}</p>}
+      <p className="mt-6 text-sm">
+        <Link className="link" href="/communities/compare">{t("Compare areas side by side")}</Link>
+      </p>
     </main>
   );
 }

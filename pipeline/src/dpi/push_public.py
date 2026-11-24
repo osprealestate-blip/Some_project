@@ -26,6 +26,8 @@ PLAN: list[tuple[str, str]] = [
                                  "where %(all_struct)s or c.dm_code = any(%(codes)s))"),
     ("community_summary", "true"),
     ("community_metrics", "true"),
+    ("master_community_summary", "true"),
+    ("master_community_metrics", "true"),
     ("pois", "active"),
     ("transactions", "community_id in (select id from communities where dm_code = any(%(detail)s)) "
                      "and txn_date > now() - make_interval(years => %(years)s)"),
@@ -94,7 +96,7 @@ ADD_TABLES = {
     "rent_contracts": "start_date > now() - make_interval(years => %(rent_years)s) and excluded is distinct from 'future_date'",
 }
 
-SUMMARY_TABLES = ["building_summary", "community_summary", "community_metrics"]
+SUMMARY_TABLES = ["building_summary", "community_summary", "community_metrics", "master_community_summary", "master_community_metrics"]
 
 
 def run_summaries(source, target) -> str:
@@ -109,6 +111,10 @@ def run_summaries(source, target) -> str:
         c.execute("set statement_timeout = 0")
     target.commit()
     lines = []
+    missing = [t for t in SUMMARY_TABLES if not _columns(target, t)]
+    if missing:
+        raise SystemExit(f"The target has no table {', '.join(missing)}. Run db/migrations/0012_master_community_figures.sql on it first "
+                         "(Supabase SQL editor), then push again. Nothing was changed.")
     for table in SUMMARY_TABLES:
         cols = [c for c in _columns(target, table) if c in set(_columns(source, table))]
         col_sql = ", ".join(f'"{c}"' for c in cols)

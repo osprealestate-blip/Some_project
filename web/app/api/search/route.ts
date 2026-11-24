@@ -1,14 +1,21 @@
 import { NextResponse } from "next/server";
 import { hasDatabase } from "@/lib/db";
-import { search } from "@/lib/queries";
+import { searchMasters } from "@/lib/masterQueries";
+import { search, type SearchHit } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
 
+/** Master communities (Dubai Marina, Azizi Venice ...) come first, then official areas that are not the same name, then the rest. */
 export async function GET(req: Request) {
   const q = new URL(req.url).searchParams.get("q") ?? "";
   if (!hasDatabase() || q.trim().length < 2) return NextResponse.json({ results: [] });
   try {
-    return NextResponse.json({ results: await search(q.slice(0, 80)) });
+    const term = q.slice(0, 80).trim().toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
+    const [hits, masters] = await Promise.all([search(q.slice(0, 80)), term.length >= 2 ? searchMasters(term).catch(() => []) : Promise.resolve([])]);
+    const masterHits: SearchHit[] = masters.map((m) => ({ kind: "community", slug: m.slug, name: m.name, community: null, psf: null }));
+    const taken = new Set(masters.map((m) => m.name.toLowerCase()));
+    const rest = hits.filter((h) => !(h.kind === "community" && taken.has(h.name.toLowerCase())));
+    return NextResponse.json({ results: [...masterHits, ...rest] });
   } catch {
     return NextResponse.json({ results: [], error: "search_failed" }, { status: 500 });
   }

@@ -88,7 +88,7 @@ def test_add_skips_future_dated_rows_and_summaries_touch_only_figure_tables():
     import pytest
     from dpi import push_public
     assert all("future_date" in cond for cond in push_public.ADD_TABLES.values())
-    assert set(push_public.SUMMARY_TABLES) == {"building_summary", "community_summary", "community_metrics"}
+    assert set(push_public.SUMMARY_TABLES) == {"building_summary", "community_summary", "community_metrics", "master_community_summary", "master_community_metrics"}
     # With no buildings on the target the summaries push stops before deleting anything.
     dst = _FakeConn(count=0)
     with pytest.raises(SystemExit):
