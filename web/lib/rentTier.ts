@@ -17,7 +17,7 @@ const MIN_CONTRACTS = 3;
 
 export function rentTier(i: RentTierInput): RentTier {
   const n = i.rentCount ?? 0;
-  if (i.offPlan) return { id: "none", kind: "Not available", label: "No rent yet", line: "Not completed yet, so there are no rent contracts for this building." };
+  if (i.offPlan) return { id: "none", kind: "Not available", label: "Off-plan: no rent yet", line: "Off-plan (not completed yet), so there are no rent contracts for this building." };
   if (i.rentLevel && n >= MIN_CONTRACTS) {
     if (i.rentLevel === "building") return { id: "tower", kind: "Actual", label: "Rents for this tower", line: `${n} registered contracts matched to this building.` };
     if (i.rentLevel === "estimated") return { id: "estimated", kind: "Estimated", label: "Estimated from unit size", line: `${n} contracts; some name only the project and were placed here by unit size.` };

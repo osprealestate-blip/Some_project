@@ -21,7 +21,7 @@ export function figureFacts(i: AboutInput): FigureFact[] {
   const period = i.periodEnd ? `12 months to ${i.periodEnd}` : "12 months to the newest sale (date not available)";
   const salesSample = sales > 0 ? plural(sales, "sale", "sales") + " counted" : "No counted sales";
   const rentSample = i.offPlan
-    ? "None: not completed yet"
+    ? "None: off-plan, not completed yet"
     : rents > 0 ? plural(rents, "contract", "contracts") + (i.rentLevel === "estimated" ? ", some placed by unit size" : "") : "No rent contracts recorded";
   const rentLimit =
     i.rentLevel === "project" ? "Rents are filed per project, so this is the whole project's rent, not this tower's."
