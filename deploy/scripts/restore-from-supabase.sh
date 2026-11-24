@@ -13,8 +13,12 @@ fi
 export SRC
 mkdir -p ../backups
 echo "1/4 Downloading from Supabase (a few minutes)..."
-docker run --rm -e SRC -v "$PWD/../backups:/out" postgres:17 \
-  sh -c 'pg_dump "$SRC" --schema=public --data-only --no-owner --no-privileges --disable-triggers -Fc -f /out/supabase-data.dump'
+docker run --rm -e SRC -v "$PWD/../backups:/out" postgres:17 sh -c '
+  # Skip tables/sequences this login cannot read (for example ones created after its grants), and say which.
+  EXCL=$(psql "$SRC" -Atc "select format(\"--exclude-table=public.%I\", c.relname) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname=\"public\" and ((c.relkind in (\"r\",\"p\") and not has_table_privilege(c.oid,\"select\")) or (c.relkind=\"S\" and not has_sequence_privilege(c.oid,\"select\")))" | tr "\n" " ")
+  echo "Skipped (no read access): ${EXCL:-none}"
+  pg_dump "$SRC" --schema=public --data-only --no-owner --no-privileges --disable-triggers -Fc $EXCL -f /out/supabase-data.dump
+'
 echo "2/4 Loading into the VPS database..."
 docker compose exec -T db pg_restore -U dpi -d dpi --data-only --disable-triggers --no-owner < ../backups/supabase-data.dump
 echo "3/4 Recording the migrations so 'dpi migrate' knows they are applied..."
