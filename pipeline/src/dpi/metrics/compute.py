@@ -13,6 +13,9 @@ Rules (also shown on the About page):
 - Communities also get ready and off-plan medians separately, and a like-for-like change: the change in each
   tower's own median per sq ft (towers with 3+ sales in both years), averaged weighted by this year's sales.
   The plain change of the community median moves with the mix of towers and off-plan sales, not just prices.
+- Master communities (buildings.master_community: Dubai Marina, Azizi Venice, Dubai South ...) get the same figures
+  from the sales of their buildings. Their rents are the contracts tied to one of their buildings, or to a project
+  whose buildings are mostly in that master community; rent contracts that name neither are not counted.
 """
 from __future__ import annotations
 
@@ -227,6 +230,151 @@ full join (
 ) r on r.community_id = s.community_id and r.period = s.period
 """
 
+# Master communities: the groups people search for. Sales come from the buildings in the group; rents from contracts
+# tied to those buildings or to their projects (a rent contract names a project, not a master community).
+_MASTER_SALES_CTE = """
+with s as (
+  select b.master_community as m, t.building_id, least(t.rooms, 4) as rooms, t.txn_date, t.price, t.price_psf, t.off_plan
+  from transactions t join buildings b on b.id = t.building_id
+  where b.master_community is not null and t.excluded is null and t.property_type = any(%(types)s)
+    and t.txn_date > %(end)s::date - interval '24 months' and t.txn_date <= %(end)s
+),
+s12 as (select * from s where txn_date > %(end)s::date - interval '12 months'),
+sprev as (select * from s where txn_date <= %(end)s::date - interval '12 months')
+"""
+
+_MASTER_SUMMARY = _MASTER_SALES_CTE + """,
+pm as (
+  select distinct on (project_id) project_id, master_community from (
+    select project_id, master_community, count(*) as n from buildings
+    where project_id is not null and master_community is not null group by 1, 2) x
+  order by project_id, n desc
+),
+r12 as (
+  select coalesce(b.master_community, pm.master_community) as m, least(r.rooms, 4) as rooms, r.annual_rent
+  from rent_contracts r
+  left join buildings b on b.id = r.building_id
+  left join pm on pm.project_id = r.project_id
+  where r.excluded is null and r.rooms is not null
+    and r.start_date > %(end)s::date - interval '12 months' and r.start_date <= %(end)s
+    and coalesce(b.master_community, pm.master_community) is not null
+),
+sale_now as (
+  select m, case when grouping(rooms) = 1 then -1 else rooms end as rooms, count(*) as n,
+         percentile_cont(0.5) within group (order by price_psf) as psf,
+         percentile_cont(0.5) within group (order by price) as price
+  from s12 group by grouping sets ((m, rooms), (m)) having grouping(rooms) = 1 or rooms is not null
+),
+sale_prev as (
+  select m, case when grouping(rooms) = 1 then -1 else rooms end as rooms, count(*) as n,
+         percentile_cont(0.5) within group (order by price_psf) as psf
+  from sprev group by grouping sets ((m, rooms), (m)) having grouping(rooms) = 1 or rooms is not null
+),
+rent as (
+  select m, case when grouping(rooms) = 1 then -1 else rooms end as rooms, count(*) as n,
+         percentile_cont(0.5) within group (order by annual_rent) as rent
+  from r12 group by grouping sets ((m, rooms), (m)) having grouping(rooms) = 1 or rooms is not null
+),
+keys as (select m, rooms from sale_now union select m, rooms from rent),
+bc as (select master_community as m, count(*) as n from buildings where master_community is not null group by 1)
+insert into master_community_summary (master_community, rooms, sale_count_12m, sale_median_psf_12m, sale_median_price_12m,
+  sale_median_psf_prev_12m, rent_count_12m, rent_median_12m, gross_yield, building_count, period_end, source_date)
+select k.m, k.rooms, coalesce(sn.n, 0),
+  case when sn.n >= %(min)s then sn.psf end,
+  case when sn.n >= %(min)s then sn.price end,
+  case when sp.n >= %(min)s then sp.psf end,
+  coalesce(r.n, 0),
+  case when r.n >= %(min)s then r.rent end,
+  null, coalesce(bc.n, 0), %(end)s, %(source_date)s
+from keys k
+left join sale_now sn on sn.m = k.m and sn.rooms = k.rooms
+left join sale_prev sp on sp.m = k.m and sp.rooms = k.rooms
+left join rent r on r.m = k.m and r.rooms = k.rooms
+left join bc on bc.m = k.m
+"""
+
+# A master community with buildings but no counted sale or rent still gets an all-bedrooms row, so the page can say
+# "no sales counted" instead of looking missing.
+_MASTER_EMPTY = """
+insert into master_community_summary (master_community, rooms, building_count, period_end, source_date)
+select b.master_community, -1, count(*), %(end)s, %(source_date)s from buildings b
+where b.master_community is not null
+  and not exists (select 1 from master_community_summary x where x.master_community = b.master_community and x.rooms = -1)
+group by 1
+"""
+
+_MASTER_SEGMENTS = _MASTER_SALES_CTE + """,
+seg as (
+  select m,
+    count(*) filter (where not off_plan and txn_date > %(end)s::date - interval '12 months') as rn,
+    percentile_cont(0.5) within group (order by price_psf) filter (where not off_plan and txn_date > %(end)s::date - interval '12 months') as rpsf,
+    count(*) filter (where not off_plan and txn_date <= %(end)s::date - interval '12 months') as rnp,
+    percentile_cont(0.5) within group (order by price_psf) filter (where not off_plan and txn_date <= %(end)s::date - interval '12 months') as rpsfp,
+    count(*) filter (where off_plan and txn_date > %(end)s::date - interval '12 months') as on_,
+    percentile_cont(0.5) within group (order by price_psf) filter (where off_plan and txn_date > %(end)s::date - interval '12 months') as opsf,
+    count(*) filter (where off_plan and txn_date <= %(end)s::date - interval '12 months') as onp,
+    percentile_cont(0.5) within group (order by price_psf) filter (where off_plan and txn_date <= %(end)s::date - interval '12 months') as opsfp
+  from s where off_plan is not null group by 1
+),
+tower as (
+  select m, building_id,
+    count(*) filter (where txn_date > %(end)s::date - interval '12 months') as n,
+    percentile_cont(0.5) within group (order by price_psf) filter (where txn_date > %(end)s::date - interval '12 months') as psf,
+    count(*) filter (where txn_date <= %(end)s::date - interval '12 months') as np,
+    percentile_cont(0.5) within group (order by price_psf) filter (where txn_date <= %(end)s::date - interval '12 months') as psfp
+  from s group by 1, 2
+),
+lfl as (
+  select m, count(*) as towers, exp(sum(n * ln(psf / psfp)) / sum(n)) - 1 as chg
+  from tower where n >= %(min)s and np >= %(min)s and psf > 0 and psfp > 0 group by 1
+)
+update master_community_summary cs set
+  sale_count_ready_12m = coalesce(seg.rn, 0),
+  sale_median_psf_ready_12m = case when seg.rn >= %(min)s then seg.rpsf end,
+  sale_median_psf_ready_prev_12m = case when seg.rnp >= %(min)s then seg.rpsfp end,
+  sale_count_offplan_12m = coalesce(seg.on_, 0),
+  sale_median_psf_offplan_12m = case when seg.on_ >= %(min)s then seg.opsf end,
+  sale_median_psf_offplan_prev_12m = case when seg.onp >= %(min)s then seg.opsfp end,
+  like_for_like_change = case when lfl.towers >= %(min)s then lfl.chg end,
+  like_for_like_towers = coalesce(lfl.towers, 0)
+from seg full join lfl on lfl.m = seg.m
+where cs.rooms = -1 and cs.master_community = coalesce(seg.m, lfl.m)
+"""
+
+_MASTER_SERIES = """
+with pm as (
+  select distinct on (project_id) project_id, master_community from (
+    select project_id, master_community, count(*) as n from buildings
+    where project_id is not null and master_community is not null group by 1, 2) x
+  order by project_id, n desc
+)
+insert into master_community_metrics (master_community, period, sale_median_psf, sale_count, rent_median, rent_count, source_date)
+select coalesce(s.m, r.m), coalesce(s.period, r.period), s.psf, coalesce(s.n, 0), r.rent, coalesce(r.n, 0), %(source_date)s
+from (
+  select b.master_community as m, date_trunc('month', t.txn_date)::date as period, count(*) as n,
+         percentile_cont(0.5) within group (order by t.price_psf) as psf
+  from transactions t join buildings b on b.id = t.building_id
+  where b.master_community is not null and t.excluded is null and t.property_type = any(%(types)s)
+    and t.txn_date > %(end)s::date - interval '10 years'
+  group by 1, 2
+) s
+full join (
+  select coalesce(b.master_community, pm.master_community) as m, date_trunc('month', c.start_date)::date as period,
+         count(*) as n, percentile_cont(0.5) within group (order by c.annual_rent) as rent
+  from rent_contracts c left join buildings b on b.id = c.building_id left join pm on pm.project_id = c.project_id
+  where c.excluded is null and c.rooms is not null and coalesce(b.master_community, pm.master_community) is not null
+    and c.start_date > %(end)s::date - interval '10 years' and c.start_date <= %(end)s
+  group by 1, 2
+) r on r.m = s.m and r.period = s.period
+"""
+
+# Off-plan sales per building, so a list of towers can tell new launches from ready ones.
+_BUILDING_OFFPLAN = _SALES_CTE + """
+update building_summary bs set sale_count_offplan_12m = x.n
+from (select building_id, count(*) as n from s12 where off_plan is true and building_id is not null group by 1) x
+where bs.building_id = x.building_id and bs.rooms = -1
+"""
+
 
 @dataclass
 class MetricsReport:
@@ -235,12 +383,14 @@ class MetricsReport:
     building_rows: int = 0
     community_rows: int = 0
     series_rows: int = 0
+    master_rows: int = 0
     outliers: OutlierReport | None = None
 
     def render(self) -> str:
         return ((self.outliers.render() + "\n" if self.outliers else "") + f"window ends: {self.period_end} (newest DLD file {self.source_date})\n"
                 f"building summary rows: {self.building_rows}\ncommunity summary rows: {self.community_rows}\n"
-                f"community monthly rows: {self.series_rows}")
+                f"community monthly rows: {self.series_rows}\n"
+                f"master community summary rows: {self.master_rows}")
 
 
 def run(conn) -> MetricsReport:
@@ -256,6 +406,7 @@ def run(conn) -> MetricsReport:
         cur.execute(_BUILDING_SUMMARY, p)
         rep.building_rows = cur.rowcount
         cur.execute(_YIELD.format(table="building_summary"))
+        cur.execute(_BUILDING_OFFPLAN, p)
         cur.execute("delete from community_summary")
         cur.execute(_COMMUNITY_SUMMARY, p)
         rep.community_rows = cur.rowcount
@@ -264,5 +415,13 @@ def run(conn) -> MetricsReport:
         cur.execute("delete from community_metrics")
         cur.execute(_COMMUNITY_SERIES, p)
         rep.series_rows = cur.rowcount
+        cur.execute("delete from master_community_summary")
+        cur.execute(_MASTER_SUMMARY, p)
+        rep.master_rows = cur.rowcount
+        cur.execute(_MASTER_EMPTY, p)
+        cur.execute(_MASTER_SEGMENTS, p)
+        cur.execute(_YIELD.format(table="master_community_summary"))
+        cur.execute("delete from master_community_metrics")
+        cur.execute(_MASTER_SERIES, p)
     conn.commit()
     return rep

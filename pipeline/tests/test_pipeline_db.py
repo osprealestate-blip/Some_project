@@ -299,3 +299,46 @@ def test_empty_building_pages_removed_on_rerun(conn):
         assert cur.fetchall() == [("checked-tower",)]  # hand-checked pages stay
         cur.execute("delete from buildings where slug = 'checked-tower'")
     conn.commit()
+
+
+def test_master_community_figures_follow_the_buildings(conn):
+    from dpi.metrics import compute
+
+    with conn.cursor() as cur:
+        cur.execute("update buildings b set master_community = case c.dm_code when '392' then 'Dubai Marina' "
+                    "when '681' then 'Jumeirah Village Circle (JVC)' else 'Business Bay' end "
+                    "from communities c where c.id = b.community_id")
+        # A master community with a building but no counted sale or rent still gets a row, so the page can say so.
+        cur.execute("insert into buildings (slug, name_en, community_id, master_community, match_confidence) "
+                    "select 'quiet-tower', 'Quiet Tower', id, 'Quiet Place', 0.9 from communities where dm_code = '392'")
+    conn.commit()
+    try:
+        m = compute.run(conn)
+        assert m.master_rows > 0
+        with conn.cursor() as cur:
+            cur.execute("select m.sale_count_12m, c.sale_count_12m, m.rent_count_12m, c.rent_count_12m, m.building_count "
+                        "from master_community_summary m, community_summary c join communities d on d.id = c.community_id "
+                        "where m.master_community = 'Dubai Marina' and m.rooms = -1 and c.rooms = -1 and d.dm_code = '392'")
+            sales, dm_sales, rents, dm_rents, towers = cur.fetchone()
+            assert sales == dm_sales > 0          # every Marina sale is tied to a Marina building
+            assert 0 < rents <= dm_rents          # rents count only when tied to a building or its project
+            assert towers == 4
+            cur.execute("select sale_count_12m, sale_median_psf_12m, building_count from master_community_summary "
+                        "where master_community = 'Quiet Place' and rooms = -1")
+            assert cur.fetchone() == (0, None, 1)
+            cur.execute("select count(*) from master_community_summary where gross_yield is not null and rooms >= 0")
+            assert cur.fetchone()[0] > 0
+            cur.execute("select sale_count_ready_12m + sale_count_offplan_12m, sale_count_12m from master_community_summary "
+                        "where master_community = 'Dubai Marina' and rooms = -1")
+            parts, whole = cur.fetchone()
+            assert parts <= whole
+            cur.execute("select count(*), sum(sale_count) from master_community_metrics where master_community = 'Dubai Marina'")
+            months, n = cur.fetchone()
+            assert months > 12 and n >= sales
+            cur.execute("select sum(sale_count_offplan_12m) from building_summary where rooms = -1")
+            assert cur.fetchone()[0] is not None
+    finally:
+        with conn.cursor() as cur:
+            cur.execute("delete from buildings where slug = 'quiet-tower'")
+            cur.execute("update buildings set master_community = null")
+        conn.commit()

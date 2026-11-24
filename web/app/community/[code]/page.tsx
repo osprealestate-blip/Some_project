@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import fs from "node:fs/promises";
 import path from "node:path";
 import BuildingMap from "@/components/LazyBuildingMap";
@@ -23,6 +23,9 @@ import { communityBuildings, communityByCode, communitySeries, communitySummarie
 import { coverageLines } from "@/lib/matchCoverage";
 import CoverageNotice from "@/components/CoverageNotice";
 import { EMPTY_TEXT, evidenceState } from "@/lib/coverage";
+import MasterCommunityPage from "@/components/MasterCommunityPage";
+import { masterDescription, masterSlug, masterTitle } from "@/lib/masterCommunities";
+import { mastersInArea, resolveMaster } from "@/lib/masterQueries";
 import { pageMetadata } from "@/lib/seo";
 import { SOURCES } from "@/lib/sources";
 import { change } from "@/lib/stats";
@@ -50,8 +53,21 @@ async function polygon(code: string): Promise<{ name: string; bounds: [[number, 
   return { name: f.properties.name, bounds: [[Math.min(...xs), Math.min(...ys)], [Math.max(...xs), Math.max(...ys)]] };
 }
 
+/** /community/392 is an official Dubai Municipality area; /community/dubai-marina is a master community (the groups people search for). */
+const isOfficialCode = (code: string) => /^\d{1,4}$/.test(code);
+
+async function masterFor(code: string): Promise<string | null> {
+  if (!hasDatabase()) return null;
+  try { return await resolveMaster(code); } catch { return null; }
+}
+
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { code } = await params;
+  if (!isOfficialCode(code)) {
+    const name = await masterFor(code);
+    if (!name) return { title: "Community" };
+    return pageMetadata({ title: masterTitle(name), description: masterDescription(name), path: `/community/${masterSlug(name)}` });
+  }
   const p = await polygon(code);
   if (!p) return { title: "Community" };
   const label = launchCommunity(code)?.label ?? p.name;
@@ -60,6 +76,14 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 
 export default async function Page({ params }: Params) {
   const { code } = await params;
+  if (isOfficialCode(code)) return <OfficialAreaPage code={code} />;
+  const name = await masterFor(code);
+  if (!name) notFound();
+  if (masterSlug(name) !== code) permanentRedirect(`/community/${masterSlug(name)}`); // /community/jvc -> /community/jumeirah-village-circle
+  return <MasterCommunityPage name={name} />;
+}
+
+async function OfficialAreaPage({ code }: { code: string }) {
   const poly = await polygon(code);
   const c = hasDatabase() ? await communityByCode(code) : null;
   if (!poly && !c) notFound();
@@ -78,6 +102,7 @@ export default async function Page({ params }: Params) {
   const conversionNote = getConversionNote(currency);
   const [summaries, series, buildings, sites, coverage] = await Promise.all([communitySummaries(c.id), communitySeries(c.id), communityBuildings(c.id), constructionProjects(code), matchCoverage(c.id).catch(() => null)]);
   const stamps = await freshnessStamps();
+  const masters = await mastersInArea(code).catch(() => [] as string[]);
   const all = summaries.find((s) => s.rooms === -1);
   const plainYoy = change(all?.sale_median_psf_12m, all?.sale_median_psf_prev_12m);
   const lfl = all?.like_for_like_change ?? null;
@@ -89,9 +114,15 @@ export default async function Page({ params }: Params) {
 
   return (
     <main className="mx-auto max-w-5xl p-4 sm:p-6">
-      <nav className="text-xs text-[var(--muted)]"><Link className="link" href="/map">Map</Link> / Communities</nav>
+      <nav className="text-xs text-[var(--muted)]"><Link className="link" href="/map">Map</Link> / <Link className="link" href="/communities">Communities</Link></nav>
       <h1 className="mt-1 text-2xl font-semibold">{title}</h1>
       {official !== title && <p className="text-sm text-[var(--muted)]">Official community name: {official} (DM {code})</p>}
+      {masters.length > 0 && (
+        <p className="mt-1 text-sm text-[var(--muted)]">
+          Official area. The communities people search for inside it:{" "}
+          {masters.map((m, i) => <span key={m}>{i > 0 && ", "}<Link className="link" href={`/community/${masterSlug(m)}`}>{m}</Link></span>)}.
+        </p>
+      )}
       {scope && <p className="mt-2 max-w-2xl text-sm">{scope}</p>}
       <DataBadge saleCount={all?.sale_count_12m} periodEnd={all?.period_end} />
       <CoverageNotice dmCode={code} stamps={stamps} />

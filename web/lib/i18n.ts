@@ -26,7 +26,8 @@ export const makeT = (lang: Lang): T => (text, vars) => translate(lang, text, va
 
 /** Pages whose text is fully translated. Elsewhere the page stays English and left-to-right, under a notice. */
 export function isTranslatedPath(pathname: string): boolean {
-  return pathname === "/" || pathname === "/map" || pathname.startsWith("/map/");
+  // /community/392 (official areas) is English only; /community/dubai-marina and the index are translated.
+  return pathname === "/" || pathname === "/map" || pathname.startsWith("/map/") || pathname === "/communities" || /^\/community\/(?!\d+$)[^/]+$/.test(pathname);
 }
 
 /** Legend rows are built from numbers ("Under AED 1,000", "AED 1,000 to AED 1,500"): translate the frame, keep the numbers. */
