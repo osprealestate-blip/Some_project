@@ -10,5 +10,5 @@ EXCL=$(psql "$SRC" -Atc "
       or (c.relkind = 'S' and not has_sequence_privilege(c.oid, 'select')))" | tr '\n' ' ')
 echo "Skipped (no read access): ${EXCL:-none}"
 # shellcheck disable=SC2086
-pg_dump "$SRC" --schema=public --data-only --no-owner --no-privileges --disable-triggers -Fc $EXCL -f /out/supabase-data.dump.part
+pg_dump "$SRC" --schema=public --data-only --no-owner --no-privileges --disable-triggers -Fc --exclude-table=public.schema_migrations $EXCL -f /out/supabase-data.dump.part
 mv /out/supabase-data.dump.part /out/supabase-data.dump

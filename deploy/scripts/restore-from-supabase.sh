@@ -26,19 +26,10 @@ PG="docker run --rm -i -v $PWD/../backups:/out"
 echo "1/5 Downloading from Supabase (a few minutes)..."
 $PG -e SRC -v "$PWD/scripts:/s:ro" postgres:17 bash /s/dump-inner.sh
 
-echo "2/5 Emptying the VPS tables (this is a full replace)..."
-docker compose exec -T db psql -U dpi -d dpi -v ON_ERROR_STOP=1 <<'SQL'
-do $$ declare r record; begin
-  for r in select tablename from pg_tables where schemaname = 'public' and tablename not in ('spatial_ref_sys','schema_migrations') loop
-    execute format('truncate table public.%I restart identity cascade', r.tablename);
-  end loop;
-end $$;
-SQL
+echo "2/5 Replacing the VPS tables in one transaction (if it fails, the old data is kept)..."
+$PG --network "$NET" -e PGPASSWORD="$DB_PASSWORD" -v "$PWD/scripts:/s:ro" postgres:17 bash /s/restore-inner.sh
 
-echo "3/5 Loading into the VPS database..."
-$PG --network "$NET" -e PGPASSWORD="$DB_PASSWORD" postgres:17 \
-  pg_restore -h db -U dpi -d dpi --data-only --disable-triggers --no-owner /out/supabase-data.dump
-
+echo "3/5 Done loading."
 echo "4/5 Recording the migrations so 'dpi migrate' knows they are applied..."
 {
   echo "create table if not exists schema_migrations (name text primary key, applied_at timestamptz default now());"
