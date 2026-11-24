@@ -37,7 +37,7 @@ type Props = {
   hiddenKinds: FacilityId[];
   onNearby: (on: boolean) => void;
   onToggleKind: (id: FacilityId) => void;
-  onFacilities: (list: NearestFacility[]) => void;
+  onFacilities: (list: NearestFacility[], routing: boolean) => void;
   routeMode: RouteMode;
   routes: RouteMap;
   onRouteMode: (m: RouteMode) => void;
@@ -105,7 +105,7 @@ export default function BuildingCard({ slug, view, currency, features, onClose, 
     setTab(TABS.some(([id]) => id === tabParam) ? (tabParam as Tab) : "overview");
     setData(null);
     setState("loading");
-    fetchCard(slug, lang).then((d) => { if (live) { setData(d); setState("ok"); onFacilities(d.facilities); } }).catch(() => { if (live) setState("error"); });
+    fetchCard(slug, lang).then((d) => { if (live) { setData(d); setState("ok"); onFacilities(d.facilities, d.routing); } }).catch(() => { if (live) setState("error"); });
     return () => { live = false; };
     // onFacilities is stable (state setter wrapper).
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -147,6 +147,7 @@ html:not([data-view="advanced"]) .adv-only { display: none; }
   box-shadow: 0 0 0 1px rgb(15 39 66 / 0.08), 0 6px 16px rgb(15 39 66 / 0.18);
   display: flex; align-items: center; gap: 6px;
 }
+@media (max-width: 767px) { .dpi-dist { white-space: normal; max-width: 128px; text-align: center; line-height: 1.25; border-radius: 12px; } }
 .dpi-dist::before { content: ""; width: 8px; height: 8px; border-radius: 999px; background: var(--c); flex: none; }
 
 /* Entrance and tab animations (Phase 4). Removed for people who ask for less motion by the rule above. */
