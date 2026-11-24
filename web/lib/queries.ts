@@ -1,5 +1,6 @@
 /** Every SQL query the web app runs. Only market fields are selected; public tables hold no personal data.
  *  Dates come back as ISO text, counts as integers. Figures follow the rules in pipeline/src/dpi/metrics. */
+import { unstable_cache } from "next/cache";
 import type { BuildingServiceCharge, CommunityServiceCharge } from "./serviceCharge";
 import type { SchoolRatingRow } from "@/lib/schoolSummary";
 import { one, query } from "./db";
@@ -609,7 +610,13 @@ export type OffPlanProject = {
 
 /** Buildings with off-plan apartment sales in the 12 months to the newest sale, busiest first. Developer, status and
  *  % complete come from the DLD Projects file when it has been loaded (`dpi import-projects`); otherwise they are null. */
-export async function offPlanProjects(dmCode: string | null, limit = 60): Promise<OffPlanProject[]> {
+export function offPlanProjects(dmCode: string | null, limit = 60): Promise<OffPlanProject[]> {
+  // Shared across function instances and cold starts (the query takes 3-10 s on the free database); an hour is plenty
+  // because the public data only changes when a new load is pushed.
+  return unstable_cache(() => offPlanProjectsUncached(dmCode, limit), ["off-plan-projects-v1", String(dmCode), String(limit)], { revalidate: 3600 })();
+}
+
+async function offPlanProjectsUncached(dmCode: string | null, limit: number): Promise<OffPlanProject[]> {
   const base = (extra: string, join: string) => `
     with newest as (select max(txn_date) as d from transactions)
     select b.slug, b.name_en, coalesce(c.name_common, c.name_official) as community, c.dm_code,
