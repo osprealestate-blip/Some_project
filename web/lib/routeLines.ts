@@ -16,8 +16,8 @@ export function routeLines(list: NearestFacility[], hidden: FacilityId[], routes
   };
 }
 
-/** Where to put a label: the middle vertex of a route, or the middle of a straight line. */
-export function labelPoint(from: { lng: number; lat: number }, f: NearestFacility, r: RouteResult | null | undefined): [number, number] {
+/** Where to put a label: the middle vertex of a route. With no route there is no line, so the label belongs to the place itself. */
+export function labelPoint(_from: { lng: number; lat: number }, f: NearestFacility, r: RouteResult | null | undefined): [number, number] {
   if (r && r.coords.length) return r.coords[Math.floor(r.coords.length / 2)];
-  return [(from.lng + f.lng) / 2, (from.lat + f.lat) / 2];
+  return [f.lng, f.lat];
 }
