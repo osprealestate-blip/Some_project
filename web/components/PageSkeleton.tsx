@@ -1,8 +1,11 @@
-/** Placeholder shown while a data page loads. Pulse animation only; no figures. */
+import LoadingSkyline from "@/components/LoadingSkyline";
+
+/** Placeholder shown while a data page loads: the building skyline, then pulsing blocks. No figures. */
 export default function PageSkeleton({ label }: { label: string }) {
   return (
     <main className="mx-auto max-w-5xl p-4 sm:p-6" aria-busy="true">
-      <p className="sr-only" role="status">{label}</p>
+      <LoadingSkyline label="Loading" className="py-6" />
+      <p className="sr-only">{label}</p>
       <div className="h-3 w-24 animate-pulse rounded bg-[var(--grid)]" />
       <div className="mt-3 h-8 w-2/3 animate-pulse rounded bg-[var(--grid)]" />
       <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">

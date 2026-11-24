@@ -13,6 +13,10 @@ export type Pt = { x: number; y: number };
 export type Rect = { left: number; top: number; right: number; bottom: number };
 
 export const FIT_MARGIN = 28;
+/** Desktop: width the docked building card takes from the left edge (tool rail + card + gap). */
+export const DOCK_INSET = 540;
+/** Phone: side room kept free so a place label (up to ~128 px wide, centred on its pin) is not cut off by the screen edge. */
+export const PHONE_SIDE = 64;
 export const FIT_MAX_ZOOM = 15.5;
 export const FIT_MIN_ZOOM = 12.5;
 /** Places farther than this (straight line) from the building are left out of the fit: one far hospital must not push the map out to a city view. */

@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache";
 import { hasDatabase, query } from "@/lib/db";
 import { MIN_CONFIDENCE } from "@/lib/queries";
 
@@ -5,12 +6,27 @@ import { MIN_CONFIDENCE } from "@/lib/queries";
  *  Real counts from our own tables for the homepage. Cached for 10 minutes per server instance (the counts are large). */
 export type HomeStats = { buildings: number; sales: number; rents: number; sourceDate: string | null };
 
-let cache: { at: number; value: HomeStats | null } | null = null;
-const TTL_MS = 10 * 60 * 1000;
+// The counts scan ~1.3M rows (4-10 s on the free database), so they are shared as one in-flight promise and kept
+// for an hour; the homepage streams them in (Suspense) instead of waiting for them.
+let cache: { at: number; value: Promise<HomeStats | null> } | null = null;
+const TTL_MS = 60 * 60 * 1000;
 
-export async function homeStats(): Promise<HomeStats | null> {
-  if (!hasDatabase()) return null;
+export function homeStats(): Promise<HomeStats | null> {
+  if (!hasDatabase()) return Promise.resolve(null);
   if (cache && Date.now() - cache.at < TTL_MS) return cache.value;
+  const value = sharedStats().catch(() => null);
+  cache = { at: Date.now(), value };
+  return value;
+}
+
+// Next's shared data cache survives cold starts and is shared by every function instance, unlike the memory cache above.
+const sharedStats = unstable_cache(async () => {
+  const v = await loadHomeStats();
+  if (!v) throw new Error("home stats unavailable"); // a failed load is not cached
+  return v;
+}, ["home-stats-v1"], { revalidate: 6 * 3600 });
+
+async function loadHomeStats(): Promise<HomeStats | null> {
   let value: HomeStats | null = null;
   try {
     const rows = await query<{ buildings: string; sales: string; rents: string; source_date: string | null }>(
@@ -25,7 +41,6 @@ export async function homeStats(): Promise<HomeStats | null> {
   } catch {
     value = null;
   }
-  cache = { at: Date.now(), value };
   return value;
 }
 

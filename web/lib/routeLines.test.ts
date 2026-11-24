@@ -23,6 +23,6 @@ describe("routeLines", () => {
   });
   it("puts labels on the route when it exists", () => {
     expect(labelPoint(from, list[0], route)).toEqual([55.105, 25.1]);
-    expect(labelPoint(from, list[0], null)[0]).toBeCloseTo(55.105);
+    expect(labelPoint(from, list[0], null)).toEqual([list[0].lng, list[0].lat]);
   });
 });

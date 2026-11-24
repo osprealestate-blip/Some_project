@@ -1,6 +1,6 @@
 "use client";
 
-import { pickFitPoints, planFit, verifyFit, FIT_MAX_ZOOM, FIT_MIN_ZOOM } from "@/lib/mapFit";
+import { pickFitPoints, planFit, verifyFit, DOCK_INSET, PHONE_SIDE, FIT_MAX_ZOOM, FIT_MIN_ZOOM } from "@/lib/mapFit";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import maplibregl, { type ExpressionSpecification, type FilterSpecification, type MapLayerMouseEvent } from "maplibre-gl";
@@ -14,6 +14,7 @@ import {
 import { DUBAI_PITCH, LAUNCH_BOUNDS, MAP_ATTRIBUTION, webglAvailable } from "@/lib/mapStyle";
 import { DEFAULT_THEME, THEMES, parseTheme, type ThemeId } from "@/lib/mapThemes";
 import dynamic from "next/dynamic";
+import LoadingSkyline from "./LoadingSkyline";
 import { fetchCard } from "@/lib/cardClient";
 import MapFilterMenu from "./MapFilterMenu";
 import { MAP_COMPARE_MAX as MAX_COMPARE } from "@/lib/mapCompare";
@@ -202,6 +203,7 @@ export default function BuildingMap({
 
   const [noWebgl, setNoWebgl] = useState(false);
   const [raw, setRaw] = useState<Collection | null>(null);
+  const [dataDone, setDataDone] = useState(false); // /api/buildings answered (or failed), so stop the loading skyline
   // A grey (OpenStreetMap) building the visitor clicked: not in our database, so it opens the "no data yet" card.
   const [place, setPlace] = useState<Place | null>(null);
   const [settings, setSettings] = useState<MapSettings>(DEFAULT_SETTINGS);
@@ -214,6 +216,7 @@ export default function BuildingMap({
   const [facilities, setFacilities] = useState<NearestFacility[]>([]);
   const [routeMode, setRouteMode] = useState<RouteMode>("drive"); // real driving (default) or walking routes
   const [routes, setRoutes] = useState<RouteMap>({});
+  const [routingOn, setRoutingOn] = useState(false); // the site owner switched a routing service on (from the card data)
   // Closing the card hides it but keeps the building selected: its highlight and nearby lines stay on the map until
   // "Deselect". The sheet height (phones) tells the camera how much of the map is free above it.
   const [hiddenFor, setHiddenFor] = useState<string | null>(null);
@@ -223,6 +226,13 @@ export default function BuildingMap({
   const compareOpen = useRef(false);
   // The selected building and the places its nearby lines point at (empty when the lines are off): the camera keeps all of them in view.
   const fitPts = useRef<[number, number][]>([]);
+  /** Desktop: the width the open colour legend takes from the right edge, so no place is framed behind it. */
+  const legendWidth = (map: maplibregl.Map) => {
+    const el = document.querySelector("[data-map-legend]");
+    if (!el) return 0;
+    const box = map.getContainer().getBoundingClientRect(), r = el.getBoundingClientRect();
+    return r.width > 0 ? Math.max(0, Math.round(box.right - r.left) + 8) : 0;
+  };
   /** Bring the building and every nearby place into the map area the sheet / side card / top bar leave free. Zooms out only
    *  when they do not fit; never zooms in. A tilted view is checked against the real projection after the move. */
   const fitNearby = (duration: number) => {
@@ -230,9 +240,9 @@ export default function BuildingMap({
     const pts = fitPts.current;
     if (!map || pts.length < 2) return false;
     const wide = window.matchMedia("(min-width: 768px)").matches;
-    const inset = wide ? { top: 0, bottom: 0, left: 420, right: 0 } : (() => {
+    const inset = wide ? { top: 8, bottom: 100, left: DOCK_INSET, right: legendWidth(map) } : (() => {
       const c = phoneCovered(map, live.current.padH, compareOpen.current);
-      return { top: c.topMin, bottom: c.bottom, left: 0, right: 0 };
+      return { top: c.topMin, bottom: c.bottom, left: PHONE_SIDE, right: PHONE_SIDE };
     })();
     const plan = planFit(map, pts, inset, (p) => p.reduce((b, c) => b.extend(c), new maplibregl.LngLatBounds(p[0], p[0])), { maxZoom: FIT_MAX_ZOOM });
     if (!plan) return false;
@@ -539,7 +549,8 @@ export default function BuildingMap({
       .then((geo: Collection | null) => {
         if (geo?.features?.length) setRaw(geo);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setDataDone(true));
 
     return () => {
       popup.remove();
@@ -801,6 +812,7 @@ export default function BuildingMap({
     const root = document.documentElement;
     const clear = () => { root.style.removeProperty("--card-x"); root.style.removeProperty("--card-y"); if (leaderRef.current) leaderRef.current.style.display = "none"; };
     const f = selected && raw ? raw.features.find((x) => x.properties.slug === selected)?.properties : null;
+    const dockCard = nearby && facilities.length > 0;
     if (!cardMode || !map || !f || view !== "card" || cardHidden) { clear(); return; }
     const place = () => {
       if (!window.matchMedia("(min-width: 768px)").matches) { clear(); return; }
@@ -814,6 +826,9 @@ export default function BuildingMap({
       const minX = 76, maxX = window.innerWidth - W - 16;
       let x = bx - GAP - W; // to the left of the building by default
       if (x < minX) x = bx + GAP <= maxX ? bx + GAP : minX;
+      // With the nearby places on, the camera frames them in the area right of the left edge: the card docks there instead of
+      // following the building, so it never covers the building or the places it points at.
+      if (dockCard) x = minX;
       x = Math.max(minX, Math.min(maxX, x));
       const y = Math.max(72, Math.min(window.innerHeight - H - 120, by - H / 2));
       root.style.setProperty("--card-x", `${Math.round(x)}px`);
@@ -832,7 +847,7 @@ export default function BuildingMap({
     map.on("move", place);
     window.addEventListener("resize", place);
     return () => { map.off("move", place); window.removeEventListener("resize", place); clear(); };
-  }, [cardMode, selected, raw, view, styleGen, cardHidden]);
+  }, [cardMode, selected, raw, view, styleGen, cardHidden, nearby, facilities.length]);
 
   // Compare list: kept in the URL (?compare=a,b,c) so it survives a reload and can be shared.
   useEffect(() => {
@@ -866,13 +881,13 @@ export default function BuildingMap({
   useEffect(() => {
     setRoutes({});
     const from = selected ? raw?.features.find((x) => x.properties.slug === selected)?.properties : null;
-    if (!nearby || !from || !facilities.length) return;
+    if (!nearby || !routingOn || !from || !facilities.length) return;
     let live = true;
     for (const f of facilities) {
       fetchRoute(routeMode, [from.lng, from.lat], [f.lng, f.lat]).then((r) => { if (live) setRoutes((m) => ({ ...m, [f.id]: r })); });
     }
     return () => { live = false; };
-  }, [nearby, routeMode, facilities, selected, raw]);
+  }, [nearby, routingOn, routeMode, facilities, selected, raw]);
   const wasNearby = useRef(false);
   const lastFit = useRef<string | null>(null);
   useEffect(() => {
@@ -909,10 +924,12 @@ export default function BuildingMap({
         const lab = document.createElement("div");
         lab.className = "dpi-dist";
         lab.style.setProperty("--c", kind.colour);
+        // No route (routing is off, still loading, or none was found): the label sits under the place's pin and says what is
+        // known, the straight-line distance. It never shows minutes it does not have.
         lab.textContent = r ? `${kindLabel} ${minutesLabel(r.minutes, routeMode, tt)} · ${kmu(r.distanceM)}`
-          : routes[f.id] === null ? tt("{kind} · travel time unavailable", { kind: kindLabel })
-          : kindLabel;
-        markers.push(new maplibregl.Marker({ element: lab }).setLngLat(labelPoint(from, f, r)).addTo(map));
+          : routingOn && routes[f.id] === null ? `${kindLabel} · ${tt("no route found")} · ${straight}`
+          : `${kindLabel} · ${straight}`;
+        markers.push(new maplibregl.Marker(r ? { element: lab } : { element: lab, anchor: "top", offset: [0, 18] }).setLngLat(labelPoint(from, f, r)).addTo(map));
       }
       // The building plus every place with a line. Fit when the lines first appear (once there is something to show);
       // choosing which kinds to show moves nothing.
@@ -923,7 +940,7 @@ export default function BuildingMap({
       wasNearby.current = false;
     }
     return () => markers.forEach((m) => m.remove());
-  }, [cardMode, nearby, facilities, hiddenKinds, selected, raw, styleGen, routes, routeMode, lang]);
+  }, [cardMode, nearby, facilities, hiddenKinds, selected, raw, styleGen, routes, routingOn, routeMode, lang]);
 
   // ?m= changes after the map opened (a start choice) switch the colour layer too.
   const metricParam = cardMode ? params.get("m") : null;
@@ -959,6 +976,11 @@ export default function BuildingMap({
   return (
     <div className="relative h-full w-full" data-map-theme={theme}>
       <div ref={container} className={className} aria-label={t("Map of Dubai buildings")} />
+      {!dataDone && (
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+          <LoadingSkyline label="Loading buildings on the map" className="rounded-2xl bg-[var(--panel)]/90 px-6 py-5 shadow-lg backdrop-blur" />
+        </div>
+      )}
       {legend && (
         <div className={selected ? "contents max-sm:hidden" : "contents"}>
         <MapControls
@@ -998,7 +1020,7 @@ export default function BuildingMap({
           routes={routes}
           onRouteMode={setRouteMode}
           onToggleKind={(id) => setHiddenKinds((h) => (h.includes(id) ? h.filter((x) => x !== id) : [...h, id]))}
-          onFacilities={setFacilities}
+          onFacilities={(list, routing) => { setFacilities(list); setRoutingOn(routing); }}
           compared={compare}
           onCompare={toggleCompare}
         />
