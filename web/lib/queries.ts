@@ -627,13 +627,22 @@ export async function offPlanProjects(dmCode: string | null, limit = 60): Promis
     having count(*) >= 3
      order by count(*) desc limit $4`;
   const args = [MIN_CONFIDENCE, SALE_TYPES, dmCode, limit];
+  const withProjects = () => query<OffPlanProject>(
+    base(", p.developer_name as developer, p.dld_status, p.percent_completed::float8 as percent_completed, p.completion_date::text as completion_date",
+      "left join projects p on p.id = b.project_id"), args);
+  // Only a missing table or column (42P01, 42703) means the optional projects join is unavailable. Any other
+  // failure (timeout, dropped pooled connection on a cold start) is retried once with the same query, so a slow
+  // first request does not double the wait or hide the developer and status columns.
   try {
-    return await query<OffPlanProject>(
-      base(", p.developer_name as developer, p.dld_status, p.percent_completed::float8 as percent_completed, p.completion_date::text as completion_date",
-        "left join projects p on p.id = b.project_id"), args);
-  } catch {
-    const rows = await query<OffPlanProject>(base("", ""), args);
-    return rows.map((r) => ({ ...r, developer: null, dld_status: null, percent_completed: null, completion_date: null }));
+    return await withProjects();
+  } catch (e) {
+    const code = (e as { code?: string }).code;
+    if (code === "42P01" || code === "42703") {
+      const rows = await query<OffPlanProject>(base("", ""), args);
+      return rows.map((r) => ({ ...r, developer: null, dld_status: null, percent_completed: null, completion_date: null }));
+    }
+    console.error("offPlanProjects: first attempt failed, retrying", e);
+    return await withProjects();
   }
 }
 
