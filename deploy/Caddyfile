@@ -1,0 +1,18 @@
+# Caddy gets and renews the HTTPS certificate (Let's Encrypt) for SITE_HOST by itself.
+{$SITE_HOST} {
+	encode zstd gzip
+
+	# Routing service, reachable only for route requests (the app calls these server-side).
+	handle /routed-foot/route/v1/* {
+		uri strip_prefix /routed-foot
+		reverse_proxy osrm-foot:5000
+	}
+	handle /routed-car/route/v1/* {
+		uri strip_prefix /routed-car
+		reverse_proxy osrm-car:5000
+	}
+
+	handle {
+		reverse_proxy web:3100
+	}
+}
