@@ -181,3 +181,13 @@ html:has([data-map-page]) { overflow: hidden; overscroll-behavior: none; }
 /* Loading skyline (components/LoadingSkyline.tsx): towers grow from the ground in turn. */
 @keyframes dpi-tower { 0%, 100% { transform: scaleY(0.25); opacity: 0.45; } 45% { transform: scaleY(1); opacity: 1; } }
 .dpi-tower { transform-box: fill-box; transform-origin: 50% 100%; animation: dpi-tower 1.4s ease-in-out infinite; }
+
+/* Master community name labels on the map (components/BuildingMap.tsx). */
+.dpi-area-label {
+  font-size: 11px; font-weight: 600; line-height: 1; letter-spacing: 0.01em; white-space: nowrap; cursor: pointer;
+  padding: 3px 7px; border-radius: 999px; border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel) 82%, transparent); color: var(--fg);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.12); backdrop-filter: blur(2px);
+}
+.dpi-area-label:hover { background: var(--panel); }
+@media (max-width: 640px) { .dpi-area-label { font-size: 10px; padding: 2px 6px; } }

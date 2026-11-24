@@ -4,6 +4,7 @@
 import { one, query } from "./db";
 import { MIN_CONFIDENCE, type CommunitySummary, type RentLevel, type SeriesPoint } from "./queries";
 import type { IndexRow, MasterBuilding } from "./masterCommunities";
+import type { MasterAreaDbRow } from "./masterAreas";
 import { findMaster, isHandChecked, masterSlug } from "./masterCommunities";
 import { change } from "./stats";
 
@@ -175,4 +176,35 @@ export async function searchMasters(term: string, limit = 4): Promise<{ name: st
     [term, MIN_CONFIDENCE, limit],
   );
   return rows.map((r) => ({ name: r.name, slug: masterSlug(r.name) }));
+}
+
+/** One outline per master community for the map. The official Dubai Municipality polygon when the community is exactly one
+ *  official area (every building matched by area); otherwise a hull round its placed buildings, kept approximate.
+ *  Buildings more than 1.5 km from any other one get their own hull (clustered with ST_ClusterDBSCAN), so a stray
+ *  building does not stretch one outline across the city. Label and zoom box use the biggest cluster. */
+export async function masterAreaRows(): Promise<MasterAreaDbRow[]> {
+  return query(
+    `with a as (
+       select b.master_community as name, count(*)::int as buildings, count(b.geom)::int as placed,
+              (count(*) filter (where b.master_community_source = 'area') = count(*) and count(distinct b.community_id) = 1) as one_area,
+              min(b.community_id) as cid
+         from buildings b where b.master_community is not null and b.match_confidence >= $1 group by 1),
+     p as (
+       select master_community as name, ST_Transform(ST_PointOnSurface(geom), 32640) as g,
+              ST_ClusterDBSCAN(ST_Transform(ST_PointOnSurface(geom), 32640), 1500, 1) over (partition by master_community) as k
+         from buildings where master_community is not null and geom is not null and match_confidence >= $1),
+     h as (select name, k, count(*) as n, ST_Buffer(ST_ConvexHull(ST_Collect(g)), 180) as hull from p group by name, k),
+     hs as (select name, ST_Transform(ST_Collect(hull), 4326) as shp, ST_Transform((array_agg(hull order by n desc))[1], 4326) as main from h group by name),
+     s as (
+       select a.name, a.buildings, a.placed,
+              case when a.one_area and c.geom is not null then ST_SimplifyPreserveTopology(c.geom, 0.0002) else hs.shp end as shp,
+              case when a.one_area and c.geom is not null then ST_SimplifyPreserveTopology(c.geom, 0.0002) else hs.main end as main,
+              (a.one_area and c.geom is not null) as official
+         from a left join communities c on c.id = a.cid left join hs on hs.name = a.name)
+     select name, buildings, placed, official, ST_AsGeoJSON(shp, 5) as shape,
+            ST_X(ST_PointOnSurface(main)) as lng, ST_Y(ST_PointOnSurface(main)) as lat,
+            ST_XMin(main) as w, ST_YMin(main) as s, ST_XMax(main) as e, ST_YMax(main) as n
+       from s where shp is not null`,
+    [MIN_CONFIDENCE],
+  );
 }
