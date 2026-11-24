@@ -61,7 +61,7 @@ If `~/.dpi.env` exists (line `HOSTED_DATABASE_URL=...`, `chmod 600`) the script 
 `pipeline\.env.hosted`, copy the `HOSTED_DATABASE_URL=` value, and if it ends `:6543/postgres` change `6543` to `5432`
 (pg_dump does not work through port 6543). It downloads about 400 MB; allow 5-15 minutes.
 
-Check the copy, then create the read-only website login:
+The copy replaces everything in the VPS tables, so it is safe to re-run. Check it, then create the read-only website login:
 ```bash
 bash scripts/counts.sh           # compare with the same query in Supabase's SQL editor
 bash scripts/create-web-role.sh
