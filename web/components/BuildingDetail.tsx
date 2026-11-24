@@ -122,6 +122,7 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
         {b.dm_code ? <Link className="link" href={`/community/${b.dm_code}`}>{b.community}</Link> : b.community}
       </nav>
       <h1 id={panel ? "building-panel-title" : undefined} className="mt-1 text-2xl font-semibold">{b.name_en}</h1>
+      {offPlan && <p className="mt-1"><span className="rounded-full border border-[var(--accent)] px-2.5 py-0.5 text-xs font-semibold" title={t("Every sale here in the last 24 months was off-plan, so the building is not completed yet.")}>{t("Off-plan")}</span></p>}
       <p className="text-sm text-[var(--muted)]">
         {b.community}{b.community !== b.community_official ? ` (${b.community_official})` : ""}
         {b.project && b.project.toLowerCase() !== b.name_en.toLowerCase() ? ` · Project: ${b.project}` : ""}
@@ -139,8 +140,10 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
         verdict={verdict}
         tiles={[
           { label: "Price per sq ft", value: formatPsf(all?.sale_median_psf_12m, currency) },
-          { label: "Gross yield (est.)", value: pct(glanceYield) },
-          { label: "Median annual rent", value: formatShortPrice(all?.rent_median_12m, currency) },
+          ...(offPlan ? [{ label: "Status", value: t("Off-plan") }] : [
+            { label: "Gross yield (est.)", value: pct(glanceYield) },
+            { label: "Median annual rent", value: formatShortPrice(all?.rent_median_12m, currency) },
+          ]),
           { label: "Sales, 12 months", value: count(all?.sale_count_12m ?? 0) },
         ]}
         facilities={facilities}
@@ -164,8 +167,8 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
         <Stat label="Median sale price" value={formatShortPrice(all?.sale_median_price_12m, currency)} note={`${count(all?.sale_count_12m ?? 0)} sales in 12 months`} meaning="Half of the apartments sold here in the last 12 months went for less than this." />
         <Stat term="price-per-sq-ft" label="Median price per sq ft" value={formatPsf(all?.sale_median_psf_12m, currency)} meaning="Price for each square foot, so flats of different sizes can be compared." />
         <Stat label="Change on a year earlier" value={pct(yoy, 1, true)} note="Median per sq ft" meaning="Compares the last 12 months with the 12 before. It also reflects which flats happened to sell, not only prices." />
-        <Stat label={rentLevel === "project" ? "Project median annual rent" : rentLevel === "estimated" ? "Median annual rent (estimated)" : "Median annual rent"} value={formatShortPrice(all?.rent_median_12m, currency)} note={offPlan ? "Not completed yet: no rent contracts" : rentLevel === "project" ? (unfinished ? "Not completed yet: this is the whole project's rent, not this tower's" : "Whole project (rents are filed per project, not per tower)") : rentLevel === "estimated" ? `Estimated: ${count(all?.rent_count_12m ?? 0)} contracts, some placed by unit size` : `${count(all?.rent_count_12m ?? 0)} contracts`} meaning="Typical yearly rent on contracts registered in the last 12 months." />
-        <Stat term="gross-yield" label="Gross yield (estimate)" value={pct(midYield)} note="Median across bedroom types" meaning="Yearly rent as a share of the price, before service charges and other costs. Not a promised return." />
+        {!offPlan && <Stat label={rentLevel === "project" ? "Project median annual rent" : rentLevel === "estimated" ? "Median annual rent (estimated)" : "Median annual rent"} value={formatShortPrice(all?.rent_median_12m, currency)} note={rentLevel === "project" ? (unfinished ? "Off-plan: this is the whole project's rent, not this tower's" : "Whole project (rents are filed per project, not per tower)") : rentLevel === "estimated" ? `Estimated: ${count(all?.rent_count_12m ?? 0)} contracts, some placed by unit size` : `${count(all?.rent_count_12m ?? 0)} contracts`} meaning="Typical yearly rent on contracts registered in the last 12 months." />}
+        {!offPlan && <Stat term="gross-yield" label="Gross yield (estimate)" value={pct(midYield)} note="Median across bedroom types" meaning="Yearly rent as a share of the price, before service charges and other costs. Not a promised return." />}
       </section>
       <RentEvidence rentLevel={rentLevel} rentCount={all?.rent_count_12m} communityRent={communityAll?.rent_median_12m ?? null} offPlan={offPlan} />
       <SourceNote source={`${SOURCES.dldSales}; ${SOURCES.dldRents}`} date={periodEnd} estimate>
@@ -185,9 +188,9 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
 
       {offPlan && (
         <section className="mt-8 rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
-          <h2 className="text-base font-semibold">Rent: not completed yet</h2>
+          <h2 className="text-base font-semibold">{t("Off-plan: no rent yet")}</h2>
           <p className="mt-1 text-sm text-[var(--muted)]">
-            Every sale here in the last 24 months was off-plan, so the building has no rent contracts yet.
+            {t("Every sale here in the last 24 months was off-plan, so the building is not completed yet and has no rent contracts.")}
             {offPlanRents.length ? " For comparison, this is what flats of a similar size rent for in the same community:" : ""}
           </p>
           {offPlanRents.length > 0 && (
