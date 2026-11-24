@@ -177,6 +177,15 @@ OSM_RULES: list[tuple[str, str, str, str]] = [
     ("amenity", "hospital", "health", "hospital"),
     ("amenity", "clinic", "health", "clinic"),
     ("amenity", "school", "school", "school"),
+    # civic places and hotels: used to name what a building is (see matching/building_kind.py)
+    ("amenity", "police", "civic", "police"),
+    ("amenity", "fuel", "civic", "fuel"),
+    ("amenity", "fire_station", "civic", "fire_station"),
+    ("amenity", "townhall", "civic", "government"),
+    ("amenity", "courthouse", "civic", "government"),
+    ("office", "government", "civic", "government"),
+    ("amenity", "place_of_worship", "civic", "mosque"),
+    ("tourism", "hotel", "lodging", "hotel"),
 ]
 
 
@@ -204,6 +213,8 @@ def read_osm(overpass_json: dict) -> list[Poi]:
         if sub == "metro" and not (tags.get("station") == "subway" or "metro" in (tags.get("name:en") or tags.get("name") or "").lower()
                                    or tags.get("network", "").lower().startswith("dubai metro")):
             continue  # skip non-metro railway stations
+        if sub == "mosque" and tags.get("religion") != "muslim":
+            continue  # only mosques; other places of worship are not typed
         lat = el.get("lat") or (el.get("center") or {}).get("lat")
         lng = el.get("lon") or (el.get("center") or {}).get("lon")
         name = tags.get("name:en") or tags.get("name")
@@ -212,7 +223,8 @@ def read_osm(overpass_json: dict) -> list[Poi]:
         if not name:
             if cat in ("lifestyle", "daily_needs") and sub not in ("park", "beach"):
                 continue  # unnamed shops and cafes are too noisy to list
-            name = {"bus": "Bus stop", "park": "Park", "beach": "Beach"}.get(sub, sub.title())
+            name = {"bus": "Bus stop", "park": "Park", "beach": "Beach", "fuel": "Petrol station", "police": "Police station",
+                    "fire_station": "Fire station", "mosque": "Mosque", "government": "Government office"}.get(sub, sub.title())
         out.append(Poi(cat, sub, name, float(lng), float(lat), {"osm_id": f"{el.get('type')}/{el.get('id')}"}))
     return out
 

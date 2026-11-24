@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import BuildingMap from "@/components/LazyBuildingMap";
+import { isKind, KIND_LABEL, kindSourceNote } from "@/lib/buildingKind";
 import GoldenVisaChecker from "@/components/GoldenVisaChecker";
 import LineChart from "@/components/LineChart";
 import MonthlyCostCalculator from "@/components/MonthlyCostCalculator";
@@ -133,6 +134,12 @@ export default async function BuildingDetail({ slug, variant = "page" }: Props) 
         <p className="mt-1 text-xs text-[var(--muted)]" title={t("Use is taken from the property types in DLD sales and rent records.")}>
           <span className="rounded-full border border-[var(--border)] px-2 py-0.5">{t(USE_NAME[b.building_type!])}</span>
           {b.building_type === "commercial" || b.building_type === "mixed" ? ` ${t("Prices and rents here cover residential units only.")}` : ""}
+        </p>
+      )}
+      {b.building_kind && isKind(b.building_kind) && b.building_kind_source && (
+        <p className="mt-1 text-xs text-[var(--muted)]">
+          <span className="rounded-full border border-[var(--border)] px-2 py-0.5">{t(KIND_LABEL[b.building_kind])}</span>{" "}
+          {kindSourceNote({ kind: b.building_kind, source: b.building_kind_source, confidence: b.building_kind_confidence ?? "low", basis: b.building_kind_basis }, t)}
         </p>
       )}
       {!panel && <p className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm"><Link className="link" href={`/compare?ids=${b.slug}`}>Compare with other buildings</Link><PrintButton /></p>}
