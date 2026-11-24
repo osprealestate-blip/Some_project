@@ -57,7 +57,7 @@ docker compose up -d db          # first start applies db/migrations (about a mi
 docker compose ps                # wait until db says "healthy"
 bash scripts/restore-from-supabase.sh
 ```
-The script asks (hidden) for the **session pooler** connection string of the `dpi_push` login: on your PC open
+If `~/.dpi.env` exists (line `HOSTED_DATABASE_URL=...`, `chmod 600`) the script reads it, switching 6543 to 5432, and delete it afterwards (`shred -u ~/.dpi.env`). Otherwise it asks (hidden) for the **session pooler** connection string of the `dpi_push` login: on your PC open
 `pipeline\.env.hosted`, copy the `HOSTED_DATABASE_URL=` value, and if it ends `:6543/postgres` change `6543` to `5432`
 (pg_dump does not work through port 6543). It downloads about 400 MB; allow 5-15 minutes.
 

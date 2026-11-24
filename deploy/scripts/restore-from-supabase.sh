@@ -3,7 +3,13 @@
 # Needs the Supabase *session pooler* string (port 5432, NOT 6543) of the dpi_push login. It is typed hidden; nothing is saved.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-read -r -s -p "Paste the Supabase session-pooler connection string (dpi_push, port 5432): " SRC; echo
+if [ -f "$HOME/.dpi.env" ]; then
+  # A file holding the line HOSTED_DATABASE_URL=... (chmod 600). Port 6543 is switched to 5432: pg_dump needs the session pooler.
+  SRC="$(grep -m1 '^HOSTED_DATABASE_URL=' "$HOME/.dpi.env" | cut -d= -f2- | tr -d '\r"' | sed 's/:6543\//:5432\//')"
+  [ -n "$SRC" ] || { echo "No HOSTED_DATABASE_URL line in ~/.dpi.env"; exit 1; }
+else
+  read -r -s -p "Paste the Supabase session-pooler connection string (dpi_push, port 5432): " SRC; echo
+fi
 export SRC
 mkdir -p ../backups
 echo "1/4 Downloading from Supabase (a few minutes)..."
