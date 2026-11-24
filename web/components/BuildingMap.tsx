@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import maplibregl, { type ExpressionSpecification, type FilterSpecification, type MapLayerMouseEvent } from "maplibre-gl";
 import { DEFAULT_CURRENCY, type Currency } from "@/config/currency";
 import { LAUNCH_CODES } from "@/lib/communities";
+import type { MasterAreaProps } from "@/lib/masterAreas";
 import { formatPsf, formatShortPrice, pct } from "@/lib/format";
 import { applyIllustratedOverrides, goToIllustratedView, illustratedCamera, showLandmarks } from "@/lib/illustratedTheme";
 import {
@@ -587,6 +588,55 @@ export default function BuildingMap({
     return showLandmarks(map, maplibregl.Marker);
   }, [theme, ready]);
 
+  // Name labels for every master community. Page elements (not map text), so Arabic joins up and a tap can open the community.
+  const [areas, setAreas] = useState<GeoJSON.FeatureCollection | null>(null);
+  useEffect(() => {
+    fetch("/api/master-areas").then((r) => (r.ok ? r.json() : null)).then((g) => { if (g?.features?.length) setAreas(g); }).catch(() => {});
+  }, []);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready || !areas) return;
+    const rtl = lang === "ar";
+    const areaPopup = new maplibregl.Popup({ closeButton: true, closeOnClick: true, offset: 10, maxWidth: "240px", className: "dpi-popup" });
+    const items = areas.features.map((f) => {
+      const p = f.properties as MasterAreaProps;
+      const el = document.createElement("button");
+      el.type = "button";
+      el.className = "dpi-area-label";
+      el.textContent = rtl && p.nameAr ? p.nameAr : p.name;
+      el.setAttribute("aria-label", el.textContent);
+      el.addEventListener("click", (e) => {
+        e.stopPropagation();
+        map.fitBounds(p.bbox, { padding: { top: 90, bottom: 160, left: 40, right: 40 }, maxZoom: 15, pitch: map.getPitch(), duration: 800 });
+        const tt = tRef.current;
+        const box = document.createElement("div");
+        box.className = "dpi-card";
+        const title = document.createElement("div");
+        title.className = "dpi-card-title";
+        title.textContent = el.textContent;
+        const sub = document.createElement("div");
+        sub.className = "dpi-card-sub";
+        sub.textContent = [tt("{n} buildings", { n: p.buildings }), p.official || p.launch ? tt("Official area outline") : tt("Approximate outline round its buildings")].join(" · ");
+        const a = document.createElement("a");
+        a.className = "link";
+        a.href = `/community/${p.slug}`;
+        a.textContent = tt("Open community page");
+        a.style.display = "inline-block";
+        a.style.marginTop = "6px";
+        box.append(title, sub, a);
+        areaPopup.setLngLat([p.lng, p.lat]).setDOMContent(box).addTo(map);
+      });
+      return { p, marker: new maplibregl.Marker({ element: el }).setLngLat([p.lng, p.lat]).addTo(map), el };
+    });
+    const sync = () => {
+      const z = map.getZoom();
+      for (const { p, el } of items) el.style.display = z >= p.labelZoom && z < 15.5 ? "" : "none";
+    };
+    sync();
+    map.on("zoom", sync);
+    return () => { map.off("zoom", sync); areaPopup.remove(); items.forEach((i) => i.marker.remove()); };
+  }, [ready, areas, lang]);
+
   // 3. Our layers on the current style: grey 3D city, launch outlines, coloured buildings.
   useEffect(() => {
     const map = mapRef.current;
@@ -644,6 +694,16 @@ export default function BuildingMap({
       const isLaunch: ExpressionSpecification = ["in", ["get", "code"], ["literal", [...LAUNCH_CODES]]];
       map.addLayer({ id: "launch-communities-fill", type: "fill", source: "communities", filter: isLaunch, maxzoom: 14, paint: { "fill-color": t.outline, "fill-opacity": 0.08 } });
       map.addLayer({ id: "launch-communities-line", type: "line", source: "communities", filter: isLaunch, paint: { "line-color": t.outline, "line-width": 1.5, "line-opacity": 0.8 } });
+    }
+
+    // Every other master community: its official area when it is exactly one, else a dashed outline round its buildings.
+    if (!map.getSource("master-areas")) {
+      map.addSource("master-areas", { type: "geojson", data: "/api/master-areas" });
+      const other: ExpressionSpecification = ["!", ["get", "launch"]];
+      const approx: ExpressionSpecification = ["all", other, ["!", ["get", "official"]]];
+      map.addLayer({ id: "master-areas-fill", type: "fill", source: "master-areas", filter: other, maxzoom: 14, paint: { "fill-color": t.outline, "fill-opacity": 0.05 } });
+      map.addLayer({ id: "master-areas-line-official", type: "line", source: "master-areas", filter: ["all", other, ["get", "official"]], paint: { "line-color": t.outline, "line-width": 1.2, "line-opacity": 0.7 } });
+      map.addLayer({ id: "master-areas-line-approx", type: "line", source: "master-areas", filter: approx, paint: { "line-color": t.outline, "line-width": 1.2, "line-opacity": 0.7, "line-dasharray": [3, 2] } });
     }
 
     if (!map.getSource("dpi-footprints")) {
