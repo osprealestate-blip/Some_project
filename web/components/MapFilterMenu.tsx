@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { useSearchParams } from "next/navigation";
 import { useT } from "./LangProvider";
 import { FACILITIES } from "@/lib/facilities";
+import { KIND_FILTER_GROUPS, KIND_LABEL } from "@/lib/buildingKind";
 import { filterParam, parseFilter, USE_FILTERS, type MapFilter } from "@/lib/mapFilter";
 
 const UNDER: [string, string][] = [["1000000", "Under AED 1M"], ["1500000", "Under AED 1.5M"], ["2500000", "Under AED 2.5M"], ["5000000", "Under AED 5M"]];
@@ -40,6 +41,14 @@ export default function MapFilterMenu() {
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {USE_FILTERS.map((u) => <button key={u} type="button" aria-pressed={cur?.type === "use" && cur.value === u} className={chip(cur?.type === "use" && cur.value === u)} onClick={() => setFilter({ type: "use", value: u })}>{t(USE_CHIP[u])}</button>)}
           </div>
+          {KIND_FILTER_GROUPS.map((g) => (
+            <div key={g.title}>
+              <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">{t(g.title)}</p>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {g.kinds.map((k) => <button key={k} type="button" aria-pressed={cur?.type === "kind" && cur.value === k} className={chip(cur?.type === "kind" && cur.value === k)} onClick={() => setFilter({ type: "kind", value: k })}>{t(KIND_LABEL[k])}</button>)}
+              </div>
+            </div>
+          ))}
           <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">{t("Median sale price")}</p>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {UNDER.map(([v, l]) => <button key={v} type="button" aria-pressed={cur?.type === "under" && cur.value === v} className={chip(cur?.type === "under" && cur.value === v)} onClick={() => setFilter({ type: "under", value: v })}>{t(l)}</button>)}

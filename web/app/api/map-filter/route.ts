@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { hasDatabase } from "@/lib/db";
+import { KIND_LABEL } from "@/lib/buildingKind";
 import { nearLabel, NEAR_RADIUS_M, parseFilter, USE_LABEL } from "@/lib/mapFilter";
 import { buildingsInMaster, resolveMaster } from "@/lib/masterQueries";
-import { buildingsByDeveloper, buildingsByUse, buildingsInCommunity, buildingsNear } from "@/lib/queries";
+import { buildingsByDeveloper, buildingsByKind, buildingsByUse, buildingsInCommunity, buildingsNear } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,10 @@ export async function GET(req: Request) {
     if (f.type === "use") {
       const g = await buildingsByUse(f.value);
       return NextResponse.json({ label: USE_LABEL[f.value], slugs: g.slugs }, { headers });
+    }
+    if (f.type === "kind") {
+      const g = await buildingsByKind(f.value);
+      return NextResponse.json({ label: KIND_LABEL[f.value], slugs: g.slugs }, { headers });
     }
     if (f.type === "master") {
       const name = await resolveMaster(f.value);

@@ -234,10 +234,11 @@ def main(argv: list[str] | None = None) -> int:
               f"then run: dpi import-images {args.out} --approve")
     elif args.cmd == "classify-buildings":
         from dpi.db import connect
-        from dpi.matching import building_use
+        from dpi.matching import building_kind, building_use
 
         with connect() as conn:
             print(building_use.run(conn, args.manual).render())
+            print(building_kind.run(conn, args.manual).render())
     elif args.cmd == "compute-metrics":
         from dpi.db import connect
         from dpi.metrics import compute
