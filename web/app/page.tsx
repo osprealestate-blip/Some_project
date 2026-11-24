@@ -13,7 +13,16 @@ import { launchCommunities } from "@/lib/queries";
 import { change } from "@/lib/stats";
 import { SOURCES } from "@/lib/sources";
 
+import { pageMetadata } from "@/lib/seo";
+import { absoluteUrl, siteUrl } from "@/lib/site";
+
 export const dynamic = "force-dynamic";
+
+export const metadata = pageMetadata({
+  title: "Dubai buildings, prices, rents and yields",
+  description: "Dubai, building by building: registered sale prices, rents and yields from Dubai Land Department data. Free, no login.",
+  path: "/",
+});
 
 async function loadCards() {
   if (!hasDatabase()) return null;
@@ -68,8 +77,10 @@ export default async function Home() {
   const cards = await loadCards();
   const byCode = new Map(cards?.map((c) => [c.dm_code, c]));
   const asOf = cards?.find((c) => c.summary)?.summary?.period_end ?? null;
+  const jsonLd = { "@context": "https://schema.org", "@type": "WebSite", name: "Dubai building intelligence", url: absoluteUrl("/", siteUrl()), inLanguage: ["en", "ar"] };
   return (
     <main>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <section className="px-3 pt-3 sm:px-6 sm:pt-4">
         <div className="relative mx-auto max-w-6xl overflow-hidden rounded-3xl bg-gradient-to-b from-[#3d6a99] via-[#5a85b2] to-[#4c76a3] text-white">
           <HeroSkyline className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 w-full text-[#1d3a58]/20" />
