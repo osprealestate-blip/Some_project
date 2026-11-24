@@ -195,7 +195,7 @@ export default function BuildingCard({ slug, view, currency, features, onClose, 
     ? showPanel
       ? { insetInlineStart: "max(16px, calc(50vw - 460px))", bottom: "calc((100dvh - min(700px, 100dvh - 7rem)) / 2)", width: "min(920px, calc(100vw - 32px))", height: "min(700px, calc(100dvh - 7rem))", borderRadius: 20 }
       // Anchored beside the selected building: BuildingMap keeps --card-x / --card-y in step with the map as it moves.
-      : { left: "var(--card-x, 16px)", top: "var(--card-y, calc(100dvh - min(500px, 100dvh - 6rem) - 16px))", width: 392, height: "min(500px, calc(100dvh - 6rem))", borderRadius: 16 }
+      : { left: "var(--card-x, 16px)", top: "var(--card-y, calc(100dvh - min(500px, 100dvh - 12rem) - 120px))", width: 392, height: "min(500px, calc(100dvh - 12rem))", borderRadius: 16 }
     : {
         insetInlineStart: 0, bottom: 0, width: "100%", borderRadius: "20px 20px 0 0",
         height: `calc(${sheet === "full" ? "100dvh" : sheet === "expanded" ? "74dvh" : sheet === "peek" ? PEEK_H : "min(60dvh, 470px)"} - ${drag ?? 0}px)`,

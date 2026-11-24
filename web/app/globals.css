@@ -172,3 +172,7 @@ html[lang="ar"] [dir="ltr"] { font-family: system-ui, -apple-system, "Segoe UI",
   a { color: inherit !important; text-decoration: none !important; }
   * { box-shadow: none !important; }
 }
+
+/* The map page fills the window under the header. Without this, a wheel or touch scroll over a floating panel scrolls the
+   whole page, which slides the legend and tool rail under the header and shows the footer under the map. */
+html:has([data-map-page]) { overflow: hidden; overscroll-behavior: none; }

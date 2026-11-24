@@ -810,12 +810,12 @@ export default function BuildingMap({
       const mpp = (78271.517 * Math.cos((f.lat * Math.PI) / 180)) / 2 ** map.getZoom();
       const rise = Math.min(260, ((f.height || 0) / mpp) * Math.sin((map.getPitch() * Math.PI) / 180));
       const bx = box.left + p.x, by = box.top + p.y - rise / 2;
-      const W = 392, H = Math.min(500, window.innerHeight - 96), GAP = 64;
+      const W = 392, H = Math.min(500, window.innerHeight - 192), GAP = 64; // 120px kept free at the bottom for the colour switcher
       const minX = 76, maxX = window.innerWidth - W - 16;
       let x = bx - GAP - W; // to the left of the building by default
       if (x < minX) x = bx + GAP <= maxX ? bx + GAP : minX;
       x = Math.max(minX, Math.min(maxX, x));
-      const y = Math.max(72, Math.min(window.innerHeight - H - 16, by - H / 2));
+      const y = Math.max(72, Math.min(window.innerHeight - H - 120, by - H / 2));
       root.style.setProperty("--card-x", `${Math.round(x)}px`);
       root.style.setProperty("--card-y", `${Math.round(y)}px`);
       const svg = leaderRef.current;
