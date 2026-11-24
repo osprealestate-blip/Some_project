@@ -153,6 +153,7 @@ export const AR: Record<string, string> = {
   "DLD, 12 months": "دائرة الأراضي والأملاك، 12 شهراً",
   "View details": "عرض التفاصيل",
   "Click for details": "اضغط للتفاصيل",
+  "{n} buildings here. Choose one.": "{n} مبانٍ هنا. اختر واحدًا.",
 
   // legend and map settings
   "Colour by": "التلوين حسب",
