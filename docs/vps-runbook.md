@@ -105,10 +105,11 @@ Turns off root and password logins. Keep the hPanel Browser terminal as your way
 ## Deploying updates from GitHub
 When a change is merged to `main` (switch the server once: `git -C ~/some_project checkout main`):
 ```bash
-bash ~/some_project/deploy/scripts/deploy.sh     # fetch, fast-forward, rebuild, restart (about 5 minutes)
+bash ~/some_project/deploy/scripts/deploy.sh           # pull main, apply new migrations, rebuild, restart
+bash ~/some_project/deploy/scripts/deploy.sh metrics   # the same, then recompute the summary figures
+bash ~/some_project/deploy/scripts/dpi.sh <command>    # run any `dpi` command against the VPS database
 ```
-New database migrations are not applied automatically: run the new file with
-`docker compose exec -T db psql -U dpi -d dpi < ../db/migrations/NNNN_name.sql`.
+The script applies any file in `db/migrations/` that is not yet listed in the `schema_migrations` table.
 
 ## Loading new data (what `dpi push-public` did for Supabase)
 From your PC open a tunnel in one PowerShell window: `ssh -L 5434:localhost:5432 deploy@213.190.4.3`, and in another set
