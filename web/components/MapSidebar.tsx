@@ -60,7 +60,7 @@ export default function MapSidebar({ compareCount }: { compareCount: number }) {
 
   const row = "flex w-full items-start gap-2 rounded-lg border border-[#0f2742]/10 bg-white px-2.5 py-2 text-start text-[13px] hover:border-cyan-500 aria-pressed:border-cyan-500 aria-pressed:bg-cyan-50";
   return (
-    <nav aria-label={t("Map tools")} className="absolute start-3 top-14 z-20 flex items-start gap-2 md:top-16 [html[data-building-selected]_&]:max-md:hidden [html[data-welcome-open]_&]:hidden">
+    <nav aria-label={t("Map tools")} className="absolute start-3 top-14 z-20 flex items-start gap-2 md:top-16 [html[data-building-selected]_&]:max-md:hidden [html[data-community-selected]_&]:max-md:hidden [html[data-welcome-open]_&]:hidden">
       <ul className="flex flex-col gap-1 rounded-2xl border border-white/70 bg-white/85 p-1 shadow-lg backdrop-blur-md">
         {SECTIONS.map((s) => (
           <li key={s.id}>

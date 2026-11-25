@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import maplibregl, { type ExpressionSpecification, type FilterSpecification, type MapLayerMouseEvent } from "maplibre-gl";
 import { DEFAULT_CURRENCY, type Currency } from "@/config/currency";
 import { LAUNCH_CODES } from "@/lib/communities";
+import { areaAt } from "@/lib/areaHit";
 import type { MasterAreaProps } from "@/lib/masterAreas";
 import { formatPsf, formatShortPrice, pct } from "@/lib/format";
 import { applyIllustratedOverrides, goToIllustratedView, illustratedCamera, showLandmarks } from "@/lib/illustratedTheme";
@@ -24,6 +25,7 @@ import { MAP_COMPARE_MAX as MAX_COMPARE } from "@/lib/mapCompare";
 const ForYouPanel = dynamic(() => import("./ForYouPanel"));
 const CompareTray = dynamic(() => import("./CompareTray"));
 const BuildingCard = dynamic(() => import("./BuildingCard"));
+const CommunityCard = dynamic(() => import("./CommunityCard"));
 import { FACILITIES, iconSvg, km, type FacilityId, type NearestFacility } from "@/lib/facilities";
 import { useLang, useT } from "./LangProvider";
 import type { T } from "@/lib/i18n";
@@ -36,6 +38,7 @@ import { fetchRoute } from "@/lib/routeClient";
 import { labelPoint, routeLines, type RouteMap } from "@/lib/routeLines";
 import { minutesLabel, type RouteMode } from "@/lib/routing";
 import MapControls from "./MapControls";
+import MapModeSwitch, { type MapMode } from "./MapModeSwitch";
 import PlaceCard, { type Place } from "./PlaceCard";
 import { tileHeight } from "@/lib/place";
 
@@ -163,6 +166,16 @@ function mapUrl(slug: string | null, view?: string | null): string {
   return `/map${q ? `?${q}` : ""}`;
 }
 
+/** Community view: ?v=communities, and &community=<slug> once one is picked. Everything else in the URL (colour layer, filter, compare) stays. */
+function communityUrl(slug: string | null): string {
+  const sp = new URLSearchParams(window.location.search);
+  sp.delete("building");
+  sp.delete("view");
+  sp.set("v", "communities");
+  if (slug) sp.set("community", slug); else sp.delete("community");
+  return `/map?${sp.toString()}`;
+}
+
 function readCamera(): { c: [number, number]; z: number; p: number; b: number } | null {
   try {
     const v = JSON.parse(window.sessionStorage.getItem(CAMERA_KEY) ?? "null");
@@ -201,7 +214,10 @@ export default function BuildingMap({
   const mapRef = useRef<maplibregl.Map | null>(null);
   const router = useRouter();
   const params = useSearchParams();
-  const selected = cardMode ? params.get("building") : null;
+  // Buildings | Communities: the same map, read at a different level. The mode and the picked community live in the URL.
+  const mode: MapMode = cardMode && params.get("v") === "communities" ? "communities" : "buildings";
+  const communitySlug = mode === "communities" ? params.get("community") : null;
+  const selected = cardMode && mode === "buildings" ? params.get("building") : null;
   const view: "card" | "panel" = params.get("view") === "panel" ? "panel" : "card";
 
   const [noWebgl, setNoWebgl] = useState(false);
@@ -321,11 +337,12 @@ export default function BuildingMap({
   const lang = useLang();
   const tRef = useRef(t);
   tRef.current = t;
-  const live = useRef({ settings, currency, theme, selected, padH: 0, burjLoaded: false, overlays: DEFAULT_OVERLAYS as Overlays, burj: null as { slug: string } | null, hover: null as string | null, baseKey: null as string | null, restored: false });
+  const live = useRef({ settings, currency, theme, selected, mode: "buildings" as MapMode, areas: [] as GeoJSON.Feature<GeoJSON.Geometry, MasterAreaProps>[], padH: 0, burjLoaded: false, overlays: DEFAULT_OVERLAYS as Overlays, burj: null as { slug: string } | null, hover: null as string | null, baseKey: null as string | null, restored: false });
   live.current.settings = settings;
   live.current.currency = currency;
   live.current.theme = theme;
   live.current.selected = selected;
+  live.current.mode = mode;
   live.current.padH = padH;
   compareOpen.current = compare.length > 0;
 
@@ -370,6 +387,32 @@ export default function BuildingMap({
     panelPushed.current = false;
     setHiddenFor(slug);
     window.history.replaceState(null, "", mapUrl(slug)); // back to the card view, so reopening starts at the peek
+  }, []);
+  // Community view: switch Buildings | Communities, and pick or clear a community. Back steps through them.
+  const chooseCommunity = useCallback((slug: string | null) => {
+    const had = new URLSearchParams(window.location.search).has("community");
+    const url = communityUrl(slug);
+    if (had || !slug) window.history.replaceState(null, "", url);
+    else window.history.pushState(null, "", url);
+  }, []);
+  const changeMode = useCallback((next: MapMode) => {
+    if (next === "communities") {
+      setHiddenFor(null);
+      setPlace(null);
+      window.history.pushState(null, "", communityUrl(null));
+      return;
+    }
+    const sp = new URLSearchParams(window.location.search);
+    sp.delete("v");
+    sp.delete("community");
+    window.history.pushState(null, "", `/map${sp.toString() ? `?${sp}` : ""}`);
+  }, []);
+  const showCommunityBuildings = useCallback((slug: string) => {
+    const sp = new URLSearchParams(window.location.search);
+    sp.delete("v");
+    sp.delete("community");
+    sp.set("f", `master:${slug}`);
+    window.history.pushState(null, "", `/map?${sp}`);
   }, []);
 
   // 1. Read saved choices, then create the map.
@@ -513,8 +556,15 @@ export default function BuildingMap({
       map.getCanvas().style.cursor = "";
       popup.remove();
     };
+    // Community view: the pointer picks areas, not buildings.
+    const overArea = (e: { lngLat: maplibregl.LngLat }) => areaAt(live.current.areas, e.lngLat.lng, e.lngLat.lat);
     map.on("mousemove", (e) => {
       if (!canHover) return;
+      if (live.current.mode === "communities") {
+        if (live.current.hover || live.current.baseKey) clearHover();
+        map.getCanvas().style.cursor = overArea(e) ? "pointer" : "";
+        return;
+      }
       const priced = DPI_LAYERS.filter((l) => map.getLayer(l));
       const hit = priced.length ? map.queryRenderedFeatures(e.point, { layers: priced })[0] : undefined;
       const p = (hit?.properties as Props3 | undefined) ?? burjAt(e.point);
@@ -583,6 +633,14 @@ export default function BuildingMap({
     };
     map.on("click", (e) => {
       chooser.remove();
+      if (live.current.mode === "communities") {
+        popup.remove();
+        setPlace(null);
+        const hit = overArea(e);
+        if (hit) chooseCommunity(hit.properties.slug);
+        else if (new URLSearchParams(window.location.search).has("community")) chooseCommunity(null);
+        return;
+      }
       const layers = DPI_LAYERS.filter((l) => map.getLayer(l));
       const f = layers.length ? map.queryRenderedFeatures(e.point, { layers })[0] : undefined;
       const p = (f?.properties as Props3 | undefined) ?? burjAt(e.point);
@@ -678,19 +736,26 @@ export default function BuildingMap({
     fetch("/api/master-areas").then((r) => (r.ok ? r.json() : null)).then((g) => { if (g?.features?.length) setAreas(g); }).catch(() => {});
   }, []);
   useEffect(() => {
+    live.current.areas = (areas?.features ?? []) as GeoJSON.Feature<GeoJSON.Geometry, MasterAreaProps>[];
+  }, [areas]);
+  useEffect(() => {
     const map = mapRef.current;
     if (!map || !ready || !areas) return;
     const rtl = lang === "ar";
+    const communities = mode === "communities";
     const areaPopup = new maplibregl.Popup({ closeButton: true, closeOnClick: true, offset: 10, maxWidth: "240px", className: "dpi-popup" });
     const items = areas.features.map((f) => {
       const p = f.properties as MasterAreaProps;
       const el = document.createElement("button");
       el.type = "button";
       el.className = "dpi-area-label";
+      if (communities) el.classList.add("is-community");
+      if (communities && p.slug === communitySlug) el.classList.add("is-selected");
       el.textContent = rtl && p.nameAr ? p.nameAr : p.name;
       el.setAttribute("aria-label", el.textContent);
       el.addEventListener("click", (e) => {
         e.stopPropagation();
+        if (communities) { chooseCommunity(p.slug); return; }
         map.fitBounds(p.bbox, { padding: { top: 90, bottom: 160, left: 40, right: 40 }, maxZoom: 15, pitch: map.getPitch(), duration: 800 });
         const tt = tRef.current;
         const box = document.createElement("div");
@@ -714,12 +779,13 @@ export default function BuildingMap({
     });
     const sync = () => {
       const z = map.getZoom();
-      for (const { p, el } of items) el.style.display = z >= p.labelZoom && z < 15.5 ? "" : "none";
+      // Community view names every community from a little further out, and keeps them while zoomed in; the picked one is always named.
+      for (const { p, el } of items) el.style.display = (communities ? p.slug === communitySlug || (z >= p.labelZoom - 1 && z < 17.5) : z >= p.labelZoom && z < 15.5) ? "" : "none";
     };
     sync();
     map.on("zoom", sync);
     return () => { map.off("zoom", sync); areaPopup.remove(); items.forEach((i) => i.marker.remove()); };
-  }, [ready, areas, lang]);
+  }, [ready, areas, lang, mode, communitySlug]);
 
   // 3. Our layers on the current style: grey 3D city, launch outlines, coloured buildings.
   useEffect(() => {
@@ -804,6 +870,13 @@ export default function BuildingMap({
       map.addLayer({ id: "master-areas-fill", type: "fill", source: "master-areas", filter: other, maxzoom: 14, paint: { "fill-color": t.outline, "fill-opacity": 0.05 } });
       map.addLayer({ id: "master-areas-line-official", type: "line", source: "master-areas", filter: ["all", other, ["get", "official"]], paint: { "line-color": t.outline, "line-width": 1.2, "line-opacity": 0.7 } });
       map.addLayer({ id: "master-areas-line-approx", type: "line", source: "master-areas", filter: approx, paint: { "line-color": t.outline, "line-width": 1.2, "line-opacity": 0.7, "line-dasharray": [3, 2] } });
+    }
+
+    // The community picked in the Communities view: a soft fill and a clear outline, at every zoom.
+    if (!map.getSource("community-selected")) {
+      map.addSource("community-selected", { type: "geojson", data: EMPTY });
+      map.addLayer({ id: "community-selected-fill", type: "fill", source: "community-selected", paint: { "fill-color": "#0891b2", "fill-opacity": 0.14 } });
+      map.addLayer({ id: "community-selected-line", type: "line", source: "community-selected", layout: { "line-join": "round" }, paint: { "line-color": "#0891b2", "line-width": 3, "line-opacity": 0.95 } });
     }
 
     if (!map.getSource("dpi-footprints")) {
@@ -931,6 +1004,56 @@ export default function BuildingMap({
     paintBurjRef.current();
   }, [selected, coloured, styleGen]);
 
+  // Phones: with a community card open, the left tool rail and Guide button step aside, like they do for a building.
+  useEffect(() => {
+    document.documentElement.toggleAttribute("data-community-selected", !!communitySlug);
+    return () => document.documentElement.removeAttribute("data-community-selected");
+  }, [communitySlug]);
+
+  // Community view: buildings stay as quiet context, every community area gets a visible fill, and the picked one is outlined.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !styleGen) return;
+    const communities = mode === "communities";
+    const k = communities ? 0.4 : 1;
+    const fade = (z0: number, o0: number, z1: number, o1: number): ExpressionSpecification => ["interpolate", ["linear"], ["zoom"], z0, o0 * k, z1, o1 * k];
+    const set = (id: string, prop: string, v: unknown) => { if (map.getLayer(id)) map.setPaintProperty(id, prop, v as never); };
+    set("dpi-3d", "fill-extrusion-opacity", fade(BLOCK_FULL_ZOOM, 0, SHAPE_FULL_ZOOM, 0.95));
+    set("dpi-3d-approx", "fill-extrusion-opacity", fade(BLOCK_FULL_ZOOM, 0, SHAPE_FULL_ZOOM, 0.6));
+    for (const id of ["dpi-columns", "dpi-columns-minor"]) set(id, "fill-extrusion-opacity", fade(BLOCK_FULL_ZOOM, 0.95, BLOCK_END_ZOOM, 0));
+    set("launch-communities-fill", "fill-opacity", communities ? 0.16 : 0.08);
+    set("master-areas-fill", "fill-opacity", communities ? 0.14 : 0.05);
+    for (const id of ["master-areas-line-official", "master-areas-line-approx", "launch-communities-line"]) set(id, "line-width", communities ? 2 : id === "launch-communities-line" ? 1.5 : 1.2);
+    const src = map.getSource("community-selected") as maplibregl.GeoJSONSource | undefined;
+    const f = communities && communitySlug ? areas?.features.find((x) => (x.properties as MasterAreaProps).slug === communitySlug) : null;
+    src?.setData(f ? { type: "FeatureCollection", features: [f] } : EMPTY);
+  }, [mode, communitySlug, areas, styleGen]);
+
+  // Picking a community brings it into view above the sheet (phone) or beside the card (desktop). Once per pick.
+  const lastCommunity = useRef<string | null>(null);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!communitySlug) { lastCommunity.current = null; return; }
+    if (!map || !styleGen || !areas || lastCommunity.current === communitySlug) return;
+    const f = areas.features.find((x) => (x.properties as MasterAreaProps).slug === communitySlug);
+    if (!f) return;
+    const wide = window.matchMedia("(min-width: 768px)").matches;
+    const bbox = (f.properties as MasterAreaProps).bbox;
+    const opts = {
+      padding: wide ? { top: 70, bottom: 90, left: 470, right: 80 } : { top: 110, bottom: Math.round(window.innerHeight * 0.46), left: 24, right: 24 },
+      maxZoom: 15.2, pitch: map.getPitch(), duration: 800,
+    };
+    // The map can be mid-resize when a card opens, and then cannot work out a fit: try again a moment later.
+    let tries = 0, timer: ReturnType<typeof setTimeout> | null = null;
+    const fit = () => {
+      timer = null;
+      if (map.cameraForBounds(bbox, opts)) { lastCommunity.current = communitySlug; map.fitBounds(bbox, opts); return; }
+      if (++tries < 8) timer = setTimeout(fit, 150);
+    };
+    fit();
+    return () => { if (timer) clearTimeout(timer); };
+  }, [communitySlug, areas, styleGen]);
+
   // The selected building: glow outline, the page flag the phone layout reads, and the camera move.
   useEffect(() => {
     if (!cardMode) return;
@@ -945,13 +1068,19 @@ export default function BuildingMap({
     const f = selected && raw ? raw.features.find((x) => x.properties.slug === selected) : null;
     if (src) src.setData(f ? { type: "FeatureCollection", features: [{ type: "Feature", geometry: f.geometry, properties: {} }] } : EMPTY);
     if (!selected) live.current.restored = false;
+    // Community view: no building is selected, so only drop the building card's padding (never move or interrupt the camera).
+    if (mode === "communities") {
+      const pad = map.getPadding();
+      if (pad.left || pad.right || pad.top || pad.bottom) map.easeTo({ padding: { left: 0, bottom: 0, top: 0, right: 0 }, duration: 0 });
+      return;
+    }
     const wide = window.matchMedia("(min-width: 768px)").matches;
     const padding = !f ? { left: 0, bottom: 0, top: 0, right: 0 } : wide ? { left: 420, bottom: 0, top: 0, right: 0 } : phonePadding(mapRef.current, live.current.padH, compareOpen.current);
     // Returning from the full page: the saved camera already shows the building, so do not move it again.
     if (f && live.current.restored) { live.current.restored = false; map.easeTo({ padding, duration: 0 }); return; }
     if (f) map.easeTo({ center: [f.properties.lng, f.properties.lat], zoom: keepZoom(map.getZoom()), padding, duration: 750 });
     else map.easeTo({ padding, duration: 400 });
-  }, [cardMode, selected, raw, styleGen]);
+  }, [cardMode, selected, raw, styleGen, mode]);
 
   // The sheet changed height (peek, expanded, hidden): keep the building centred in the map area still free above it.
   useEffect(() => {
@@ -1146,7 +1275,9 @@ export default function BuildingMap({
       </div>
     );
   }
-  const legend = coloured ? legendItems(settings.metric, coloured.breaks, settings.palette, coloured.values, currency) : null;
+  const inCommunities = mode === "communities";
+  const pickedArea = inCommunities && communitySlug ? (areas?.features.find((x) => (x.properties as MasterAreaProps).slug === communitySlug)?.properties as MasterAreaProps | undefined) : undefined;
+  const legend = coloured && !inCommunities ? legendItems(settings.metric, coloured.breaks, settings.palette, coloured.values, currency) : null;
   return (
     <div className="relative h-full w-full" data-map-theme={theme}>
       <div ref={container} className={className} aria-label={t("Map of Dubai buildings")} />
@@ -1221,7 +1352,25 @@ export default function BuildingMap({
         />
       )}
       {cardMode && <MapSidebar compareCount={compare.length} />}
-      {cardMode && popular.length > 0 && !selected && (
+      {cardMode && <MapModeSwitch mode={mode} onChange={changeMode} />}
+      {inCommunities && communitySlug && (
+        <CommunityCard
+          key={communitySlug}
+          slug={communitySlug}
+          name={pickedArea ? (lang === "ar" && pickedArea.nameAr ? pickedArea.nameAr : pickedArea.name) : communitySlug}
+          currency={currency}
+          onClose={() => chooseCommunity(null)}
+          onPickBuilding={(slug) => select(slug)}
+          onShowBuildings={() => showCommunityBuildings(communitySlug)}
+          onSheetHeight={setSheetH}
+        />
+      )}
+      {inCommunities && !communitySlug && dataDone && (
+        <p role="status" className="pointer-events-none absolute inset-x-0 bottom-24 z-10 flex justify-center px-3 md:bottom-16">
+          <span className="rounded-full bg-[var(--panel)]/95 px-3.5 py-1.5 text-center text-xs text-[var(--muted)] shadow-md backdrop-blur">{t("Tap a community name or area to see its figures.")}</span>
+        </p>
+      )}
+      {cardMode && !inCommunities && popular.length > 0 && !selected && (
         <section aria-label={t("Popular buildings in this area")} className="absolute bottom-28 start-3 z-10 hidden w-72 rounded-2xl border border-white/70 bg-white/90 p-3 text-[#0f2742] shadow-xl backdrop-blur-xl md:block [html[data-welcome-open]_&]:hidden [html[data-sidebar-open]_&]:hidden">
           <button type="button" onClick={() => setPopularOpen((o) => !o)} aria-expanded={popularOpen} className="flex w-full items-center justify-between text-start text-[13px] font-semibold">
             {t("Popular buildings in this area")}<span aria-hidden className="text-xs">{popularOpen ? "▾" : "▸"}</span>
@@ -1241,17 +1390,17 @@ export default function BuildingMap({
           <p className="mt-1.5 text-[11px] text-[#0f2742]/55">{t("Ranked by sales in the last 12 months. Source: Dubai Land Department.")}</p>
         </section>
       )}
-      {cardMode && mapFilter && (
-        <div role="status" className="absolute start-1/2 top-3 z-20 flex max-w-[calc(100%-1.5rem)] -translate-x-1/2 items-center gap-2 rounded-full border border-cyan-300/60 bg-slate-900/90 py-1.5 ps-4 pe-1.5 text-xs text-white shadow-lg backdrop-blur rtl:translate-x-1/2 max-md:start-14 max-md:max-w-[calc(100%-4rem)] max-md:translate-x-0 max-md:rtl:translate-x-0 md:top-4">
+      {cardMode && !inCommunities && mapFilter && (
+        <div role="status" className="absolute start-1/2 top-14 z-20 flex max-w-[calc(100%-1.5rem)] -translate-x-1/2 items-center gap-2 rounded-full border border-cyan-300/60 bg-slate-900/90 py-1.5 ps-4 pe-1.5 text-xs text-white shadow-lg backdrop-blur rtl:translate-x-1/2 max-md:start-16 max-md:max-w-[calc(100%-5rem)] max-md:translate-x-0 max-md:rtl:translate-x-0 md:top-16">
           <span className="min-w-0 truncate font-semibold">{mapFilter.state === "ok" ? filterLabel(parseFilter(mapFilter.key)!, t, mapFilter.label) : mapFilter.label}</span>
           {mapFilter.state === "ok" && <span className="shrink-0 text-slate-300">{filterSlugs ? t(filterSlugs.length === 1 ? "{n} building" : "{n} buildings", { n: filterSlugs.length }) : t("no buildings found")}</span>}
           <button type="button" onClick={clearFilter} className="shrink-0 rounded-full bg-white/15 px-3 py-1 font-semibold hover:bg-white/25">{t("Clear")}</button>
         </div>
       )}
-      {cardMode && forYou && (
+      {cardMode && !inCommunities && forYou && (
         <ForYouPanel features={raw?.features.map((f) => f.properties) ?? []} currency={currency} periodEnd={raw?.meta?.periodEnd ?? null} onPick={(slug) => select(slug)} onClose={() => setForYou(false)} />
       )}
-      {cardMode && thinned && !selected && (
+      {cardMode && !inCommunities && thinned && !selected && (
         <p role="status" className="pointer-events-none absolute inset-x-0 bottom-[4.75rem] z-10 flex justify-center px-2 md:bottom-[4.5rem]">
           <span className="rounded-full bg-[var(--panel)]/95 px-3 py-1 text-xs text-[var(--muted)] shadow-md backdrop-blur">{t("Showing the busiest buildings (10+ sales). Zoom in to see all.")}</span>
         </p>

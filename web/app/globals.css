@@ -191,3 +191,8 @@ html:has([data-map-page]) { overflow: hidden; overscroll-behavior: none; }
 }
 .dpi-area-label:hover { background: var(--panel); }
 @media (max-width: 640px) { .dpi-area-label { font-size: 10px; padding: 2px 6px; } }
+
+/* Communities view: the picked community's name is marked, and every name is a little easier to hit. */
+.dpi-area-label.is-community { font-size: 12px; padding: 5px 10px; }
+.dpi-area-label.is-selected { background: #0f2742; color: #fff; border-color: #0f2742; }
+@media (max-width: 640px) { .dpi-area-label.is-community { font-size: 11px; padding: 4px 8px; } }
