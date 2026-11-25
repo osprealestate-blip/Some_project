@@ -6,8 +6,8 @@ import { FACILITIES } from "@/lib/facilities";
 import { A_PLACE, facilityIntent, NEAR_RADIUS_M } from "@/lib/mapFilter";
 import { useEffect, useId, useRef, useState } from "react";
 
-type Hit = { kind: "building" | "community" | "developer" | "facility"; slug: string; name: string; community: string | null };
-const KIND_LABEL: Record<Hit["kind"], string> = { building: "", community: "Area", developer: "Developer", facility: "Map search" };
+type Hit = { kind: "building" | "community" | "developer" | "facility" | "cluster"; slug: string; name: string; community: string | null };
+const KIND_LABEL: Record<Hit["kind"], string> = { building: "", community: "Area", developer: "Developer", facility: "Map search", cluster: "Villa cluster" };
 
 /** `mapMode`: on the map page a building result opens its card on the map instead of leaving for its page. */
 export default function SearchBox({ autoFocus = false, placeholder = "Search a building or area", mapMode: mapModeProp = false }: { autoFocus?: boolean; placeholder?: string; mapMode?: boolean }) {
@@ -61,6 +61,7 @@ export default function SearchBox({ autoFocus = false, placeholder = "Search a b
     h.kind === "building" ? (mapMode ? mapHref({ building: h.slug }) : `/building/${h.slug}`)
     : h.kind === "facility" ? mapHref({ f: `near:${h.slug}` })
     : h.kind === "developer" ? mapHref({ f: `dev:${h.slug}` })
+    : h.kind === "cluster" ? (mapMode ? mapHref({ villa: h.slug }) : `/villas/${h.slug}`)
     : mapMode ? mapHref({ f: /^\d+$/.test(h.slug) ? `area:${h.slug}` : `master:${h.slug}` }) : `/community/${h.slug}`;
   const go = (h: Hit) => {
     setOpen(false);
@@ -104,7 +105,7 @@ export default function SearchBox({ autoFocus = false, placeholder = "Search a b
                 className={`flex w-full items-baseline justify-between gap-2 px-3 py-1.5 text-start ${i === active ? "bg-[var(--bg)]" : ""} hover:bg-[var(--bg)]`}
               >
                 <span className="min-w-0 break-words">{h.name}</span>
-                <span className="shrink-0 text-xs text-[var(--muted)]">{h.kind === "building" ? h.community : t(KIND_LABEL[h.kind])}</span>
+                <span className="shrink-0 text-xs text-[var(--muted)]">{h.kind === "building" ? h.community : h.kind === "cluster" ? `${t("Villa cluster")}${h.community ? ` · ${h.community}` : ""}` : t(KIND_LABEL[h.kind])}</span>
               </button>
             </li>
           ))}

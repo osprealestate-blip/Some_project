@@ -28,6 +28,8 @@ import MasterCommunityPage from "@/components/MasterCommunityPage";
 import { masterDescription, masterSlug, masterTitle } from "@/lib/masterCommunities";
 import { mastersInArea, resolveMaster } from "@/lib/masterQueries";
 import { pageMetadata } from "@/lib/seo";
+import { clustersInCommunity } from "@/lib/villaClusterQueries";
+import { CLUSTER_KIND_LABEL } from "@/lib/villaCluster";
 import { SOURCES } from "@/lib/sources";
 import { change } from "@/lib/stats";
 
@@ -101,7 +103,7 @@ async function OfficialAreaPage({ code }: { code: string }) {
   }
   const currency = await getServerCurrency();
   const conversionNote = getConversionNote(currency);
-  const [summaries, series, buildings, sites, coverage] = await Promise.all([communitySummaries(c.id), communitySeries(c.id), communityBuildings(c.id), constructionProjects(code), matchCoverage(c.id).catch(() => null)]);
+  const [summaries, series, buildings, sites, coverage, clusters] = await Promise.all([communitySummaries(c.id), communitySeries(c.id), communityBuildings(c.id), constructionProjects(code), matchCoverage(c.id).catch(() => null), clustersInCommunity(code).catch(() => [])]);
   const stamps = await freshnessStamps();
   const masters = await mastersInArea(code).catch(() => [] as string[]);
   const all = summaries.find((s) => s.rooms === -1);
@@ -184,6 +186,22 @@ async function OfficialAreaPage({ code }: { code: string }) {
       {poly && (
         <section className="mt-8 h-80 overflow-hidden rounded-lg border border-[var(--border)]">
           <BuildingMap bounds={poly.bounds} currency={currency} />
+        </section>
+      )}
+
+      {clusters.length > 0 && (
+        <section className="mt-8">
+          <h2 className="text-base font-semibold">Villa and townhouse clusters</h2>
+          <p className="mt-1 text-sm text-[var(--muted)]">One map point per project, at its centre. Sales are counted for the whole project, never for a single villa.</p>
+          <ul className="mt-2 grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
+            {clusters.map((v) => (
+              <li key={v.slug} className="flex justify-between gap-3">
+                <span className="min-w-0"><Link className="link" href={`/villas/${v.slug}`}>{v.name}</Link> <span className="text-xs text-[var(--muted)]">{CLUSTER_KIND_LABEL[v.kind]}</span></span>
+                <span className="shrink-0 tabular-nums text-[var(--muted)]">{count(v.sales)} sales{v.psf ? ` · ${formatPsf(v.psf, currency)}` : ""}</span>
+              </li>
+            ))}
+          </ul>
+          <SourceNote source={SOURCES.dldSales} date={all?.period_end}>Last 12 months, matched to each project by its Dubai Land Department project name.</SourceNote>
         </section>
       )}
 

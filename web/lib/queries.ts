@@ -361,7 +361,7 @@ export async function siblingBuildings(b: Building): Promise<{ slug: string; nam
 
 // ---------- search & map ----------
 
-export type SearchHit = { kind: "building" | "community" | "developer"; slug: string; name: string; community: string | null; psf: number | null };
+export type SearchHit = { kind: "building" | "community" | "developer" | "cluster"; slug: string; name: string; community: string | null; psf: number | null };
 
 export async function search(q: string, limit = 12): Promise<SearchHit[]> {
   const term = q.trim().toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();

@@ -40,6 +40,8 @@ import { minutesLabel, type RouteMode } from "@/lib/routing";
 import MapControls from "./MapControls";
 import MapModeSwitch, { type MapMode } from "./MapModeSwitch";
 import PlaceCard, { type Place } from "./PlaceCard";
+import VillaClusterCard from "./VillaClusterCard";
+import type { ClusterKind } from "@/lib/villaCluster";
 import { tileHeight } from "@/lib/place";
 
 type Props = {
@@ -80,6 +82,9 @@ function square(lng: number, lat: number, half: number): GeoJSON.Polygon {
   return { type: "Polygon", coordinates: [[[lng - dLng, lat - dLat], [lng + dLng, lat - dLat], [lng + dLng, lat + dLat], [lng - dLng, lat + dLat], [lng - dLng, lat - dLat]]] };
 }
 
+/** Villa and townhouse clusters: one amber ring per project (never per villa), drawn above the buildings. */
+const VILLA_LAYERS = ["dpi-villas", "dpi-villas-halo"];
+type VillaPoint = { slug: string; name: string; kind: ClusterKind; lng: number; lat: number };
 const EMPTY: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
 
 function load(key: string): string | null {
@@ -166,6 +171,16 @@ function mapUrl(slug: string | null, view?: string | null): string {
   return `/map${q ? `?${q}` : ""}`;
 }
 
+/** The map page's URL for a selected villa cluster (?villa=slug), keeping the compare list, colour layer and filter. */
+function villaUrl(slug: string | null): string {
+  const sp = new URLSearchParams();
+  if (slug) sp.set("villa", slug);
+  const cur = new URLSearchParams(window.location.search);
+  for (const k of ["compare", "m", "f"]) if (cur.get(k)) sp.set(k, cur.get(k)!);
+  const q = sp.toString();
+  return `/map${q ? `?${q}` : ""}`;
+}
+
 /** Community view: ?v=communities, and &community=<slug> once one is picked. Everything else in the URL (colour layer, filter, compare) stays. */
 function communityUrl(slug: string | null): string {
   const sp = new URLSearchParams(window.location.search);
@@ -219,6 +234,9 @@ export default function BuildingMap({
   const communitySlug = mode === "communities" ? params.get("community") : null;
   const selected = cardMode && mode === "buildings" ? params.get("building") : null;
   const view: "card" | "panel" = params.get("view") === "panel" ? "panel" : "card";
+  const villaSlug = cardMode && mode === "buildings" && !selected ? params.get("villa") : null;
+  const [villas, setVillas] = useState<VillaPoint[]>([]);
+  const villa = villaSlug ? villas.find((v) => v.slug === villaSlug) ?? null : null;
 
   const [noWebgl, setNoWebgl] = useState(false);
   const [raw, setRaw] = useState<Collection | null>(null);
@@ -647,6 +665,19 @@ export default function BuildingMap({
         else if (new URLSearchParams(window.location.search).has("community")) chooseCommunity(null);
         return;
       }
+      // A villa cluster ring wins over whatever lies beneath it.
+      const vl = cardMode ? VILLA_LAYERS.filter((l) => map.getLayer(l)) : [];
+      const vhit = vl.length ? map.queryRenderedFeatures(e.point, { layers: vl })[0] : undefined;
+      if (vhit) {
+        popup.remove();
+        setPlace(null);
+        const at = vhit.properties as { slug: string };
+        const url = villaUrl(at.slug);
+        if (new URLSearchParams(window.location.search).has("villa")) window.history.replaceState(null, "", url);
+        else window.history.pushState(null, "", url);
+        return;
+      }
+      if (cardMode && new URLSearchParams(window.location.search).has("villa")) window.history.replaceState(null, "", villaUrl(null));
       const layers = DPI_LAYERS.filter((l) => map.getLayer(l));
       const f = layers.length ? map.queryRenderedFeatures(e.point, { layers })[0] : undefined;
       const p = (f?.properties as Props3 | undefined) ?? burjAt(e.point);
@@ -692,6 +723,18 @@ export default function BuildingMap({
       }
     });
 
+    if (cardMode) {
+      fetch("/api/villa-clusters")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((geo: { features?: { geometry: { coordinates: [number, number] }; properties: { slug: string; name: string; kind: ClusterKind } }[] } | null) => {
+          if (geo?.features?.length) setVillas(geo.features.map((f) => ({ slug: f.properties.slug, name: f.properties.name, kind: f.properties.kind, lng: f.geometry.coordinates[0], lat: f.geometry.coordinates[1] })));
+        })
+        .catch(() => {});
+      for (const l of VILLA_LAYERS) {
+        map.on("mouseenter", l, () => { map.getCanvas().style.cursor = "pointer"; });
+        map.on("mouseleave", l, () => { map.getCanvas().style.cursor = ""; });
+      }
+    }
     fetch("/api/buildings")
       .then((r) => (r.ok ? r.json() : null))
       .then((geo: Collection | null) => {
@@ -937,6 +980,19 @@ export default function BuildingMap({
       map.addLayer({ id: "dpi-selected-line", type: "line", source: "dpi-selected", layout: { "line-join": "round" }, paint: { "line-color": "#ecfeff", "line-width": 2.5, "line-opacity": 0.95 } });
     }
 
+    // Villa and townhouse clusters: a soft halo (the project covers an area) with a ring marker (the centre).
+    if (!map.getSource("dpi-villas")) {
+      map.addSource("dpi-villas", { type: "geojson", data: EMPTY });
+      map.addLayer({ id: "dpi-villas-halo", type: "circle", source: "dpi-villas", minzoom: 10.5, paint: {
+        "circle-radius": ["interpolate", ["linear"], ["zoom"], 10.5, 8, 14, 20, 17, 34], "circle-color": "#f59e0b", "circle-opacity": 0.18, "circle-pitch-alignment": "map" } });
+      map.addLayer({ id: "dpi-villas", type: "circle", source: "dpi-villas", minzoom: 10.5, paint: {
+        "circle-radius": ["interpolate", ["linear"], ["zoom"], 10.5, 3.5, 14, 6.5, 17, 9],
+        "circle-color": "#ffffff", "circle-stroke-color": "#d97706", "circle-stroke-width": ["interpolate", ["linear"], ["zoom"], 10.5, 2, 15, 3.5],
+        "circle-pitch-alignment": "viewport" } });
+      map.addLayer({ id: "dpi-villas-selected", type: "circle", source: "dpi-villas", filter: ["==", ["get", "slug"], ""], paint: {
+        "circle-radius": ["interpolate", ["linear"], ["zoom"], 10.5, 8, 14, 14, 17, 20], "circle-color": "rgba(0,0,0,0)", "circle-stroke-color": CYAN, "circle-stroke-width": 3 } });
+    }
+
     // Location mode: restrained straight lines to the nearest places, coloured by kind. Compared buildings get an amber outline.
     if (!map.getSource("dpi-nearby")) {
       map.addSource("dpi-nearby", { type: "geojson", data: EMPTY });
@@ -1009,6 +1065,33 @@ export default function BuildingMap({
     live.current.hover = null;
     paintBurjRef.current();
   }, [selected, coloured, styleGen]);
+
+  // Villa clusters: the points, the selected one, hidden in the Communities view, and a move to the one picked from search.
+  useEffect(() => {
+    const map = mapRef.current;
+    const src = map?.getSource("dpi-villas") as maplibregl.GeoJSONSource | undefined;
+    if (!map || !styleGen || !src) return;
+    src.setData({ type: "FeatureCollection", features: villas.map((v) => ({ type: "Feature", geometry: { type: "Point", coordinates: [v.lng, v.lat] }, properties: { slug: v.slug, name: v.name, kind: v.kind } })) });
+  }, [villas, styleGen]);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !styleGen) return;
+    if (map.getLayer("dpi-villas-selected")) map.setFilter("dpi-villas-selected", ["==", ["get", "slug"], villaSlug ?? ""]);
+    for (const l of [...VILLA_LAYERS, "dpi-villas-selected"]) if (map.getLayer(l)) map.setLayoutProperty(l, "visibility", mode === "buildings" ? "visible" : "none");
+  }, [villaSlug, mode, styleGen]);
+  const movedToVilla = useRef<string | null>(null);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !villa || !dataDone || movedToVilla.current === villa.slug) return;
+    const wide = window.matchMedia("(min-width: 768px)").matches;
+    // After the building selection effect has reset the padding, so this move is not cut short.
+    const timer = setTimeout(() => {
+      movedToVilla.current = villa.slug;
+      map.easeTo({ center: [villa.lng, villa.lat], zoom: Math.max(map.getZoom(), 14.5), duration: 700, padding: wide ? { top: 0, bottom: 0, left: 0, right: 420 } : { top: 0, bottom: Math.round(window.innerHeight * 0.55), left: 0, right: 0 } });
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [villa, dataDone]);
+  useEffect(() => { if (!villaSlug) movedToVilla.current = null; }, [villaSlug]);
 
   // Phones: with a community card open, the left tool rail and Guide button step aside, like they do for a building.
   useEffect(() => {
@@ -1293,7 +1376,7 @@ export default function BuildingMap({
         </div>
       )}
       {legend && (
-        <div className={selected ? "contents max-sm:hidden" : "contents"}>
+        <div className={villa ? "hidden" : selected ? "contents max-sm:hidden" : "contents"}>
         <MapControls
           compact={controls === "legend"}
           settings={settings}
@@ -1338,7 +1421,10 @@ export default function BuildingMap({
           onCompare={toggleCompare}
         />
       )}
-      {place && !selected && <PlaceCard place={place} onClose={() => setPlace(null)} />}
+      {cardMode && villa && (
+        <VillaClusterCard key={villa.slug} slug={villa.slug} name={villa.name} kind={villa.kind} currency={currency} onClose={() => window.history.replaceState(null, "", villaUrl(null))} />
+      )}
+      {place && !selected && !villa && <PlaceCard place={place} onClose={() => setPlace(null)} />}
       {cardMode && selected && cardHidden && (
         <div role="status" className="dpi-glass dpi-enter fixed inset-x-3 bottom-[5.5rem] z-40 mx-auto flex max-w-md items-center gap-2 rounded-2xl p-2 ps-3 md:bottom-28 md:max-w-sm">
           <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-full bg-cyan-400 ring-2 ring-cyan-200" />
@@ -1376,7 +1462,7 @@ export default function BuildingMap({
           <span className="rounded-full bg-[var(--panel)]/95 px-3.5 py-1.5 text-center text-xs text-[var(--muted)] shadow-md backdrop-blur">{t("Tap a community name or area to see its figures.")}</span>
         </p>
       )}
-      {cardMode && !inCommunities && popular.length > 0 && !selected && (
+      {cardMode && !inCommunities && popular.length > 0 && !selected && !villa && (
         <section aria-label={t("Popular buildings in this area")} className="absolute bottom-28 start-3 z-10 hidden w-72 rounded-2xl border border-white/70 bg-white/90 p-3 text-[#0f2742] shadow-xl backdrop-blur-xl md:block [html[data-welcome-open]_&]:hidden [html[data-sidebar-open]_&]:hidden">
           <button type="button" onClick={() => setPopularOpen((o) => !o)} aria-expanded={popularOpen} className="flex w-full items-center justify-between text-start text-[13px] font-semibold">
             {t("Popular buildings in this area")}<span aria-hidden className="text-xs">{popularOpen ? "▾" : "▸"}</span>
@@ -1412,7 +1498,7 @@ export default function BuildingMap({
         </p>
       )}
       {cardMode && legend && (
-        <div role="group" aria-label={t("Colour the map by")} className={`absolute inset-x-0 bottom-9 z-10 flex justify-center px-2 ${selected ? "max-md:hidden" : ""} ${compare.length ? "md:bottom-20" : ""}`}>
+        <div role="group" aria-label={t("Colour the map by")} className={`absolute inset-x-0 bottom-9 z-10 flex justify-center px-2 ${selected || villa ? "max-md:hidden" : ""} ${compare.length ? "md:bottom-20" : ""}`}>
           <div className="pointer-events-auto flex max-w-full gap-1 overflow-x-auto rounded-full border border-[var(--border)] bg-[var(--panel)]/95 p-1 text-xs shadow-md backdrop-blur">
             <button type="button" onClick={() => setForYou(true)} className="shrink-0 rounded-full bg-cyan-300 px-3 py-1.5 font-semibold text-slate-900 hover:bg-cyan-200">{t("★ For you")}</button>
             {(["psf", "yield", "sales", "change"] as const).map((id) => (

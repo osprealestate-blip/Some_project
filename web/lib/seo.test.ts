@@ -34,6 +34,12 @@ describe("pageMetadata", () => {
   });
 });
 
+describe("sitemapEntries clusters", () => {
+  it("lists villa cluster pages", () => {
+    expect(sitemapEntries("https://a.test", [], ["392"], ["natura"]).map((e) => e.url)).toContain("https://a.test/villas/natura");
+  });
+});
+
 describe("sitemapEntries", () => {
   const urls = sitemapEntries("https://a.test", ["stax", "b-2"], ["392"]).map((e) => e.url);
   it("lists the fixed pages, communities and buildings", () => {
