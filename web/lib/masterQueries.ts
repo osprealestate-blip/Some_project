@@ -7,6 +7,7 @@ import type { IndexRow, MasterBuilding } from "./masterCommunities";
 import type { MasterAreaDbRow } from "./masterAreas";
 import { findMaster, isHandChecked, masterSlug, UNBUILT_OFFICIAL_AREAS } from "./masterCommunities";
 import { change } from "./stats";
+import { clusterMasterCounts } from "./villaClusterQueries";
 
 const MISSING = new Set(["42P01", "42703"]); // table or column not there yet
 const missing = (e: unknown) => MISSING.has((e as { code?: string }).code ?? "");
@@ -17,7 +18,19 @@ export async function masterNames(): Promise<string[]> {
     "select distinct master_community as name from buildings where master_community is not null and match_confidence >= $1 order by 1",
     [MIN_CONFIDENCE],
   );
-  return rows.map((r) => r.name);
+  const clusters = await clusterMasterCounts().catch(() => []); // before migration 0015 there are none
+  return [...new Set([...rows.map((r) => r.name), ...clusters.map((c) => c.name)])].sort((a, b) => a.localeCompare(b));
+}
+
+/** Adds each community's cluster count, and a row for communities that have clusters but no building pages. */
+async function withClusters(rows: IndexRow[]): Promise<IndexRow[]> {
+  const counts = new Map((await clusterMasterCounts().catch(() => [])).map((c) => [c.name, c.clusters]));
+  const out = rows.map((r) => ({ ...r, clusters: counts.get(r.name) ?? 0 }));
+  const seen = new Set(rows.map((r) => r.name));
+  for (const [name, clusters] of counts) {
+    if (!seen.has(name)) out.push({ name, slug: masterSlug(name), buildings: 0, placed: 0, clusters, sales: 0, psf: null, rent: null, yield: null, yoy: null, handChecked: false });
+  }
+  return out;
 }
 
 export async function resolveMaster(part: string): Promise<string | null> {
@@ -45,7 +58,7 @@ export async function masterIndex(): Promise<{ rows: IndexRow[]; figures: boolea
       [MIN_CONFIDENCE],
     );
     const pe = await one<{ d: string | null }>("select max(period_end)::text as d from master_community_summary");
-    return { rows: rows.map(toRow), figures: rows.some((r) => r.sales > 0 || r.psf != null), periodEnd: pe?.d ?? null };
+    return { rows: await withClusters(rows.map(toRow)), figures: rows.some((r) => r.sales > 0 || r.psf != null), periodEnd: pe?.d ?? null };
   } catch (e) {
     if (!missing(e)) throw e;
     // Figure tables not on this database yet: counts from the building summaries, no medians.
@@ -57,7 +70,7 @@ export async function masterIndex(): Promise<{ rows: IndexRow[]; figures: boolea
         where b.master_community is not null and b.match_confidence >= $1 group by 1 order by sales desc, 1`,
       [MIN_CONFIDENCE],
     );
-    return { rows: rows.map(toRow), figures: false, periodEnd: null };
+    return { rows: await withClusters(rows.map(toRow)), figures: false, periodEnd: null };
   }
 }
 

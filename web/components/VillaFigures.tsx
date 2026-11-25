@@ -21,7 +21,7 @@ export default function VillaFigures({ data, currency, t }: { data: VillaCardDat
         <Fig label={t("Median per sq ft")} value={s.psf != null ? formatPsf(s.psf, currency) : "–"} />
       </dl>
       {s.sales > 0 && s.psf == null && <p className="text-xs text-[var(--muted)]">{t("Fewer than 3 sales in 12 months: no median shown.")}</p>}
-      {s.sales === 0 && <p className="text-xs text-[var(--muted)]">{t("No counted sales in the last 12 months.")}</p>}
+      {s.sales === 0 && <p className="text-xs text-[var(--muted)]">{t(s.salesAll === 0 ? "No Dubai Land Department sales matched to this project name." : "No counted sales in the last 12 months.")}</p>}
       {s.rent != null && <p>{t("Median rent")}: <strong>{formatMoneyShort(s.rent, currency)}</strong> {t("a year, from {n} contracts", { n: s.rentCount })}</p>}
       {mix.length > 0 && (
         <div>
@@ -44,10 +44,10 @@ export default function VillaFigures({ data, currency, t }: { data: VillaCardDat
         </p>
       )}
       <div className="space-y-1 text-[11px] leading-snug text-[var(--muted)]">
-        <p>{t("Sales and rents: matched to this project by its Dubai Land Department project name, 12 months to {date}. Medians; a sample, not every rent.", { date: day(data.periodEnd) })}</p>
-        <p>{t("Source")}: {tList(t, SOURCES.dldSales)}{data.sourceDate ? `, ${t("data to {date}", { date: day(data.sourceDate) })}` : ""}.</p>
-        {(data.plots != null || data.sizeMedianSqft) && <p>{t("Plot counts and sizes: Dubai Land Department records, checked {date}.", { date: day(data.auditDate) })}</p>}
-        <p>{t(CLUSTER_POINT_NOTE)}{point ? ` ${t("Position: {source}.", { source: point })}` : ""}</p>
+        {data.periodEnd && <p>{t("Sales and rents: matched to this project by its Dubai Land Department project name, 12 months to {date}. Medians; a sample, not every rent.", { date: day(data.periodEnd) })}</p>}
+        {data.periodEnd && <p>{t("Source")}: {tList(t, SOURCES.dldSales)}{data.sourceDate ? `, ${t("data to {date}", { date: day(data.sourceDate) })}` : ""}.</p>}
+        {(data.plots != null || data.sizeMedianSqft) && <p>{t("Plot counts and sizes: our 2025 property list, checked {date}.", { date: day(data.auditDate) })}</p>}
+        <p>{data.lng == null ? t("No map position yet, so there is no dot on the map.") : <>{t(CLUSTER_POINT_NOTE)}{point ? ` ${t("Position: {source}.", { source: point })}` : ""}</>}</p>
         <p>{t("Map: OpenStreetMap contributors via OpenFreeMap. Community: Dubai Municipality.")}</p>
       </div>
       {data.community && data.dmCode && (

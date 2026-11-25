@@ -308,6 +308,9 @@ def run(conn, crosswalk_path: Path | None = None, dld_buildings_path: Path | Non
 
         report.removed = _remove_stale(cur, set(building_ids.values()))
         _link_sales(cur, building_ids, project_ids)
+        from dpi import greenlist_towers  # it imports from this module
+
+        greenlist_towers.relink(cur)
         _link_rents(cur, project_ids)
         report.rents_estimated = rents.estimate(cur)
 
@@ -389,7 +392,7 @@ def _remove_stale(cur, kept: set[int]) -> int:
     Hand-checked (verified) and hand-placed (manual) pages and pages with units stay. Their sales and rents are
     unlinked first and relinked to the right page by the next steps; derived rows (metrics, aliases) go with them.
     """
-    cur.execute("select id from buildings where verified_at is null and coalesce(match_method, '') <> 'manual' "
+    cur.execute("select id from buildings where verified_at is null and coalesce(match_method, '') not in ('manual', 'greenlist') "
                 "and coalesce(geom_source, '') <> 'manual' and not (id = any(%s)) "
                 "and not exists (select 1 from units u where u.building_id = buildings.id)", (list(kept),))
     stale = [r[0] for r in cur.fetchall()]

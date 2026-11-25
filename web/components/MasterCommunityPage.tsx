@@ -1,4 +1,5 @@
 import Link from "next/link";
+import ClusterList from "./ClusterList";
 import DataBadge from "./DataBadge";
 import LatestSales from "./LatestSales";
 import LineChart from "./LineChart";
@@ -15,6 +16,7 @@ import { masterPage } from "@/lib/masterQueries";
 import { freshnessStamps } from "@/lib/queries";
 import { SOURCES } from "@/lib/sources";
 import { change } from "@/lib/stats";
+import { clustersInMaster } from "@/lib/villaClusterQueries";
 
 const TONE = { Available: "var(--good)", Partial: "var(--warn)", "Not available": "var(--muted)" } as const;
 
@@ -23,7 +25,7 @@ const TONE = { Available: "var(--good)", Partial: "var(--warn)", "Not available"
 export default async function MasterCommunityPage({ name }: { name: string }) {
   const { t, lang } = await getT();
   const currency = await getServerCurrency();
-  const [page, stamps] = await Promise.all([masterPage(name), freshnessStamps().catch(() => ({ salesTo: null, rentsTo: null, projectsAsOf: null }))]);
+  const [page, stamps, clusters] = await Promise.all([masterPage(name), freshnessStamps().catch(() => ({ salesTo: null, rentsTo: null, projectsAsOf: null })), clustersInMaster(name).catch(() => [])]);
   const { summaries, series, buildings, areas, developers } = page;
   const all = summaries.find((s) => s.rooms === -1);
   const slug = masterSlug(name);
@@ -63,6 +65,7 @@ export default async function MasterCommunityPage({ name }: { name: string }) {
         {t("{n} buildings", { n: count(buildings.length) })}
         {complexes > 0 && <> · {t("{n} developments", { n: count(complexes) })}</>}
         {placed > 0 && <> · {t("{n} on the map", { n: count(placed) })}</>}
+        {clusters.length > 0 && <> · {t("{n} villa and townhouse clusters", { n: count(clusters.length) })}</>}
       </p>
       {(areas.length > 0 || dev) && (
         <p className="mt-1 max-w-2xl text-xs text-[var(--muted)]">
@@ -87,7 +90,7 @@ export default async function MasterCommunityPage({ name }: { name: string }) {
       )}
       {page.figures && state !== "ok" && (
         <p role="note" className="mt-3 rounded-lg border border-dashed border-[var(--border)] p-3 text-sm text-[var(--muted)]">
-          {buildings.length === 0
+          {buildings.length === 0 && clusters.length === 0
             ? t("No building pages exist for this community yet.")
             : state === "none"
               ? t("No apartment sales were counted here in the last 12 months, so there is no price figure. That is a gap in the data, not a price of zero.")
@@ -141,6 +144,8 @@ export default async function MasterCommunityPage({ name }: { name: string }) {
           <SourceNote t={t} source={SOURCES.dldSales} date={all.period_end}>{t("Off-plan = sold by the developer before completion (DLD registration type).")}</SourceNote>
         </section>
       ) : null}
+
+      <ClusterList clusters={clusters} currency={currency} periodEnd={all?.period_end ?? stamps.salesTo} t={t} />
 
       <section className="mt-8">
         <div className="flex flex-wrap items-baseline justify-between gap-2">

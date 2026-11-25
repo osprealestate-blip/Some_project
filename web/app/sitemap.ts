@@ -2,7 +2,8 @@ import type { MetadataRoute } from "next";
 import { LAUNCH_CODES } from "@/lib/communities";
 import { hasDatabase } from "@/lib/db";
 import { siteUrl } from "@/lib/site";
-import { visibleClusterSlugs } from "@/lib/villaClusterQueries";
+import { masterSlug } from "@/lib/masterCommunities";
+import { clusterCommunityCodes, clusterMasterCounts, visibleClusterSlugs } from "@/lib/villaClusterQueries";
 import { masterCommunitySlugs, sitemapEntries, visibleBuildingSlugs, visibleCommunityCodes } from "@/lib/sitemap";
 
 export const dynamic = "force-dynamic";
@@ -16,6 +17,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   if (hasDatabase()) {
     try { [slugs, codes] = await Promise.all([visibleBuildingSlugs(), visibleCommunityCodes()]); } catch { /* list the fixed pages only */ }
     try { masters = await masterCommunitySlugs(); } catch { /* official areas only */ }
+    try { // communities that only have villa clusters
+      codes = [...new Set([...codes, ...(await clusterCommunityCodes())])];
+      masters = [...new Set([...masters, ...(await clusterMasterCounts()).map((c) => masterSlug(c.name))])];
+    } catch { /* migration 0015 not applied yet */ }
     try { clusters = await visibleClusterSlugs(); } catch { /* migration 0014 not applied yet: no cluster pages */ }
   }
   const official = codes.length ? [...new Set([...LAUNCH_CODES, ...codes])] : LAUNCH_CODES;

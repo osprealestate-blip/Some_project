@@ -55,7 +55,7 @@ export default function CommunityIndex({ rows, currency = DEFAULT_CURRENCY, figu
                     <span className="font-medium">{title}</span>
                     <span className="shrink-0 rounded-full border border-[var(--border)] px-2 py-0.5 text-[11px] text-[var(--muted)]">{r.handChecked ? t("Hand-checked") : t("Auto-matched")}</span>
                   </div>
-                  <div className="text-xs text-[var(--muted)]">{t("{n} buildings", { n: count(r.buildings) })} · {t(r.sales === 1 ? "{n} sale in 12 months" : "{n} sales in 12 months", { n: count(r.sales) })}</div>
+                  <div className="text-xs text-[var(--muted)]">{t("{n} buildings", { n: count(r.buildings) })} · {r.clusters ? `${t("{n} villa and townhouse clusters", { n: count(r.clusters) })} · ` : ""}{t(r.sales === 1 ? "{n} sale in 12 months" : "{n} sales in 12 months", { n: count(r.sales) })}</div>
                   {r.psf != null ? (
                     <dl className="mt-3 grid grid-cols-[1.5fr_1fr_0.8fr] gap-2 whitespace-nowrap text-sm">
                       <div><dt className="text-[11px] text-[var(--muted)]">{t("Per sq ft")}</dt><dd className="tabular-nums">{formatPsf(r.psf, currency)}</dd></div>

@@ -80,6 +80,7 @@ export type Building = {
   lat: number | null;
   project: string | null;
   project_id: number | null;
+  /** 0 or null in SQL terms never matches: null for a tower in an area with no official community polygon. */
   community_id: number;
   community: string;
   community_official: string;
@@ -184,7 +185,7 @@ export async function communitySeries(id: number): Promise<{ sales: SeriesPoint[
   };
 }
 
-export async function communityBuildings(id: number, limit = 200): Promise<BuildingListItem[]> {
+export async function communityBuildings(id: number, limit = 1000): Promise<BuildingListItem[]> {
   return query<BuildingListItem>(
     `select b.slug, b.name_en, coalesce(c.name_common, c.name_official) as community, c.dm_code,
             s.sale_count_12m, s.sale_median_psf_12m, s.rent_median_12m, s.rent_level,
@@ -209,9 +210,10 @@ export async function buildingBySlug(slug: string): Promise<Building | null> {
             b.building_kind, b.building_kind_source, b.building_kind_confidence, b.building_kind_basis,
             ST_X(ST_PointOnSurface(b.geom)) as lng, ST_Y(ST_PointOnSurface(b.geom)) as lat,
             p.name as project, b.project_id, b.community_id,
-            coalesce(c.name_common, c.name_official) as community, c.name_official as community_official, c.dm_code,
+            coalesce(c.name_common, c.name_official, b.master_community, 'Dubai') as community,
+            coalesce(c.name_official, b.master_community, 'Dubai') as community_official, c.dm_code,
             (select count(*)::int from buildings o where o.project_id = b.project_id) as project_buildings
-       from buildings b join communities c on c.id = b.community_id left join projects p on p.id = b.project_id
+       from buildings b left join communities c on c.id = b.community_id left join projects p on p.id = b.project_id
       where b.slug = $1 and b.match_confidence >= $2`,
     [slug, MIN_CONFIDENCE],
   );
@@ -396,7 +398,15 @@ export async function search(q: string, limit = 12): Promise<SearchHit[]> {
       [term],
     );
   } catch { /* column missing */ }
-  return [...communities, ...developers, ...buildings.map(({ score: _score, ...h }) => h)];
+  // Towers with no official community have no alias row (aliases are per community): found by name.
+  const outside = await query<SearchHit>(
+    `select 'building' as kind, b.slug, b.name_en as name, b.master_community as community, s.sale_median_psf_12m as psf
+       from buildings b left join building_summary s on s.building_id = b.id and s.rooms = -1
+      where b.community_id is null and b.match_confidence >= $2 and lower(b.name_en) like '%' || $1 || '%'
+      order by s.sale_count_12m desc nulls last, b.name_en limit $3`,
+    [term, MIN_CONFIDENCE, limit],
+  );
+  return [...communities, ...developers, ...buildings.map(({ score: _score, ...h }) => h), ...outside];
 }
 
 /** A group of buildings for the map filter: the slugs, and for "near" the straight-line distance to that kind of place. */
