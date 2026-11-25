@@ -9,6 +9,7 @@ import {
   DEFAULT_SETTINGS, METRICS, METRIC_IDS, PALETTES, PALETTE_IDS, type LegendItem, type MapSettings, type MetricId, type ScaleMode,
 } from "@/lib/mapMetrics";
 import { DISCLAIMER } from "@/lib/sources";
+import type { Overlays } from "@/lib/transitLayers";
 import { DEFAULT_THEME, THEMES, THEME_IDS, type ThemeId } from "@/lib/mapThemes";
 
 type Props = {
@@ -21,6 +22,8 @@ type Props = {
   periodEnd: string | null;
   onSettings: (s: MapSettings) => void;
   onTheme: (t: ThemeId) => void;
+  overlays: Overlays;
+  onOverlay: (key: keyof Overlays, on: boolean) => void;
   onToggleClass: (cls: number) => void;
 };
 
@@ -187,6 +190,24 @@ export default function MapControls(p: Props) {
             </fieldset>
 
             <fieldset>
+              <legend className="mb-1 font-medium">{t("Map layers")}</legend>
+              <div className="flex flex-wrap gap-1.5">
+                {([["metro", "Metro and tram"], ["roads", "Major highways"]] as const).map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => p.onOverlay(key, !p.overlays[key])}
+                    aria-pressed={p.overlays[key]}
+                    className={`rounded-full border px-3 py-1 text-xs ${p.overlays[key] ? "border-[var(--accent)] bg-[var(--accent)] text-white" : "border-[var(--border)]"}`}
+                  >
+                    {t(label)}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1 text-[11px] text-[var(--muted)]">{t("Lines and stations as mapped in OpenStreetMap.")}</p>
+            </fieldset>
+
+            <fieldset>
               <legend className="mb-1 font-medium">{t("Map theme")}</legend>
               <div className="grid grid-cols-3 gap-1.5">
                 {THEME_IDS.map((id) => (
@@ -206,7 +227,7 @@ export default function MapControls(p: Props) {
 
             <button
               type="button"
-              onClick={() => { p.onSettings(DEFAULT_SETTINGS); p.onTheme(DEFAULT_THEME); }}
+              onClick={() => { p.onSettings(DEFAULT_SETTINGS); p.onTheme(DEFAULT_THEME); p.onOverlay("metro", false); p.onOverlay("roads", false); }}
               className="link text-[11px]"
             >
               {t("Reset to defaults")}

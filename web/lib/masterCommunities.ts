@@ -237,3 +237,8 @@ export function masterTitle(name: string): string {
 export function masterDescription(name: string): string {
   return `Apartment sale prices, rents and gross yields in ${name}, building by building, from Dubai Land Department data. Compare towers, developments and off-plan against ready.`;
 }
+
+/** Master communities whose official Dubai Municipality polygon is mostly planned, unbuilt sea (the polygon is the
+ *  whole planned island, not what exists). The map draws a dashed outline round their placed buildings instead,
+ *  and says nothing where there are none, rather than a huge empty shape. */
+export const UNBUILT_OFFICIAL_AREAS: readonly string[] = ["Palm Deira"];
