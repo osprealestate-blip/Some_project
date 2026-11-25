@@ -99,6 +99,11 @@ def main(argv: list[str] | None = None) -> int:
     pq.add_argument("--update-existing", action="store_true",
                     help="also move hosted positions that differ from ours by more than 1 m (default: only fill empty ones)")
     pq.add_argument("--apply", action="store_true", help="write the positions; without it nothing is written")
+    vc = sub.add_parser("load-villa-clusters",
+                        help="Villa and townhouse clusters (one map point per project) from a CSV; dry run unless --apply")
+    vc.add_argument("file", type=Path)
+    vc.add_argument("--source-date", default=None, help="date of the audit and lookups, YYYY-MM-DD (default: today)")
+    vc.add_argument("--apply", action="store_true", help="write the clusters and their figures; without it nothing is written")
     pp = sub.add_parser("push-public", help="Copy the public tables the web app reads to a hosted database")
     pp.add_argument("--target-env", default="HOSTED_DATABASE_URL",
                     help="environment variable holding the target connection string (never pass it on the command line)")
@@ -320,6 +325,13 @@ def main(argv: list[str] | None = None) -> int:
         with connect() as src, psycopg.connect(target_url) as dst:
             print(push_positions.run(src, dst, srcs, update_existing=args.update_existing,
                                      dry_run=not args.apply).render())
+    elif args.cmd == "load-villa-clusters":
+        from dpi import villa_clusters
+        from dpi.db import connect
+
+        with connect() as conn:
+            print(villa_clusters.run(conn, args.file, args.apply,
+                                     date.fromisoformat(args.source_date) if args.source_date else None).render())
     elif args.cmd == "group-complexes":
         from dpi.db import connect
         from dpi.matching import complexes
