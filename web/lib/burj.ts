@@ -16,12 +16,20 @@ function polygonsOf(g: GeoJSON.Geometry): Ring[][] {
   return g.type === "Polygon" ? [g.coordinates as Ring[]] : g.type === "MultiPolygon" ? (g.coordinates as Ring[][]) : [];
 }
 
-/** Basemap building pieces that make up the tower, as GeoJSON features with `h` (top, m) and `b` (base, m). Each is
- *  grown 1.5% round its own centre and 1 m taller, so the highlight sits just outside the grey piece (no flicker). */
-export function burjParts(tileFeatures: GeoJSON.Feature[]): GeoJSON.Feature[] {
+export type BurjParts = {
+  features: GeoJSON.Feature[];
+  /** [top, base] pairs the basemap layer should stop drawing, because the highlight redraws that exact piece. */
+  hide: [number, number][];
+};
+
+/** Basemap building pieces that make up the tower, as GeoJSON features with `h` (top, m) and `b` (base, m).
+ *  A piece whose [top, base] heights no other loaded building shares is hidden from the grey layer and redrawn exactly.
+ *  A piece that shares them with a far-away building cannot be told apart by height, so it stays in the grey layer and
+ *  its highlight is grown a little and 1 m taller, to sit just outside it. */
+export function burjParts(tileFeatures: GeoJSON.Feature[]): BurjParts {
   const kx = 111_320 * Math.cos((BURJ_CENTRE.lat * Math.PI) / 180);
-  const out: GeoJSON.Feature[] = [];
-  const seen = new Set<string>();
+  const mine: { key: string; poly: Ring[]; cx: number; cy: number; h: number; b: number }[] = [];
+  const elsewhere = new Set<string>();
   for (const f of tileFeatures) {
     const h = Number(f.properties?.render_height ?? 0);
     if (h < MIN_PART_HEIGHT_M) continue;
@@ -31,13 +39,26 @@ export function burjParts(tileFeatures: GeoJSON.Feature[]): GeoJSON.Feature[] {
       if (!ring?.length) continue;
       const xs = ring.map((p) => p[0]), ys = ring.map((p) => p[1]);
       const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cy = (Math.min(...ys) + Math.max(...ys)) / 2;
-      if (Math.hypot((cx - BURJ_CENTRE.lng) * kx, (cy - BURJ_CENTRE.lat) * 110_574) > RADIUS_M) continue;
-      const key = `${cx.toFixed(6)}|${cy.toFixed(6)}|${h}|${b}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      const grown = poly.map((r) => r.map(([x, y]) => [cx + (x - cx) * 1.015, cy + (y - cy) * 1.015]));
-      out.push({ type: "Feature", geometry: { type: "Polygon", coordinates: grown }, properties: { h: h + 1, b } });
+      const key = `${h}/${b}`;
+      const near = Math.hypot((cx - BURJ_CENTRE.lng) * kx, (cy - BURJ_CENTRE.lat) * 110_574) <= RADIUS_M;
+      // A whole-complex outline (hide_3d) is not drawn by the basemap either: its separate parts are. Drawing it as well
+      // is what made the highlight a full-height slab with the Y footprint.
+      if (f.properties?.hide_3d) continue;
+      if (near) mine.push({ key, poly, cx, cy, h, b }); else elsewhere.add(key);
     }
   }
-  return out;
+  const features: GeoJSON.Feature[] = [];
+  const hide = new Map<string, [number, number]>();
+  const seen = new Set<string>();
+  for (const m of mine) {
+    const exact = !elsewhere.has(m.key);
+    const id = `${m.cx.toFixed(6)}|${m.cy.toFixed(6)}|${m.key}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    if (exact) hide.set(m.key, [m.h, m.b]);
+    const k = exact ? 1 : 1.06;
+    const grown = m.poly.map((r) => r.map(([x, y]) => [m.cx + (x - m.cx) * k, m.cy + (y - m.cy) * k]));
+    features.push({ type: "Feature", geometry: { type: "Polygon", coordinates: grown }, properties: { h: m.h + (exact ? 0 : 2), b: m.b } });
+  }
+  return { features, hide: [...hide.values()] };
 }

@@ -490,7 +490,13 @@ export default function BuildingMap({
       if (!src || !ts || map.getZoom() < 13 || live.current.burjLoaded) return;
       const feats = map.querySourceFeatures(ts, { sourceLayer: "building" }) as unknown as GeoJSON.Feature[];
       const parts = burjParts(feats);
-      if (parts.length) { live.current.burjLoaded = true; src.setData({ type: "FeatureCollection", features: parts }); }
+      if (parts.features.length) {
+        live.current.burjLoaded = true;
+        src.setData({ type: "FeatureCollection", features: parts.features });
+        // Stop the grey layer drawing the pieces we redraw, so the highlight covers the whole tower.
+        const hideRules = parts.hide.map(([h, b]) => ["all", ["==", ["coalesce", ["get", "render_height"], 0], h], ["==", ["coalesce", ["get", "render_min_height"], 0], b]]);
+        if (map.getLayer("base-3d")) map.setFilter("base-3d", (hideRules.length ? ["all", ["!", ["has", "hide_3d"]], ["!", ["any", ...hideRules]]] : ["!", ["has", "hide_3d"]]) as FilterSpecification);
+      }
     };
     map.on("idle", () => { loadBurjParts(); });
     const paintBurj = () => {
@@ -500,7 +506,7 @@ export default function BuildingMap({
       const col = live.current.selected === b.slug ? CYAN : live.current.hover === b.slug ? th.baseHover : th.baseBuilding;
       const on = live.current.selected === b.slug || live.current.hover === b.slug;
       map.setPaintProperty("burj-3d", "fill-extrusion-color", col);
-      map.setPaintProperty("burj-3d", "fill-extrusion-opacity", on ? 0.97 : 0.001);
+      map.setPaintProperty("burj-3d", "fill-extrusion-opacity", on ? 0.97 : 0.75);
     };
     paintBurjRef.current = paintBurj;
     const burjAt = (point: maplibregl.PointLike): Props3 | undefined => {
@@ -831,7 +837,7 @@ export default function BuildingMap({
           "fill-extrusion-color": t.baseBuilding,
           "fill-extrusion-height": ["get", "h"],
           "fill-extrusion-base": ["get", "b"],
-          "fill-extrusion-opacity": 0.001,
+          "fill-extrusion-opacity": 0.75,
         },
       });
       tileSourceRef.current = tileSource;
