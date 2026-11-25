@@ -6,7 +6,7 @@ import { FACILITIES } from "@/lib/facilities";
 import { A_PLACE, facilityIntent, NEAR_RADIUS_M } from "@/lib/mapFilter";
 import { useEffect, useId, useRef, useState } from "react";
 
-type Hit = { kind: "building" | "community" | "developer" | "facility" | "cluster"; slug: string; name: string; community: string | null };
+type Hit = { kind: "building" | "community" | "developer" | "facility" | "cluster"; slug: string; name: string; community: string | null; placed?: boolean };
 const KIND_LABEL: Record<Hit["kind"], string> = { building: "", community: "Area", developer: "Developer", facility: "Map search", cluster: "Villa cluster" };
 
 /** `mapMode`: on the map page a building result opens its card on the map instead of leaving for its page. */
@@ -61,7 +61,7 @@ export default function SearchBox({ autoFocus = false, placeholder = "Search a b
     h.kind === "building" ? (mapMode ? mapHref({ building: h.slug }) : `/building/${h.slug}`)
     : h.kind === "facility" ? mapHref({ f: `near:${h.slug}` })
     : h.kind === "developer" ? mapHref({ f: `dev:${h.slug}` })
-    : h.kind === "cluster" ? (mapMode ? mapHref({ villa: h.slug }) : `/villas/${h.slug}`)
+    : h.kind === "cluster" ? (mapMode && h.placed ? mapHref({ villa: h.slug }) : `/villas/${h.slug}`)
     : mapMode ? mapHref({ f: /^\d+$/.test(h.slug) ? `area:${h.slug}` : `master:${h.slug}` }) : `/community/${h.slug}`;
   const go = (h: Hit) => {
     setOpen(false);

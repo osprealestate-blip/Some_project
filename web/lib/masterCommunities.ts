@@ -199,6 +199,7 @@ export type IndexRow = {
   slug: string;
   buildings: number;
   placed: number;
+  clusters?: number;
   sales: number;
   psf: number | null;
   rent: number | null;

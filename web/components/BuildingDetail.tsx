@@ -52,6 +52,7 @@ const METHOD_TEXT: Record<string, string> = {
   land_number_plot: "DLD sales matched by name to a DLD plot with several towers",
   name: "DLD sales matched by building name",
   manual: "Checked by hand",
+  greenlist: "Name from our 2025 property list; DLD sales matched by building name",
 };
 
 const POSITION_TEXT: Record<string, string> = {

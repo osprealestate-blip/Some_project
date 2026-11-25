@@ -5,7 +5,7 @@ Input is a CSV, one row per cluster. It joins the special-2025 audit columns wit
 
   slug | project_slug      URL name (made from the name when empty)
   name | project           display name
-  lng, lat                 the cluster centre; empty = the cluster is stored but not shown on the map
+  lng, lat                 the cluster centre; empty = listed (page, search, community) without a map dot
   point_source             2gis | google | osm | manual (required when there is a point)
   cluster_point            true (default) = the point is the centre of a cluster, not a building
   point_note               free text, kept with the point
@@ -15,6 +15,9 @@ Input is a CSV, one row per cluster. It joins the special-2025 audit columns wit
   size_median              median size in sq ft from the audit, 0 or empty = unknown
   match_names              DLD project names, separated by |; the name itself is always included
   already_in_app           true = the project already has building pages: skipped, so nothing is counted twice
+  master_community         the community people search for (e.g. "Tilal Al Ghaf"); optional
+  match_dm_codes           community numbers, separated by |, whose sales and rents may be matched; 0 = records with
+                           no official area; "-" = match nothing; empty = no restriction
 
 Sales and rents are matched to a cluster by an exact project-name match (lower case, no punctuation). Nothing is
 guessed: a cluster whose name matches no DLD project simply shows no figures. Only aggregates are stored.
@@ -61,6 +64,13 @@ def kind_of(text: str) -> str:
     return "mixed" if town and villa else "townhouse" if town else "villa"
 
 
+def dm_list(text: str) -> list[str] | None:
+    """None = no restriction, [] = match nothing."""
+    if not text:
+        return None
+    return [x.strip() for x in text.split("|") if x.strip() and x.strip() != "-"]
+
+
 @dataclass
 class Cluster:
     slug: str
@@ -76,6 +86,8 @@ class Cluster:
     records: int | None = None
     size: float | None = None
     match_names: list[str] = field(default_factory=list)
+    master: str | None = None
+    match_dm: list[str] | None = None
 
 
 def read_rows(path: Path) -> tuple[list[Cluster], list[str], list[str]]:
@@ -124,7 +136,8 @@ def read_rows(path: Path) -> tuple[list[Cluster], list[str], list[str]]:
                 is_cluster_point=_first(r, "cluster_point").lower() not in {"0", "false", "no", "n", "f"},
                 note=_first(r, "point_note", "note") or None, dm_code=_first(r, "dm_code") or None,
                 plots=int(plots) if plots is not None else None, records=int(records) if records is not None else None,
-                size=size if size and size > 0 else None, match_names=names))
+                size=size if size and size > 0 else None, match_names=names,
+                master=_first(r, "master_community") or None, match_dm=dm_list(_first(r, "match_dm_codes"))))
     return clusters, problems, skipped
 
 
@@ -138,6 +151,8 @@ class Report:
     with_point: int = 0
     without_point: int = 0
     no_community: int = 0
+    no_area: int = 0
+    mixed: int = 0
     matched_projects: int = 0
     with_sales: int = 0
     sales_matched: int = 0
@@ -150,8 +165,9 @@ class Report:
     def render(self) -> str:
         out = ["DRY RUN, nothing written." if self.dry_run else f"Written: {self.written:,} clusters and their figures.",
                f"Clusters read: {self.rows:,}  (problem rows left out: {len(self.problems):,}, skipped: {len(self.skipped):,})",
-               f"On the map (have a point): {self.with_point:,}   not shown (no point yet): {self.without_point:,}",
+               f"On the map (have a point): {self.with_point:,}   listed without a map dot: {self.without_point:,}",
                f"Points with no Dubai Municipality community around them: {self.no_community:,}",
+               f"Listed with no official community: {self.no_area:,}",
                f"DLD project names matched exactly: {self.matched_projects:,}",
                f"Clusters with villa or townhouse sales in the last 12 months: {self.with_sales:,}",
                f"Sales (12 months) / rent contracts (12 months) behind the figures: {self.sales_matched:,} / {self.rents_matched:,}"]
@@ -161,6 +177,8 @@ class Report:
             out.append("Busiest clusters: " + "; ".join(f"{n} ({c:,})" for n, c in self.top))
         if self.unmatched:
             out.append(f"No DLD sales matched by name ({len(self.unmatched):,}), first 15: " + "; ".join(self.unmatched[:15]))
+        if self.mixed:
+            out.append(f"Project names that also sell apartments (rents without a type left out): {self.mixed:,}")
         for title, items in (("Problems", self.problems), ("Skipped", self.skipped), ("Warnings", self.warnings)):
             if items:
                 out.append(f"{title} ({len(items):,}), first 15:")
@@ -173,6 +191,8 @@ with p as (select max(txn_date) as e, max(source_date) as sd from transactions w
 s as (
   select m.cluster_id, least(t.rooms, 4) as rooms, t.txn_date, t.price, t.price_psf, t.size_sqft
   from transactions t join vc_match m on m.raw_project = t.raw_project
+  join villa_clusters v on v.id = m.cluster_id
+       and (v.match_community_ids is null or coalesce(t.community_id, 0) = any(v.match_community_ids))
   where t.excluded is null and t.property_type in ('villa', 'townhouse')
 )
 select cluster_id, case when grouping(rooms) = 1 then -1 else rooms end as rooms,
@@ -189,9 +209,12 @@ _SUMMARY_RENTS = """
 with p as (select max(txn_date) as e from transactions where excluded is null)
 select m.cluster_id, case when grouping(least(r.rooms, 4)) = 1 then -1 else least(r.rooms, 4) end as rooms, count(*),
        percentile_cont(0.5) within group (order by r.annual_rent), count(*) filter (where r.sub_type is null)
-from rent_contracts r join vc_match m on m.raw_project = r.raw_project, p
+from rent_contracts r join vc_match m on m.raw_project = r.raw_project
+join villa_clusters v on v.id = m.cluster_id
+     and (v.match_community_ids is null or coalesce(r.community_id, 0) = any(v.match_community_ids))
+cross join p
 where r.excluded is null and r.rooms is not null and r.start_date > p.e - interval '12 months' and r.start_date <= p.e
-  and (r.sub_type is null or r.sub_type ~* '(villa|town)')
+  and (r.sub_type ~* '(villa|town)' or (r.sub_type is null and m.cluster_id not in (select cluster_id from vc_mixed)))
 group by grouping sets ((m.cluster_id, least(r.rooms, 4)), (m.cluster_id))
 """
 
@@ -210,10 +233,10 @@ def run(conn, path: Path, apply: bool = False, source_date=None) -> Report:
         for c in clusters:
             cur.execute("""
                 insert into villa_clusters (slug, name, kind, geom, geom_source, is_cluster_point, geom_note, plot_count,
-                                            record_count, size_median_sqft, match_names, source_date)
+                                            record_count, size_median_sqft, match_names, source_date, master_community)
                 values (%(slug)s, %(name)s, %(kind)s,
                         case when %(lng)s::float8 is null then null else ST_SetSRID(ST_MakePoint(%(lng)s, %(lat)s), 4326) end,
-                        %(src)s, %(cp)s, %(note)s, %(plots)s, %(records)s, %(size)s, %(names)s, %(sd)s)
+                        %(src)s, %(cp)s, %(note)s, %(plots)s, %(records)s, %(size)s, %(names)s, %(sd)s, %(master)s)
                 on conflict (slug) do update set
                   name = excluded.name, kind = excluded.kind,
                   geom = coalesce(excluded.geom, villa_clusters.geom),
@@ -222,10 +245,11 @@ def run(conn, path: Path, apply: bool = False, source_date=None) -> Report:
                   geom_note = case when excluded.geom is null then villa_clusters.geom_note else excluded.geom_note end,
                   plot_count = excluded.plot_count, record_count = excluded.record_count,
                   size_median_sqft = excluded.size_median_sqft, match_names = excluded.match_names,
-                  source_date = excluded.source_date""",
+                  source_date = excluded.source_date,
+                  master_community = coalesce(excluded.master_community, villa_clusters.master_community)""",
                         {"slug": c.slug, "name": c.name, "kind": c.kind, "lng": c.lng, "lat": c.lat, "src": c.geom_source,
                          "cp": c.is_cluster_point, "note": c.note, "plots": c.plots, "records": c.records, "size": c.size,
-                         "names": c.match_names, "sd": stamp})
+                         "names": c.match_names, "sd": stamp, "master": c.master})
         # 2. Community: the number given, else the polygon that contains the point.
         for c in clusters:
             if c.dm_code:
@@ -235,6 +259,16 @@ def run(conn, path: Path, apply: bool = False, source_date=None) -> Report:
                 cur.execute("""update villa_clusters v set community_id = (
                                  select c.id from communities c where c.geom is not null and ST_Contains(c.geom, v.geom) limit 1)
                                where v.slug = %s and v.geom is not null""", (c.slug,))
+        cur.execute("select dm_code, id from communities where dm_code is not null")
+        ids = dict(cur.fetchall())
+        ids["0"] = 0
+        for c in clusters:
+            if c.match_dm is not None:
+                cur.execute("update villa_clusters set match_community_ids = %s::int[] where slug = %s",
+                            ([ids[x] for x in c.match_dm if x in ids], c.slug))
+        cur.execute("select count(*) from villa_clusters where community_id is null and slug = any(%s)",
+                    ([c.slug for c in clusters],))
+        rep.no_area = cur.fetchone()[0]
         cur.execute("select count(*) from villa_clusters where geom is not null and community_id is null and slug = any(%s)",
                     ([c.slug for c in clusters],))
         rep.no_community = cur.fetchone()[0]
@@ -261,6 +295,16 @@ def run(conn, path: Path, apply: bool = False, source_date=None) -> Report:
             for raw, cid in sorted(pairs):
                 cp.write_row((raw, cid))
         cur.execute("create index on vc_match (raw_project)")
+        # A project name that also sells apartments (1 sale in 5 or more) covers more than villas: a rent that does not say
+        # what was rented is then left out, so apartment rents never pass as villa rents.
+        cur.execute("""create temp table vc_mixed on commit drop as
+            select m.cluster_id from transactions t join vc_match m on m.raw_project = t.raw_project
+              join villa_clusters v on v.id = m.cluster_id
+                   and (v.match_community_ids is null or coalesce(t.community_id, 0) = any(v.match_community_ids))
+             where t.excluded is null group by m.cluster_id
+            having count(*) filter (where t.property_type = 'apartment') * 5 >= count(*)""")
+        cur.execute("select count(*) from vc_mixed")
+        rep.mixed = cur.fetchone()[0]
         # 4. Figures. Rebuilt for every cluster in the file, so a re-run replaces them.
         cur.execute("delete from villa_cluster_summary where cluster_id in (select id from villa_clusters where slug = any(%s))",
                     ([c.slug for c in clusters],))

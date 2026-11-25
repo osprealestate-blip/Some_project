@@ -7,9 +7,11 @@ export type VillaCardData = {
   name: string;
   kind: ClusterKind;
   community: string | null;
+  master: string | null;
   dmCode: string | null;
-  lng: number;
-  lat: number;
+  /** Null until a map position is found. */
+  lng: number | null;
+  lat: number | null;
   /** Where the map point came from, and whether it is the centre of the cluster. */
   point: { source: string | null; isCentre: boolean; note: string | null };
   /** From the DLD audit: plots in the cluster and the records behind them. Null when not known. */
@@ -25,12 +27,12 @@ export type VillaCardData = {
 
 export async function villaCard(slug: string): Promise<VillaCardData | null> {
   const c = await clusterBySlug(slug);
-  if (!c || c.lng == null || c.lat == null) return null;
+  if (!c) return null;
   const sums = await clusterSummaries(c.id);
   const all = sums.find((s) => s.rooms === -1);
   const r = (v: number | null | undefined, step: number) => (v == null ? null : Math.round(v / step) * step);
   return {
-    slug: c.slug, name: c.name, kind: c.kind, community: c.community, dmCode: c.dm_code, lng: c.lng, lat: c.lat,
+    slug: c.slug, name: c.name, kind: c.kind, community: c.community, master: c.master, dmCode: c.dm_code, lng: c.lng, lat: c.lat,
     point: { source: c.geom_source, isCentre: c.is_cluster_point, note: c.geom_note },
     plots: c.plot_count, records: c.record_count, sizeMedianSqft: c.size_median_sqft, auditDate: c.source_date,
     periodEnd: all?.period_end ?? null, sourceDate: all?.source_date ?? null,

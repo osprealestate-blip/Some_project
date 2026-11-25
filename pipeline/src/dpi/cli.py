@@ -104,6 +104,10 @@ def main(argv: list[str] | None = None) -> int:
     vc.add_argument("file", type=Path)
     vc.add_argument("--source-date", default=None, help="date of the audit and lookups, YYYY-MM-DD (default: today)")
     vc.add_argument("--apply", action="store_true", help="write the clusters and their figures; without it nothing is written")
+    gt = sub.add_parser("load-greenlist-towers",
+                        help="Building pages (no map position) for new towers on the property list, from a CSV; dry run unless --apply")
+    gt.add_argument("file", type=Path)
+    gt.add_argument("--apply", action="store_true", help="write the pages; without it nothing is written")
     pp = sub.add_parser("push-public", help="Copy the public tables the web app reads to a hosted database")
     pp.add_argument("--target-env", default="HOSTED_DATABASE_URL",
                     help="environment variable holding the target connection string (never pass it on the command line)")
@@ -332,6 +336,12 @@ def main(argv: list[str] | None = None) -> int:
         with connect() as conn:
             print(villa_clusters.run(conn, args.file, args.apply,
                                      date.fromisoformat(args.source_date) if args.source_date else None).render())
+    elif args.cmd == "load-greenlist-towers":
+        from dpi import greenlist_towers
+        from dpi.db import connect
+
+        with connect() as conn:
+            print(greenlist_towers.run(conn, args.file, args.apply).render())
     elif args.cmd == "group-complexes":
         from dpi.db import connect
         from dpi.matching import complexes

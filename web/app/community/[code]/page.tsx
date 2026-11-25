@@ -29,7 +29,8 @@ import { masterDescription, masterSlug, masterTitle } from "@/lib/masterCommunit
 import { mastersInArea, resolveMaster } from "@/lib/masterQueries";
 import { pageMetadata } from "@/lib/seo";
 import { clustersInCommunity } from "@/lib/villaClusterQueries";
-import { CLUSTER_KIND_LABEL } from "@/lib/villaCluster";
+import ClusterList from "@/components/ClusterList";
+import { makeT } from "@/lib/i18n";
 import { SOURCES } from "@/lib/sources";
 import { change } from "@/lib/stats";
 
@@ -189,21 +190,7 @@ async function OfficialAreaPage({ code }: { code: string }) {
         </section>
       )}
 
-      {clusters.length > 0 && (
-        <section className="mt-8">
-          <h2 className="text-base font-semibold">Villa and townhouse clusters</h2>
-          <p className="mt-1 text-sm text-[var(--muted)]">One map point per project, at its centre. Sales are counted for the whole project, never for a single villa.</p>
-          <ul className="mt-2 grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
-            {clusters.map((v) => (
-              <li key={v.slug} className="flex justify-between gap-3">
-                <span className="min-w-0"><Link className="link" href={`/villas/${v.slug}`}>{v.name}</Link> <span className="text-xs text-[var(--muted)]">{CLUSTER_KIND_LABEL[v.kind]}</span></span>
-                <span className="shrink-0 tabular-nums text-[var(--muted)]">{count(v.sales)} sales{v.psf ? ` · ${formatPsf(v.psf, currency)}` : ""}</span>
-              </li>
-            ))}
-          </ul>
-          <SourceNote source={SOURCES.dldSales} date={all?.period_end}>Last 12 months, matched to each project by its Dubai Land Department project name.</SourceNote>
-        </section>
-      )}
+      <ClusterList clusters={clusters} currency={currency} periodEnd={all?.period_end} t={makeT("en")} />
 
       {buildings.length > 0 && (
         <section className="mt-8 grid gap-6 lg:grid-cols-2">

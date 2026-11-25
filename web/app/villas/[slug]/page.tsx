@@ -7,6 +7,7 @@ import VillaFigures from "@/components/VillaFigures";
 import { getServerCurrency } from "@/lib/currency";
 import { hasDatabase } from "@/lib/db";
 import { makeT } from "@/lib/i18n";
+import { masterSlug } from "@/lib/masterCommunities";
 import { pageMetadata } from "@/lib/seo";
 import { villaCard } from "@/lib/villaCardData";
 import { CLUSTER_KIND_LABEL } from "@/lib/villaCluster";
@@ -37,17 +38,20 @@ export default async function Page({ params }: Params) {
       <nav className="text-xs text-[var(--muted)]">
         <Link className="link" href="/map">Map</Link>
         {data.community && data.dmCode && <> / <Link className="link" href={`/community/${data.dmCode}`}>{data.community}</Link></>}
+        {data.master && data.master !== data.community && <> / <Link className="link" href={`/community/${masterSlug(data.master)}`}>{data.master}</Link></>}
       </nav>
       <p className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">{CLUSTER_KIND_LABEL[data.kind]}</p>
       <h1 className="text-2xl font-semibold">{data.name}</h1>
       {data.community && <p className="text-sm text-[var(--muted)]">{data.community}</p>}
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <section aria-label="Figures" className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4"><VillaFigures data={data} currency={currency} t={t} /></section>
-        <div className="h-72 overflow-hidden rounded-lg border border-[var(--border)] md:h-auto md:min-h-72">
-          <BuildingMap focus={{ lng: data.lng, lat: data.lat }} currency={currency} controls="legend" />
-        </div>
+        {data.lng != null && data.lat != null && (
+          <div className="h-72 overflow-hidden rounded-lg border border-[var(--border)] md:h-auto md:min-h-72">
+            <BuildingMap focus={{ lng: data.lng, lat: data.lat }} currency={currency} controls="legend" />
+          </div>
+        )}
       </div>
-      <p className="mt-4 text-xs"><Link className="link" href={`/map?villa=${encodeURIComponent(data.slug)}`}>Show it on the 3D map</Link></p>
+      {data.lng != null && <p className="mt-4 text-xs"><Link className="link" href={`/map?villa=${encodeURIComponent(data.slug)}`}>Show it on the 3D map</Link></p>}
     </main>
   );
 }
