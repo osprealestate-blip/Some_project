@@ -152,6 +152,7 @@ class Report:
     without_point: int = 0
     no_community: int = 0
     no_area: int = 0
+    mixed: int = 0
     matched_projects: int = 0
     with_sales: int = 0
     sales_matched: int = 0
@@ -176,6 +177,8 @@ class Report:
             out.append("Busiest clusters: " + "; ".join(f"{n} ({c:,})" for n, c in self.top))
         if self.unmatched:
             out.append(f"No DLD sales matched by name ({len(self.unmatched):,}), first 15: " + "; ".join(self.unmatched[:15]))
+        if self.mixed:
+            out.append(f"Project names that also sell apartments (rents without a type left out): {self.mixed:,}")
         for title, items in (("Problems", self.problems), ("Skipped", self.skipped), ("Warnings", self.warnings)):
             if items:
                 out.append(f"{title} ({len(items):,}), first 15:")
@@ -211,7 +214,7 @@ join villa_clusters v on v.id = m.cluster_id
      and (v.match_community_ids is null or coalesce(r.community_id, 0) = any(v.match_community_ids))
 cross join p
 where r.excluded is null and r.rooms is not null and r.start_date > p.e - interval '12 months' and r.start_date <= p.e
-  and (r.sub_type is null or r.sub_type ~* '(villa|town)')
+  and (r.sub_type ~* '(villa|town)' or (r.sub_type is null and m.cluster_id not in (select cluster_id from vc_mixed)))
 group by grouping sets ((m.cluster_id, least(r.rooms, 4)), (m.cluster_id))
 """
 
@@ -292,6 +295,16 @@ def run(conn, path: Path, apply: bool = False, source_date=None) -> Report:
             for raw, cid in sorted(pairs):
                 cp.write_row((raw, cid))
         cur.execute("create index on vc_match (raw_project)")
+        # A project name that also sells apartments (1 sale in 5 or more) covers more than villas: a rent that does not say
+        # what was rented is then left out, so apartment rents never pass as villa rents.
+        cur.execute("""create temp table vc_mixed on commit drop as
+            select m.cluster_id from transactions t join vc_match m on m.raw_project = t.raw_project
+              join villa_clusters v on v.id = m.cluster_id
+                   and (v.match_community_ids is null or coalesce(t.community_id, 0) = any(v.match_community_ids))
+             where t.excluded is null group by m.cluster_id
+            having count(*) filter (where t.property_type = 'apartment') * 5 >= count(*)""")
+        cur.execute("select count(*) from vc_mixed")
+        rep.mixed = cur.fetchone()[0]
         # 4. Figures. Rebuilt for every cluster in the file, so a re-run replaces them.
         cur.execute("delete from villa_cluster_summary where cluster_id in (select id from villa_clusters where slug = any(%s))",
                     ([c.slug for c in clusters],))
