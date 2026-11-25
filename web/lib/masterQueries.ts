@@ -5,7 +5,7 @@ import { one, query } from "./db";
 import { MIN_CONFIDENCE, type CommunitySummary, type RentLevel, type SeriesPoint } from "./queries";
 import type { IndexRow, MasterBuilding } from "./masterCommunities";
 import type { MasterAreaDbRow } from "./masterAreas";
-import { findMaster, isHandChecked, masterSlug } from "./masterCommunities";
+import { findMaster, isHandChecked, masterSlug, UNBUILT_OFFICIAL_AREAS } from "./masterCommunities";
 import { change } from "./stats";
 
 const MISSING = new Set(["42P01", "42703"]); // table or column not there yet
@@ -197,14 +197,14 @@ export async function masterAreaRows(): Promise<MasterAreaDbRow[]> {
      hs as (select name, ST_Transform(ST_Collect(hull), 4326) as shp, ST_Transform((array_agg(hull order by n desc))[1], 4326) as main from h group by name),
      s as (
        select a.name, a.buildings, a.placed,
-              case when a.one_area and c.geom is not null then ST_SimplifyPreserveTopology(c.geom, 0.0002) else hs.shp end as shp,
-              case when a.one_area and c.geom is not null then ST_SimplifyPreserveTopology(c.geom, 0.0002) else hs.main end as main,
-              (a.one_area and c.geom is not null) as official
+              case when a.one_area and c.geom is not null and a.name <> all($2::text[]) then ST_SimplifyPreserveTopology(c.geom, 0.0002) else hs.shp end as shp,
+              case when a.one_area and c.geom is not null and a.name <> all($2::text[]) then ST_SimplifyPreserveTopology(c.geom, 0.0002) else hs.main end as main,
+              (a.one_area and c.geom is not null and a.name <> all($2::text[])) as official
          from a left join communities c on c.id = a.cid left join hs on hs.name = a.name)
      select name, buildings, placed, official, ST_AsGeoJSON(shp, 5) as shape,
             ST_X(ST_PointOnSurface(main)) as lng, ST_Y(ST_PointOnSurface(main)) as lat,
             ST_XMin(main) as w, ST_YMin(main) as s, ST_XMax(main) as e, ST_YMax(main) as n
        from s where shp is not null`,
-    [MIN_CONFIDENCE],
+    [MIN_CONFIDENCE, [...UNBUILT_OFFICIAL_AREAS]],
   );
 }

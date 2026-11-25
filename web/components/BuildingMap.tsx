@@ -31,6 +31,8 @@ import { useLang, useT } from "./LangProvider";
 import type { T } from "@/lib/i18n";
 import { tLegend } from "@/lib/i18n";
 import MapSidebar from "./MapSidebar";
+import { addTransitLayers, DEFAULT_OVERLAYS, setOverlayVisibility, type Overlays } from "@/lib/transitLayers";
+import { burjParts, isBurjKhalifa } from "@/lib/burj";
 import { filterLabel, filterParam, parseFilter } from "@/lib/mapFilter";
 import { fetchRoute } from "@/lib/routeClient";
 import { labelPoint, routeLines, type RouteMap } from "@/lib/routeLines";
@@ -56,7 +58,7 @@ type Props3 = MapBuildingProps & { lng: number; lat: number; height: number };
 type Feature = { type: "Feature"; geometry: GeoJSON.Geometry; properties: Props3 };
 type Collection = { type: "FeatureCollection"; features: Feature[]; meta?: { periodEnd?: string | null } };
 
-const STORE = { settings: "dpi.map.settings", theme: "dpi.map.theme" };
+const STORE = { settings: "dpi.map.settings", theme: "dpi.map.theme", overlays: "dpi.map.overlays" };
 const CAMERA_KEY = "dpi.map.camera"; // this tab only: where the map was, so Back to map returns there
 const SELECTED_ATTR = "data-building-selected";
 const CYAN = "#22d3ee";
@@ -225,6 +227,7 @@ export default function BuildingMap({
   const [place, setPlace] = useState<Place | null>(null);
   const [settings, setSettings] = useState<MapSettings>(DEFAULT_SETTINGS);
   const [theme, setTheme] = useState<ThemeId>(DEFAULT_THEME);
+  const [overlays, setOverlays] = useState<Overlays>(DEFAULT_OVERLAYS);
   const [hidden, setHidden] = useState<number[]>([]);
   const [ready, setReady] = useState(false); // settings read from the browser
   const [styleGen, setStyleGen] = useState(0); // bumps each time a style finishes loading
@@ -334,7 +337,7 @@ export default function BuildingMap({
   const lang = useLang();
   const tRef = useRef(t);
   tRef.current = t;
-  const live = useRef({ settings, currency, theme, selected, mode: "buildings" as MapMode, areas: [] as GeoJSON.Feature<GeoJSON.Geometry, MasterAreaProps>[], padH: 0, hover: null as string | null, baseKey: null as string | null, restored: false });
+  const live = useRef({ settings, currency, theme, selected, mode: "buildings" as MapMode, areas: [] as GeoJSON.Feature<GeoJSON.Geometry, MasterAreaProps>[], padH: 0, burjLoaded: false, overlays: DEFAULT_OVERLAYS as Overlays, burj: null as { slug: string } | null, hover: null as string | null, baseKey: null as string | null, restored: false });
   live.current.settings = settings;
   live.current.currency = currency;
   live.current.theme = theme;
@@ -346,6 +349,8 @@ export default function BuildingMap({
   const coloured = useMemo(() => (raw ? colourise(raw.features, settings) : null), [raw, settings]);
 
   // Other maps (building and community pages): a click goes to the full building page.
+  const tileSourceRef = useRef<string | null>(null);
+  const paintBurjRef = useRef<() => void>(() => {});
   const open = useCallback((slug: string) => router.push(`/building/${encodeURIComponent(slug)}`), [router]);
 
   // The main map keeps the visitor on the map. The selection lives in the URL (?building=slug, &view=panel), so a
@@ -425,6 +430,12 @@ export default function BuildingMap({
     setTheme(savedTheme);
     setReady(true);
     live.current.theme = savedTheme;
+    try {
+      const o = JSON.parse(load(STORE.overlays) ?? "{}");
+      const ov = { metro: o.metro === true, roads: o.roads === true };
+      live.current.overlays = ov;
+      setOverlays(ov);
+    } catch { /* overlays stay off */ }
 
     // The Illustrated theme opens on its own tilted coast view, unless this map was given a place to show.
     const saved = cardMode && !focus && !bounds ? readCamera() : null;
@@ -471,6 +482,30 @@ export default function BuildingMap({
         if (slug) map.setFeatureState({ source: src, id: slug }, { hover: true });
       }
       live.current.hover = slug;
+      paintBurj();
+    };
+    const loadBurjParts = () => {
+      const src = map.getSource("burj-parts") as maplibregl.GeoJSONSource | undefined;
+      const ts = tileSourceRef.current;
+      if (!src || !ts || map.getZoom() < 13 || live.current.burjLoaded) return;
+      const feats = map.querySourceFeatures(ts, { sourceLayer: "building" }) as unknown as GeoJSON.Feature[];
+      const parts = burjParts(feats);
+      if (parts.length) { live.current.burjLoaded = true; src.setData({ type: "FeatureCollection", features: parts }); }
+    };
+    map.on("idle", () => { loadBurjParts(); });
+    const paintBurj = () => {
+      const b = live.current.burj;
+      if (!b || !map.getLayer("burj-3d")) return;
+      const th = THEMES[live.current.theme];
+      const col = live.current.selected === b.slug ? CYAN : live.current.hover === b.slug ? th.baseHover : th.baseBuilding;
+      const on = live.current.selected === b.slug || live.current.hover === b.slug;
+      map.setPaintProperty("burj-3d", "fill-extrusion-color", col);
+      map.setPaintProperty("burj-3d", "fill-extrusion-opacity", on ? 0.97 : 0.001);
+    };
+    paintBurjRef.current = paintBurj;
+    const burjAt = (point: maplibregl.PointLike): Props3 | undefined => {
+      const b = live.current.burj as Props3 | null;
+      return b && map.getLayer("burj-3d") && map.queryRenderedFeatures(point, { layers: ["burj-3d"] }).length ? b : undefined;
     };
     const featureAt = (e: MapLayerMouseEvent) => e.features?.[0]?.properties as Props3 | undefined;
     const show = (p: Props3, withButton: boolean) => {
@@ -532,7 +567,7 @@ export default function BuildingMap({
       }
       const priced = DPI_LAYERS.filter((l) => map.getLayer(l));
       const hit = priced.length ? map.queryRenderedFeatures(e.point, { layers: priced })[0] : undefined;
-      const p = hit?.properties as Props3 | undefined;
+      const p = (hit?.properties as Props3 | undefined) ?? burjAt(e.point);
       if (p) {
         if (leaveTimer) { clearTimeout(leaveTimer); leaveTimer = null; }
         setBaseHover(null);
@@ -608,7 +643,7 @@ export default function BuildingMap({
       }
       const layers = DPI_LAYERS.filter((l) => map.getLayer(l));
       const f = layers.length ? map.queryRenderedFeatures(e.point, { layers })[0] : undefined;
-      const p = f?.properties as Props3 | undefined;
+      const p = (f?.properties as Props3 | undefined) ?? burjAt(e.point);
       if (p && layers.length) {
         const stack = stackAt(e.point, p, layers);
         if (stack.length > 1) {
@@ -786,6 +821,22 @@ export default function BuildingMap({
           "fill-extrusion-opacity": 0.75,
         },
       });
+      // Burj Khalifa: its real stepped parts (from the basemap), redrawn only while hovered or selected (see lib/burj.ts).
+      if (!map.getSource("burj-parts")) { map.addSource("burj-parts", { type: "geojson", data: EMPTY }); live.current.burjLoaded = false; }
+      map.addLayer({
+        id: "burj-3d",
+        type: "fill-extrusion",
+        source: "burj-parts",
+        paint: {
+          "fill-extrusion-color": t.baseBuilding,
+          "fill-extrusion-height": ["get", "h"],
+          "fill-extrusion-base": ["get", "b"],
+          "fill-extrusion-opacity": 0.001,
+        },
+      });
+      tileSourceRef.current = tileSource;
+      // Metro and highway overlays (off until switched on in the map settings), drawn under the buildings.
+      if (tileSource) addTransitLayers(map, tileSource, "base-3d", live.current.overlays);
       // The building under the pointer, when it is one of ours-without-figures: drawn again, taller, in a highlight colour.
       if (tileSource && !map.getSource("base-hover")) {
         map.addSource("base-hover", { type: "geojson", data: EMPTY });
@@ -902,7 +953,12 @@ export default function BuildingMap({
     const fp = map.getSource("dpi-footprints") as maplibregl.GeoJSONSource | undefined;
     const cols = map.getSource("dpi-columns") as maplibregl.GeoJSONSource | undefined;
     if (!fp || !cols) return;
-    fp.setData({ type: "FeatureCollection", features: coloured.features } as GeoJSON.FeatureCollection);
+    live.current.burj = (coloured.features.find((f) => isBurjKhalifa(f.properties))?.properties as { slug: string } | undefined) ?? null;
+    paintBurjRef.current();
+    fp.setData({
+      type: "FeatureCollection",
+      features: coloured.features.map((f) => (isBurjKhalifa(f.properties) ? { ...f, properties: { ...f.properties, landmark: true } } : f)),
+    } as GeoJSON.FeatureCollection);
     cols.setData({
       type: "FeatureCollection",
       features: coloured.features.map((f) => ({ type: "Feature", geometry: square(f.properties.lng, f.properties.lat, COLUMN_HALF_M), properties: f.properties })),
@@ -918,7 +974,7 @@ export default function BuildingMap({
       if (!map.getLayer(id)) continue;
       const base: FilterSpecification | null = id === "dpi-columns" ? [">=", ["get", "sales"], BUSY_SALES]
         : id === "dpi-columns-minor" ? ["<", ["get", "sales"], BUSY_SALES]
-        : ["==", ["get", "approx"], id === "dpi-3d-approx"];
+        : ["all", ["==", ["get", "approx"], id === "dpi-3d-approx"], ["!", ["boolean", ["get", "landmark"], false]]];
       map.setFilter(id, (base ? ["all", base, show] : show) as FilterSpecification);
     }
     // Zoom to the matches the first time a search is applied.
@@ -945,6 +1001,7 @@ export default function BuildingMap({
       if (selected) map.setFeatureState({ source: src, id: selected }, { selected: true });
     }
     live.current.hover = null;
+    paintBurjRef.current();
   }, [selected, coloured, styleGen]);
 
   // Phones: with a community card open, the left tool rail and Guide button step aside, like they do for a building.
@@ -1203,6 +1260,14 @@ export default function BuildingMap({
     save(STORE.theme, next);
   };
 
+  const changeOverlay = (key: keyof Overlays, on: boolean) => {
+    const next = { ...live.current.overlays, [key]: on };
+    setOverlays(next);
+    live.current.overlays = next;
+    if (mapRef.current) setOverlayVisibility(mapRef.current, next);
+    save(STORE.overlays, JSON.stringify(next));
+  };
+
   if (noWebgl) {
     return (
       <div className="flex h-full items-center justify-center p-6 text-center text-[var(--muted)]">
@@ -1233,6 +1298,8 @@ export default function BuildingMap({
           periodEnd={raw?.meta?.periodEnd ?? null}
           onSettings={changeSettings}
           onTheme={changeTheme}
+          overlays={overlays}
+          onOverlay={changeOverlay}
           onToggleClass={(cls) => setHidden((h) => (h.includes(cls) ? h.filter((c) => c !== cls) : [...h, cls]))}
         />
         </div>
