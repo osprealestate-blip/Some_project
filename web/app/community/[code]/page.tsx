@@ -23,6 +23,7 @@ import { communityBuildings, communityByCode, communitySeries, communitySummarie
 import { coverageLines } from "@/lib/matchCoverage";
 import CoverageNotice from "@/components/CoverageNotice";
 import { EMPTY_TEXT, evidenceState } from "@/lib/coverage";
+import LatestSales from "@/components/LatestSales";
 import MasterCommunityPage from "@/components/MasterCommunityPage";
 import { masterDescription, masterSlug, masterTitle } from "@/lib/masterCommunities";
 import { mastersInArea, resolveMaster } from "@/lib/masterQueries";
@@ -245,6 +246,9 @@ async function OfficialAreaPage({ code }: { code: string }) {
         ) : <p className="mt-2 text-sm text-[var(--muted)]">{EMPTY_TEXT.noBuildings}</p>}
         <SourceNote source={SOURCES.dldSales} date={all?.period_end} estimate>* Yield is an estimate, shown only where the rent it comes from is shown. “project” = rents for the whole project, because DLD rent contracts name the project, not the tower; “est.” = some rents placed in the tower by unit size.</SourceNote>
       </section>
+
+      {buildings.length > 0 && <LatestSales scope={{ area: code }} currency={currency} periodEnd={all?.period_end} />}
+
       <p className="mt-6 text-xs text-[var(--muted)]">Boundary: {SOURCES.dm}.</p>
     </main>
   );

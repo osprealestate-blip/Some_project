@@ -1,5 +1,6 @@
 import Link from "next/link";
 import DataBadge from "./DataBadge";
+import LatestSales from "./LatestSales";
 import LineChart from "./LineChart";
 import MasterBuildingList from "./MasterBuildingList";
 import SourceNote from "./SourceNote";
@@ -151,6 +152,8 @@ export default async function MasterCommunityPage({ name }: { name: string }) {
           {t("* Yield is an estimate, shown only where the rent it comes from is shown. “project” = rents for the whole project, because DLD rent contracts name the project, not the tower; “est.” = some rents placed in the tower by unit size. A dash means too few records, not zero.")}
         </SourceNote>
       </section>
+
+      {buildings.length > 0 && <LatestSales scope={{ master: name }} currency={currency} periodEnd={all?.period_end} />}
 
       {summaries.some((s) => s.rooms >= 0 && (s.sale_count_12m > 0 || s.rent_count_12m > 0)) && (
         <details className="mt-8 rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">

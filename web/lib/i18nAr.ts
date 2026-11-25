@@ -647,4 +647,11 @@ export const AR: Record<string, string> = {
   "Busiest buildings": "أكثر المباني نشاطاً",
   "Apartments only; 12 months to the newest sale. Rents are contracts tied to its buildings or their projects, so they are a sample, not every rent.": "شقق فقط؛ ١٢ شهراً حتى أحدث عملية بيع. الإيجارات هي العقود المرتبطة بمبانيه أو مشاريعه، فهي عيّنة وليست كل الإيجارات.",
   "Show its buildings": "اعرض مبانيه",
+  "The newest apartment sales we counted here, newest first.": "أحدث مبيعات الشقق التي احتسبناها هنا، الأحدث أولاً.",
+  "Could not load the sales. Try again later.": "تعذّر تحميل المبيعات. حاول لاحقاً.",
+  "Try again": "حاول مجدداً",
+  "No counted sales in the last 12 months.": "لا توجد مبيعات محتسبة في آخر ١٢ شهراً.",
+  "sq ft": "قدم²",
+  "Show more": "اعرض المزيد",
+  "Market fields only: no unit numbers, floors or parties. A price here is what that flat sold for, not what yours would.": "حقول السوق فقط: دون أرقام وحدات أو طوابق أو أطراف. السعر هنا هو ما بيعت به تلك الشقة، لا ما ستُباع به شقتك.",
 };
