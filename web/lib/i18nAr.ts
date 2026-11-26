@@ -665,6 +665,7 @@ export const AR: Record<string, string> = {
   "Median size": "وسيط المساحة",
   "Sales and rents: matched to this project by its Dubai Land Department project name, 12 months to {date}. Medians; a sample, not every rent.": "المبيعات والإيجارات: مرتبطة بهذا المشروع باسمه في دائرة الأراضي والأملاك في دبي، ١٢ شهراً حتى {date}. وسيطات؛ عيّنة وليست كل الإيجارات.",
   "Plot counts and sizes: our 2025 property list, checked {date}.": "أعداد القسائم ومساحاتها: قائمة العقارات لدينا لعام 2025، روجعت في {date}.",
+  "Plot counts: our 2025 property list, checked {date}.": "أعداد القسائم: قائمة العقارات لدينا لعام 2025، روجعت في {date}.",
   "No map position yet, so there is no dot on the map.": "لا يوجد موقع على الخريطة بعد، لذلك لا تظهر نقطة.",
   "No Dubai Land Department sales matched to this project name.": "لا توجد مبيعات في دائرة الأراضي والأملاك مطابقة لاسم هذا المشروع.",
   "Villa and townhouse clusters": "مجمّعات الفلل والتاون هاوس",

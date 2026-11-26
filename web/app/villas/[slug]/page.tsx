@@ -47,7 +47,7 @@ export default async function Page({ params }: Params) {
         <section aria-label="Figures" className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4"><VillaFigures data={data} currency={currency} t={t} /></section>
         {data.lng != null && data.lat != null && (
           <div className="h-72 overflow-hidden rounded-lg border border-[var(--border)] md:h-auto md:min-h-72">
-            <BuildingMap focus={{ lng: data.lng, lat: data.lat }} currency={currency} controls="legend" />
+            <BuildingMap focus={{ lng: data.lng, lat: data.lat }} currency={currency} controls="legend" focusDot />
           </div>
         )}
       </div>

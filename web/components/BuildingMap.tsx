@@ -54,6 +54,8 @@ type Props = {
   /** The main map: a click selects the building and opens the card over the map (URL: ?building=slug). Other maps
    *  open the full building page instead. */
   cardMode?: boolean;
+  /** A small map around `focus` (villa cluster page): draw the cluster's amber ring at the focus point. */
+  focusDot?: boolean;
 };
 
 type Props3 = MapBuildingProps & { lng: number; lat: number; height: number };
@@ -223,7 +225,7 @@ function phonePadding(map: maplibregl.Map | null, sheetPx: number, compareOpen: 
 const keepZoom = (z: number) => Math.max(z, 14);
 
 export default function BuildingMap({
-  focus = null, bounds = null, className = "h-full w-full", currency = DEFAULT_CURRENCY, controls = "full", cardMode = false,
+  focus = null, bounds = null, className = "h-full w-full", currency = DEFAULT_CURRENCY, controls = "full", cardMode = false, focusDot = false,
 }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -1071,8 +1073,9 @@ export default function BuildingMap({
     const map = mapRef.current;
     const src = map?.getSource("dpi-villas") as maplibregl.GeoJSONSource | undefined;
     if (!map || !styleGen || !src) return;
-    src.setData({ type: "FeatureCollection", features: villas.map((v) => ({ type: "Feature", geometry: { type: "Point", coordinates: [v.lng, v.lat] }, properties: { slug: v.slug, name: v.name, kind: v.kind } })) });
-  }, [villas, styleGen]);
+    const dot: VillaPoint[] = focusDot && focus ? [{ slug: "", name: "", kind: "villa", lng: focus.lng, lat: focus.lat }] : villas;
+    src.setData({ type: "FeatureCollection", features: dot.map((v) => ({ type: "Feature", geometry: { type: "Point", coordinates: [v.lng, v.lat] }, properties: { slug: v.slug, name: v.name, kind: v.kind } })) });
+  }, [villas, styleGen, focusDot, focus?.lng, focus?.lat]);
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !styleGen) return;
