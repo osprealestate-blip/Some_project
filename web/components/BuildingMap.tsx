@@ -54,6 +54,8 @@ type Props = {
   /** The main map: a click selects the building and opens the card over the map (URL: ?building=slug). Other maps
    *  open the full building page instead. */
   cardMode?: boolean;
+  /** A villa cluster's own page: draws that one cluster's ring (the main map loads every cluster itself). */
+  villaDot?: VillaPoint | null;
 };
 
 type Props3 = MapBuildingProps & { lng: number; lat: number; height: number };
@@ -224,6 +226,7 @@ const keepZoom = (z: number) => Math.max(z, 14);
 
 export default function BuildingMap({
   focus = null, bounds = null, className = "h-full w-full", currency = DEFAULT_CURRENCY, controls = "full", cardMode = false,
+  villaDot = null,
 }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -235,7 +238,7 @@ export default function BuildingMap({
   const selected = cardMode && mode === "buildings" ? params.get("building") : null;
   const view: "card" | "panel" = params.get("view") === "panel" ? "panel" : "card";
   const villaSlug = cardMode && mode === "buildings" && !selected ? params.get("villa") : null;
-  const [villas, setVillas] = useState<VillaPoint[]>([]);
+  const [villas, setVillas] = useState<VillaPoint[]>(villaDot ? [villaDot] : []);
   const villa = villaSlug ? villas.find((v) => v.slug === villaSlug) ?? null : null;
 
   const [noWebgl, setNoWebgl] = useState(false);
