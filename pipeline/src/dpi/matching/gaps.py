@@ -83,3 +83,75 @@ def render_rent_gaps(rows: list[tuple[str, int, int]]) -> str:
     for cause, n, sized in rows:
         out.append(f"  {n:>9,}  {100 * n / total:5.1f}%  {cause}: {RENT_GAP_HELP.get(cause, '')} (with size and bedrooms: {sized:,})")
     return "\n".join(out)
+
+
+# --- Evidence flag for buildings with no map position (read-only; nothing is hidden or placed) ---------------------------
+FLAG_REAL = "real building, position unknown"
+FLAG_OFFPLAN = "likely off-plan / not built"
+FLAG_UNCLEAR = "unclear"
+
+CLASSIFY_COLUMNS = ["slug", "name", "community", "project", "flag", "evidence", "sales_12m", "sales_all", "offplan_sales",
+                    "ready_sales", "rent_contracts", "first_sale", "last_sale", "project_status"]
+
+
+def classify_unplaced(sales_all: int, offplan: int, ready: int, rents: int, first_sale, last_sale, project_status,
+                      today) -> tuple[str, str]:
+    """Flag from the figures already in the database. Only states what the records show; never a position or a verdict.
+
+    Real: rent contracts are linked to it, or the project is marked completed, or it has ready (non-off-plan) sales, or
+    its first sale is more than 3 years old (a tower that old is built).  Off-plan: at least 3 sales, all of them
+    off-plan, no rent contract, project not marked completed, first sale within 3 years.  Everything else is unclear.
+    """
+    old = first_sale is not None and (today - first_sale).days > 3 * 365
+    if rents > 0:
+        return FLAG_REAL, f"{rents} rent contracts linked"
+    if project_status == "completed":
+        return FLAG_REAL, "DLD project status completed"
+    if ready > 0:
+        return FLAG_REAL, f"{ready} ready (not off-plan) sales"
+    if old:
+        return FLAG_REAL, f"first sale {first_sale}, more than 3 years ago"
+    if sales_all >= 3 and offplan == sales_all and project_status in (None, "planned", "under_construction"):
+        return FLAG_OFFPLAN, f"all {offplan} sales are off-plan, no rent contracts, first sale {first_sale}"
+    return FLAG_UNCLEAR, f"{sales_all} sales, {offplan} off-plan, {ready} ready, {rents} rents"
+
+
+_CLASSIFY = """
+select b.slug, b.name_en, coalesce(c.name_common, c.name_official, ''), coalesce(p.name, ''), p.status,
+       count(t.id) filter (where t.txn_date >= (select max(txn_date) from transactions where txn_date <= current_date) - interval '12 months'),
+       count(t.id), count(t.id) filter (where t.off_plan is true), count(t.id) filter (where t.off_plan is false),
+       (select count(*) from rent_contracts r where r.building_id = b.id),
+       min(t.txn_date), max(t.txn_date)
+from buildings b
+left join communities c on c.id = b.community_id
+left join projects p on p.id = b.project_id
+left join transactions t on t.building_id = b.id and t.excluded is null
+where b.geom is null
+group by b.id, c.id, p.id
+order by 6 desc, 7 desc, b.slug
+"""
+
+
+def classify_rows(conn, today=None) -> list[dict]:
+    import datetime as dt
+
+    today = today or dt.date.today()
+    with conn.cursor() as cur:
+        cur.execute(_CLASSIFY)
+        rows = cur.fetchall()
+    out = []
+    for slug, name, comm, proj, status, s12, sall, off, ready, rents, first, last in rows:
+        flag, why = classify_unplaced(sall, off, ready, rents, first, last, status, today)
+        out.append({"slug": slug, "name": name, "community": comm, "project": proj, "flag": flag, "evidence": why,
+                    "sales_12m": s12, "sales_all": sall, "offplan_sales": off, "ready_sales": ready,
+                    "rent_contracts": rents, "first_sale": first or "", "last_sale": last or "",
+                    "project_status": status or ""})
+    return out
+
+
+def write_classified(rows: list[dict], path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=CLASSIFY_COLUMNS)
+        w.writeheader()
+        w.writerows(rows)

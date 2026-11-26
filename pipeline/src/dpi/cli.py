@@ -42,6 +42,8 @@ def main(argv: list[str] | None = None) -> int:
     ur.add_argument("--out", type=Path, default=Path("data/clean/unplaced_buildings.csv"))
     ur.add_argument("--limit", type=int, default=300)
     ur.add_argument("--communities", default="", help="DM codes (comma separated, empty = all)")
+    cu = sub.add_parser("classify-unplaced", help="Flag buildings with no map position as 'real building, position unknown' or 'likely off-plan / not built' from the records (read-only)")
+    cu.add_argument("--out", type=Path, default=Path("data/clean/unplaced_classified.csv"))
     sub.add_parser("rent-gaps", help="Why rent contracts have no building, in groups (read-only)")
     ip = sub.add_parser("import-projects", help="DLD Projects file: developer, status, %% completed, dates (off-plan facts)")
     ip.add_argument("path", type=Path)
@@ -193,6 +195,18 @@ def main(argv: list[str] | None = None) -> int:
             rows = gaps.unplaced_rows(conn, args.limit, codes or None)
         gaps.write_unplaced(rows, args.out)
         print(f"{len(rows)} unplaced buildings written to {args.out} (fill lat and lng, then copy rows into db/seeds/manual_positions.csv)")
+    elif args.cmd == "classify-unplaced":
+        from collections import Counter
+
+        from dpi.db import connect
+        from dpi.matching import gaps
+
+        with connect() as conn:
+            rows = gaps.classify_rows(conn)
+        gaps.write_classified(rows, args.out)
+        for flag, n in Counter(r["flag"] for r in rows).most_common():
+            print(f"{n:5d}  {flag}")
+        print(f"{len(rows)} unplaced buildings written to {args.out} (read-only; nothing in the database changed)")
     elif args.cmd == "rent-gaps":
         from dpi.db import connect
         from dpi.matching import gaps

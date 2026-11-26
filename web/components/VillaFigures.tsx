@@ -46,7 +46,7 @@ export default function VillaFigures({ data, currency, t }: { data: VillaCardDat
       <div className="space-y-1 text-[11px] leading-snug text-[var(--muted)]">
         {data.periodEnd && <p>{t("Sales and rents: matched to this project by its Dubai Land Department project name, 12 months to {date}. Medians; a sample, not every rent.", { date: day(data.periodEnd) })}</p>}
         {data.periodEnd && <p>{t("Source")}: {tList(t, SOURCES.dldSales)}{data.sourceDate ? `, ${t("data to {date}", { date: day(data.sourceDate) })}` : ""}.</p>}
-        {(data.plots != null || data.sizeMedianSqft) && <p>{t("Plot counts and sizes: our 2025 property list, checked {date}.", { date: day(data.auditDate) })}</p>}
+        {(data.plots != null || data.sizeMedianSqft) && <p>{t(data.sizeMedianSqft ? "Plot counts and sizes: our 2025 property list, checked {date}." : "Plot counts: our 2025 property list, checked {date}.", { date: day(data.auditDate) })}</p>}
         <p>{data.lng == null ? t("No map position yet, so there is no dot on the map.") : <>{t(CLUSTER_POINT_NOTE)}{point ? ` ${t("Position: {source}.", { source: point })}` : ""}</>}</p>
         <p>{t("Map: OpenStreetMap contributors via OpenFreeMap. Community: Dubai Municipality.")}</p>
       </div>
