@@ -673,6 +673,7 @@ export const AR: Record<string, string> = {
   "One entry per project. Sales are counted for the whole project, never for a single villa.": "بند واحد لكل مشروع. تُحسب المبيعات للمشروع كاملاً، وليس لفيلا واحدة.",
   "{n} have no map position yet.": "{n} بلا موقع على الخريطة بعد.",
   "Last 12 months, matched to each project by its Dubai Land Department project name.": "آخر 12 شهراً، مطابقة لكل مشروع باسمه في دائرة الأراضي والأملاك.",
+  "You tapped a building inside this project's area. We hold no figures for single villas, so these are for the whole project. The area is an estimate from the plot count.": "لمستَ مبنى داخل نطاق هذا المشروع. لا نملك أرقامًا لكل فيلا على حدة، لذا تخص الأرقام المشروع كاملًا. النطاق تقدير مبني على عدد القطع.",
   "The dot marks the middle of the project, not a single villa.": "النقطة تحدد وسط المشروع، وليست فيلا واحدة.",
   "Position: {source}.": "الموقع: {source}.",
   "Map: OpenStreetMap contributors via OpenFreeMap. Community: Dubai Municipality.": "الخريطة: مساهمو OpenStreetMap عبر OpenFreeMap. المجتمع: بلدية دبي.",

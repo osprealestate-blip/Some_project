@@ -11,6 +11,14 @@ One map point per villa or townhouse **project** (a cluster), never one per vill
 - Page `/villas/<slug>`, search results ("Villa cluster"), the official community page (list of its clusters), the sitemap.
 - No per-villa or unit data, no personal data, nothing invented: a cluster with no DLD sales matched by name shows no figures.
 
+## Tapping a villa on the map
+A cluster has one point, so "the villas of a project" is a circle around that point: radius from the plot count (about 450 m² of
+land per plot with streets, 300 m² for townhouses; 90 to 450 m; 150 m when the plot count is unknown). A tap on any grey
+OpenStreetMap building inside that circle opens the cluster's card, with a note that the figures are for the whole project, never for
+one villa. Where circles overlap, the cluster the tap is deepest inside wins. The footprints inside the selected cluster's circle are tinted
+amber. Buildings outside every circle still open the "no data yet" card. The radius is an estimate, not a boundary.
+To make the area exact later, a boundary polygon per cluster is needed; a point is enough for now.
+
 ## Data
 - Migration `0014_villa_clusters.sql`: `villa_clusters` (point, `geom_source` 2gis|google|osm|manual, `is_cluster_point`, audit counts,
   `match_names`) and `villa_cluster_summary` (12-month medians per bedroom count, same rules as `building_summary`).

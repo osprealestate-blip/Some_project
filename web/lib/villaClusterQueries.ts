@@ -5,7 +5,7 @@ import type { ClusterKind, ClusterRoomRow } from "./villaCluster";
 
 export type ClusterPoint = {
   slug: string; name: string; kind: ClusterKind; community: string | null; lng: number; lat: number;
-  sales: number; psf: number | null; price: number | null; rent: number | null;
+  sales: number; psf: number | null; price: number | null; rent: number | null; plots: number | null;
 };
 
 /** Clusters that have a map point. A cluster without one is never returned here. */
@@ -13,7 +13,7 @@ export async function clusterPoints(): Promise<ClusterPoint[]> {
   return query<ClusterPoint>(
     `select v.slug, v.name, v.kind, coalesce(c.name_common, c.name_official) as community,
             ST_X(v.geom) as lng, ST_Y(v.geom) as lat, coalesce(s.sale_count_12m, 0)::int as sales,
-            s.sale_median_psf_12m as psf, s.sale_median_price_12m as price, s.rent_median_12m as rent
+            s.sale_median_psf_12m as psf, s.sale_median_price_12m as price, s.rent_median_12m as rent, v.plot_count as plots
        from villa_clusters v left join communities c on c.id = v.community_id
        left join villa_cluster_summary s on s.cluster_id = v.id and s.rooms = -1
       where v.geom is not null`,

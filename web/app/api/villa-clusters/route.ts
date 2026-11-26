@@ -19,7 +19,7 @@ export async function GET() {
         features: rows.map((r) => ({
           type: "Feature",
           geometry: { type: "Point", coordinates: [Math.round(r.lng * 1e6) / 1e6, Math.round(r.lat * 1e6) / 1e6] },
-          properties: { slug: r.slug, name: r.name, kind: r.kind, community: r.community, sales: r.sales, psf: round(r.psf), price: round(r.price, 1000), rent: round(r.rent, 100) },
+          properties: { slug: r.slug, name: r.name, kind: r.kind, community: r.community, sales: r.sales, psf: round(r.psf), price: round(r.price, 1000), rent: round(r.rent, 100), plots: r.plots },
         })),
       },
       { headers: { "Cache-Control": "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400" } },

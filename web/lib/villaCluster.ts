@@ -48,3 +48,32 @@ export const CLUSTER_SOURCE_LABEL: Record<string, string> = {
   osm: "OpenStreetMap",
   manual: "Placed by hand",
 };
+
+/** Villa area on the map. The data holds ONE point per project, so "the villas of this project" is drawn as a circle around
+ *  that point. Its size is an estimate from the plot count (about 450 m² of land per plot with its share of streets, 300 m²
+ *  for townhouses), kept between 90 m and 450 m. It is an area guess, never a boundary, and the card says so. */
+export function clusterRadiusM(plots: number | null | undefined, kind: ClusterKind = "villa"): number {
+  const n = plots && plots > 0 ? plots : 0;
+  if (!n) return 150;
+  const per = kind === "townhouse" ? 300 : 450;
+  return Math.min(450, Math.max(90, Math.round(Math.sqrt((n * per) / Math.PI))));
+}
+
+export type ClusterArea = { slug: string; kind: ClusterKind; lng: number; lat: number; plots?: number | null };
+
+/** Metres between two points, good enough at Dubai's latitude. */
+export function metresBetween(lng1: number, lat1: number, lng2: number, lat2: number): number {
+  return Math.hypot((lng1 - lng2) * 100_900, (lat1 - lat2) * 110_574);
+}
+
+/** The cluster whose area contains this point. When areas overlap, the one the point sits deepest inside (distance
+ *  relative to its radius) wins. Null when the point is inside none. */
+export function clusterAt<T extends ClusterArea>(clusters: T[], lng: number, lat: number): T | null {
+  let best: T | null = null, bestRatio = Infinity;
+  for (const c of clusters) {
+    const r = clusterRadiusM(c.plots, c.kind);
+    const ratio = metresBetween(lng, lat, c.lng, c.lat) / r;
+    if (ratio <= 1 && ratio < bestRatio) { best = c; bestRatio = ratio; }
+  }
+  return best;
+}
