@@ -36,7 +36,7 @@ export default function MapFilterMenu() {
         {t("Filters")}{cur ? " •" : ""}
       </button>
       {open && createPortal(
-        <div id="map-filter-menu" role="region" aria-label={t("Map filters")} className="dpi-glass fixed bottom-24 left-1/2 z-20 max-md:z-[35] w-72 max-w-[calc(100vw-24px)] -translate-x-1/2 rounded-2xl p-3 text-start">
+        <div id="map-filter-menu" role="region" aria-label={t("Map filters")} className="dpi-glass fixed bottom-24 left-1/2 z-20 max-md:z-[35] w-72 max-h-[calc(100dvh-10.5rem)] overflow-y-auto overscroll-contain max-w-[calc(100vw-24px)] -translate-x-1/2 rounded-2xl p-3 text-start">
           <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">{t("Building use")}</p>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {USE_FILTERS.map((u) => <button key={u} type="button" aria-pressed={cur?.type === "use" && cur.value === u} className={chip(cur?.type === "use" && cur.value === u)} onClick={() => setFilter({ type: "use", value: u })}>{t(USE_CHIP[u])}</button>)}
