@@ -92,7 +92,7 @@ export default function MapControls(p: Props) {
   }
 
   return (
-    <div data-map-legend className="absolute bottom-[5.5rem] start-2 z-10 flex max-h-[calc(100%-7rem)] w-[min(300px,calc(100%-1rem))] sm:bottom-auto sm:start-auto sm:end-2 sm:top-2 sm:max-h-[calc(100%-9rem)] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--panel)]/95 text-xs shadow-lg backdrop-blur">
+    <div data-map-legend className="absolute bottom-[5.5rem] start-2 z-10 max-md:z-30 flex max-h-[calc(100%-7rem)] w-[min(300px,calc(100%-1rem))] sm:bottom-auto sm:start-auto sm:end-2 sm:top-2 sm:max-h-[calc(100%-9rem)] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--panel)]/95 text-xs shadow-lg backdrop-blur">
       <div className="flex items-center gap-1.5 border-b border-[var(--border)] px-2.5 py-2">
         {metricSelect}
         {!p.compact && (
