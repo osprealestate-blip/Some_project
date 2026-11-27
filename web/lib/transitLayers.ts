@@ -4,8 +4,9 @@
  *  Lines are only what OpenStreetMap has mapped; line names and colours are not shown because the tiles do not carry them. */
 import type { ExpressionSpecification, FilterSpecification, LayerSpecification, Map as MapLibreMap } from "maplibre-gl";
 
-export type Overlays = { metro: boolean; roads: boolean };
-export const DEFAULT_OVERLAYS: Overlays = { metro: false, roads: false };
+/** `landmarks` is the named places layer (lib/venueLayer.ts): on unless switched off. */
+export type Overlays = { metro: boolean; roads: boolean; landmarks: boolean };
+export const DEFAULT_OVERLAYS: Overlays = { metro: false, roads: false, landmarks: true };
 export const METRO_LAYERS = ["ov-metro-casing", "ov-metro", "ov-metro-stations", "ov-metro-labels"];
 export const ROAD_LAYERS = ["ov-roads-casing", "ov-roads", "ov-roads-labels"];
 const METRO = "#7c3aed";

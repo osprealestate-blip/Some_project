@@ -8,7 +8,7 @@ import { DEFAULT_CURRENCY, type Currency } from "@/config/currency";
 import { LAUNCH_CODES } from "@/lib/communities";
 import { areaAt } from "@/lib/areaHit";
 import type { MasterAreaProps } from "@/lib/masterAreas";
-import { formatPsf, formatShortPrice, pct } from "@/lib/format";
+import { day, formatPsf, formatShortPrice, pct } from "@/lib/format";
 import { applyIllustratedOverrides, goToIllustratedView, illustratedCamera, showLandmarks } from "@/lib/illustratedTheme";
 import {
   DEFAULT_SETTINGS, METRICS, colourise, legendItems, parseSettings, type MapBuildingProps, type MapSettings,
@@ -33,6 +33,7 @@ import { tLegend } from "@/lib/i18n";
 import MapSidebar from "./MapSidebar";
 import { addTransitLayers, DEFAULT_OVERLAYS, setOverlayVisibility, type Overlays } from "@/lib/transitLayers";
 import { burjParts, isBurjKhalifa } from "@/lib/burj";
+import { addVenueLayers, setVenueVisibility, venueAt, venueCard, VENUES_URL, type Venues } from "@/lib/venueLayer";
 import { filterLabel, filterParam, parseFilter } from "@/lib/mapFilter";
 import { fetchRoute } from "@/lib/routeClient";
 import { labelPoint, routeLines, type RouteMap } from "@/lib/routeLines";
@@ -244,6 +245,12 @@ export default function BuildingMap({
   // The cluster was opened by tapping a grey building inside its area (not the ring): the card then says so.
   const [viaFootprint, setViaFootprint] = useState<string | null>(null);
 
+  // Named places (arenas, malls, hotels, parks): the main map only.
+  const [venues, setVenues] = useState<Venues | null>(null);
+  const venuesRef = useRef<Venues | null>(null);
+  venuesRef.current = venues;
+  const venuePopupRef = useRef<maplibregl.Popup | null>(null);
+
   const [noWebgl, setNoWebgl] = useState(false);
   const [raw, setRaw] = useState<Collection | null>(null);
   const [dataDone, setDataDone] = useState(false); // /api/buildings answered (or failed), so stop the loading skyline
@@ -361,12 +368,13 @@ export default function BuildingMap({
   const lang = useLang();
   const tRef = useRef(t);
   tRef.current = t;
-  const live = useRef({ settings, currency, theme, selected, mode: "buildings" as MapMode, areas: [] as GeoJSON.Feature<GeoJSON.Geometry, MasterAreaProps>[], padH: 0, burjLoaded: false, overlays: DEFAULT_OVERLAYS as Overlays, burj: null as { slug: string } | null, hover: null as string | null, baseKey: null as string | null, restored: false });
+  const live = useRef({ settings, currency, theme, selected, mode: "buildings" as MapMode, areas: [] as GeoJSON.Feature<GeoJSON.Geometry, MasterAreaProps>[], padH: 0, burjLoaded: false, overlays: DEFAULT_OVERLAYS as Overlays, burj: null as { slug: string } | null, lang: "en" as string, hover: null as string | null, baseKey: null as string | null, restored: false });
   live.current.settings = settings;
   live.current.currency = currency;
   live.current.theme = theme;
   live.current.selected = selected;
   live.current.mode = mode;
+  live.current.lang = lang;
   live.current.padH = padH;
   compareOpen.current = compare.length > 0;
 
@@ -456,7 +464,7 @@ export default function BuildingMap({
     live.current.theme = savedTheme;
     try {
       const o = JSON.parse(load(STORE.overlays) ?? "{}");
-      const ov = { metro: o.metro === true, roads: o.roads === true };
+      const ov = { metro: o.metro === true, roads: o.roads === true, landmarks: o.landmarks !== false };
       live.current.overlays = ov;
       setOverlays(ov);
     } catch { /* overlays stay off */ }
@@ -610,6 +618,15 @@ export default function BuildingMap({
         }
         return;
       }
+      // A named place: a pointer, and its card on click.
+      if (venueAt(map, e.point)) {
+        if (leaveTimer) { clearTimeout(leaveTimer); leaveTimer = null; }
+        setHover(null);
+        setBaseHover(null);
+        popup.remove();
+        map.getCanvas().style.cursor = "pointer";
+        return;
+      }
       // Not a priced building. The grey OpenStreetMap buildings around ours lift on hover too, so every building
       // reacts the same way, but they have no figures and no page: no card and no pointer cursor.
       const base = map.getLayer("base-hover-3d") && map.getLayer("base-3d") ? map.queryRenderedFeatures(e.point, { layers: ["base-3d"] })[0] : undefined;
@@ -661,8 +678,12 @@ export default function BuildingMap({
       el.append(ul);
       chooser.setLngLat([list[0].lng, list[0].lat]).setDOMContent(el).addTo(map);
     };
+    // The card of a named place (a mall, a hotel, an arena).
+    const venuePopup = new maplibregl.Popup({ closeButton: true, closeOnClick: false, offset: 12, maxWidth: "240px", className: "dpi-popup" });
+    venuePopupRef.current = venuePopup;
     map.on("click", (e) => {
       chooser.remove();
+      venuePopup.remove();
       if (live.current.mode === "communities") {
         popup.remove();
         setPlace(null);
@@ -705,6 +726,16 @@ export default function BuildingMap({
         if (!canHover) {
           setHover(null);
           popup.remove();
+        }
+        // A named place wins over the grey building under it, never over one of our priced buildings.
+        const venue = venueAt(map, e.point);
+        if (venue) {
+          popup.remove();
+          setPlace(null);
+          setBaseHover(null);
+          const asOf = venuesRef.current?.meta.asOf ?? "";
+          venuePopup.setLngLat(venue.lngLat).setDOMContent(venueCard(venue.props, asOf, live.current.lang === "ar", tRef.current, asOf ? day(asOf) : "")).addTo(map);
+          return;
         }
         // A grey building: no record in our database, but it still opens a card that says so.
         const base = map.getLayer("base-3d") ? map.queryRenderedFeatures(e.point, { layers: ["base-3d"] })[0] : undefined;
@@ -754,6 +785,12 @@ export default function BuildingMap({
         map.on("mouseleave", l, () => { map.getCanvas().style.cursor = ""; });
       }
     }
+    if (cardMode) {
+      fetch(VENUES_URL)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((geo: Venues | null) => { if (geo?.features?.length) setVenues(geo); })
+        .catch(() => {});
+    }
     fetch("/api/buildings")
       .then((r) => (r.ok ? r.json() : null))
       .then((geo: Collection | null) => {
@@ -765,6 +802,7 @@ export default function BuildingMap({
     return () => {
       popup.remove();
       chooser.remove();
+      venuePopup.remove();
       map.remove();
       mapRef.current = null;
     };
@@ -1108,7 +1146,7 @@ export default function BuildingMap({
     if (!map.getSource("villa-area")) {
       map.addSource("villa-area", { type: "geojson", data: EMPTY });
       map.addLayer({ id: "villa-area-3d", type: "fill-extrusion", source: "villa-area", paint: {
-        "fill-extrusion-color": "#f59e0b", "fill-extrusion-height": ["+", ["get", "h"], 0.6], "fill-extrusion-base": ["get", "b"], "fill-extrusion-opacity": 0.8 } });
+        "fill-extrusion-color": "#f59e0b", "fill-extrusion-height": ["+", ["get", "h"], 0.6], "fill-extrusion-base": ["get", "b"], "fill-extrusion-opacity": 0.8 } }, map.getLayer("dpi-venues-3") ? "dpi-venues-3" : undefined);
     }
     const radius = clusterRadiusM(villa.plots, villa.kind);
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -1156,6 +1194,16 @@ export default function BuildingMap({
     return () => clearTimeout(timer);
   }, [villa, dataDone]);
   useEffect(() => { if (!villaSlug) movedToVilla.current = null; }, [villaSlug]);
+
+  // Named places, drawn above the buildings. Out of the way in the Communities view and while the nearby lines are on.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !styleGen || !venues) return;
+    const on = overlays.landmarks && mode === "buildings" && !nearby;
+    addVenueLayers(map, venues, THEMES[live.current.theme].dark);
+    setVenueVisibility(map, on);
+    if (!on) venuePopupRef.current?.remove();
+  }, [venues, overlays.landmarks, mode, nearby, styleGen]);
 
   // Phones: with a community card open, the left tool rail and Guide button step aside, like they do for a building.
   useEffect(() => {

@@ -192,7 +192,7 @@ export default function MapControls(p: Props) {
             <fieldset>
               <legend className="mb-1 font-medium">{t("Map layers")}</legend>
               <div className="flex flex-wrap gap-1.5">
-                {([["metro", "Metro and tram"], ["roads", "Major highways"]] as const).map(([key, label]) => (
+                {([["landmarks", "Landmarks"], ["metro", "Metro and tram"], ["roads", "Major highways"]] as const).map(([key, label]) => (
                   <button
                     key={key}
                     type="button"
@@ -205,6 +205,7 @@ export default function MapControls(p: Props) {
                 ))}
               </div>
               <p className="mt-1 text-[11px] text-[var(--muted)]">{t("Lines and stations as mapped in OpenStreetMap.")}</p>
+              <p className="text-[11px] text-[var(--muted)]">{t("Landmarks: names of malls, hotels, arenas, parks and sights from OpenStreetMap. Zoom in for more.")}</p>
             </fieldset>
 
             <fieldset>
@@ -227,7 +228,7 @@ export default function MapControls(p: Props) {
 
             <button
               type="button"
-              onClick={() => { p.onSettings(DEFAULT_SETTINGS); p.onTheme(DEFAULT_THEME); p.onOverlay("metro", false); p.onOverlay("roads", false); }}
+              onClick={() => { p.onSettings(DEFAULT_SETTINGS); p.onTheme(DEFAULT_THEME); p.onOverlay("metro", false); p.onOverlay("roads", false); p.onOverlay("landmarks", true); }}
               className="link text-[11px]"
             >
               {t("Reset to defaults")}

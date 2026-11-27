@@ -76,6 +76,11 @@ def main(argv: list[str] | None = None) -> int:
     lp.add_argument("--fetch-osm", action="store_true")
     lp.add_argument("--save-osm", type=Path)
     lp.add_argument("--source-date", required=True, help="YYYY-MM-DD of the files (or of the OSM download)")
+    lm = sub.add_parser("fetch-landmarks",
+                        help="Well-known venues from OpenStreetMap, written to the map's landmarks file (no database needed)")
+    lm.add_argument("--osm-json", type=Path, help="use a saved Overpass answer instead of downloading")
+    lm.add_argument("--areas", type=Path, default=Path("web/public/data/dubai_communities.geojson"))
+    lm.add_argument("--out", type=Path, default=Path("web/public/data/dubai_landmarks.geojson"))
     sub.add_parser("rematch-communities",
                    help="Fill the community for stored sales and rents that have none, using the latest name fixes")
     gc = sub.add_parser("group-complexes", help="Group sibling towers (A/B, 1/2) into complexes, set master communities, "
@@ -295,6 +300,17 @@ def main(argv: list[str] | None = None) -> int:
                     args.save_osm.write_text(json.dumps(data), encoding="utf-8")
             if data:
                 print("OpenStreetMap places:", pois.replace_source(conn, "osm", sd, pois.read_osm(data)))
+    elif args.cmd == "fetch-landmarks":
+        import json
+
+        from dpi.load import landmarks
+
+        data = json.loads(args.osm_json.read_text(encoding="utf-8")) if args.osm_json else landmarks.fetch()
+        out = landmarks.build(data, json.loads(args.areas.read_text(encoding="utf-8")))
+        if not out["features"] or not out["meta"]["asOf"]:
+            raise SystemExit("No landmarks or no OpenStreetMap date in the answer; the file was left as it is.")
+        args.out.write_text(landmarks.to_text(out), encoding="utf-8")
+        print(f"{len(out['features'])} landmarks (OpenStreetMap, {out['meta']['asOf']}) written to {args.out}")
     elif args.cmd == "rematch-communities":
         from dpi.db import connect
         from dpi.importers import dld

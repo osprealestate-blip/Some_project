@@ -17,6 +17,7 @@ Order matters. Every step can be re-run safely. Commands run from the repo root 
 | 7 | `dpi compute-metrics` | 12-month medians, year-on-year change, yields per building and community, monthly community series. Re-run after every import. |
 | 7b | `dpi classify-buildings` | Residential, commercial, mixed, hotel or unknown for every building, from the DLD sub-type and usage on its sales (and exact rent links), with OpenStreetMap tags only as a fallback. Needs `dpi migrate` (0008) and a re-import of sales and rents so the sub-type is stored; run after step 6 so OSM tags are present. Hand overrides: `db/seeds/manual_building_types.csv`. Details: `docs/building-use.md`. |
 | 8 | `dpi load-pois --source-date <date> --khda <school_search csv> --sheryan <sheryan_facility_detail csv> --fetch-osm --save-osm data/clean/osm_pois.json` | Nearby places for the Life Score. |
+| 8b | `dpi fetch-landmarks` | Refreshes the named places on the map (arenas, malls, hotels, sights, parks) from OpenStreetMap into `web/public/data/dubai_landmarks.geojson`. No database needed; commit the file and deploy. The file records its OpenStreetMap date. |
 | 9 | `cd web && npm ci && npm run dev` with `DATABASE_URL` in `web/.env.local` | App on http://localhost:3100 |
 
 Each command prints counts. Check after step 5 that the launch areas have most sales linked, and after step 6
