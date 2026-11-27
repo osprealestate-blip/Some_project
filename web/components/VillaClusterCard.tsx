@@ -10,7 +10,7 @@ import VillaFigures from "./VillaFigures";
 
 /** The map card for a villa or townhouse cluster: the same glass sheet as the building card, but with cluster figures
  *  only (sales, price, bedroom mix, plot count) and a plain note that the dot is the middle of the project. */
-export default function VillaClusterCard({ slug, name, kind, currency, onClose }: { slug: string; name: string; kind: ClusterKind; currency: Currency; onClose: () => void }) {
+export default function VillaClusterCard({ slug, name, kind, currency, fromFootprint, onClose }: { slug: string; name: string; kind: ClusterKind; currency: Currency; fromFootprint?: boolean; onClose: () => void }) {
   const t = useT();
   const [data, setData] = useState<VillaCardData | null | undefined>(undefined);
   useEffect(() => {
@@ -33,6 +33,11 @@ export default function VillaClusterCard({ slug, name, kind, currency, onClose }
         </div>
         <button type="button" onClick={onClose} aria-label={t("Close")} className="shrink-0 rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold hover:bg-white/20">{t("Close")}</button>
       </div>
+      {fromFootprint && (
+        <p className="mt-3 rounded-lg bg-amber-400/15 px-3 py-2 text-xs">
+          {t("You tapped a building inside this project's area. We hold no figures for single villas, so these are for the whole project. The area is an estimate from the plot count.")}
+        </p>
+      )}
       <div className="mt-3">
         {data === undefined ? <p className="text-sm text-[var(--muted)]">{t("Loading…")}</p>
           : data === null ? <p className="text-sm text-[var(--muted)]">{t("Could not load the figures for this cluster.")}</p>
