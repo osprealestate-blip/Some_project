@@ -8,7 +8,7 @@ import { DEFAULT_CURRENCY, type Currency } from "@/config/currency";
 import { LAUNCH_CODES } from "@/lib/communities";
 import { areaAt } from "@/lib/areaHit";
 import type { MasterAreaProps } from "@/lib/masterAreas";
-import { formatPsf, formatShortPrice, pct } from "@/lib/format";
+import { day, formatPsf, formatShortPrice, pct } from "@/lib/format";
 import { applyIllustratedOverrides, goToIllustratedView, illustratedCamera, showLandmarks } from "@/lib/illustratedTheme";
 import {
   DEFAULT_SETTINGS, METRICS, colourise, legendItems, parseSettings, type MapBuildingProps, type MapSettings,
@@ -33,6 +33,7 @@ import { tLegend } from "@/lib/i18n";
 import MapSidebar from "./MapSidebar";
 import { addTransitLayers, DEFAULT_OVERLAYS, setOverlayVisibility, type Overlays } from "@/lib/transitLayers";
 import { burjParts, isBurjKhalifa } from "@/lib/burj";
+import { addVenueLayers, setVenueVisibility, venueAt, venueCard, VENUES_URL, type Venues } from "@/lib/venueLayer";
 import { filterLabel, filterParam, parseFilter } from "@/lib/mapFilter";
 import { fetchRoute } from "@/lib/routeClient";
 import { labelPoint, routeLines, type RouteMap } from "@/lib/routeLines";
@@ -41,7 +42,7 @@ import MapControls from "./MapControls";
 import MapModeSwitch, { type MapMode } from "./MapModeSwitch";
 import PlaceCard, { type Place } from "./PlaceCard";
 import VillaClusterCard from "./VillaClusterCard";
-import type { ClusterKind } from "@/lib/villaCluster";
+import { clusterAt, clusterRadiusM, metresBetween, type ClusterKind } from "@/lib/villaCluster";
 import { tileHeight } from "@/lib/place";
 
 type Props = {
@@ -54,6 +55,8 @@ type Props = {
   /** The main map: a click selects the building and opens the card over the map (URL: ?building=slug). Other maps
    *  open the full building page instead. */
   cardMode?: boolean;
+  /** A small map around `focus` (villa cluster page): draw the cluster's amber ring at the focus point. */
+  focusDot?: boolean;
 };
 
 type Props3 = MapBuildingProps & { lng: number; lat: number; height: number };
@@ -84,7 +87,7 @@ function square(lng: number, lat: number, half: number): GeoJSON.Polygon {
 
 /** Villa and townhouse clusters: one amber ring per project (never per villa), drawn above the buildings. */
 const VILLA_LAYERS = ["dpi-villas", "dpi-villas-halo"];
-type VillaPoint = { slug: string; name: string; kind: ClusterKind; lng: number; lat: number };
+type VillaPoint = { slug: string; name: string; kind: ClusterKind; lng: number; lat: number; plots?: number | null };
 const EMPTY: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
 
 function load(key: string): string | null {
@@ -223,7 +226,7 @@ function phonePadding(map: maplibregl.Map | null, sheetPx: number, compareOpen: 
 const keepZoom = (z: number) => Math.max(z, 14);
 
 export default function BuildingMap({
-  focus = null, bounds = null, className = "h-full w-full", currency = DEFAULT_CURRENCY, controls = "full", cardMode = false,
+  focus = null, bounds = null, className = "h-full w-full", currency = DEFAULT_CURRENCY, controls = "full", cardMode = false, focusDot = false,
 }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -237,6 +240,16 @@ export default function BuildingMap({
   const villaSlug = cardMode && mode === "buildings" && !selected ? params.get("villa") : null;
   const [villas, setVillas] = useState<VillaPoint[]>([]);
   const villa = villaSlug ? villas.find((v) => v.slug === villaSlug) ?? null : null;
+  const villasRef = useRef<VillaPoint[]>([]);
+  villasRef.current = villas;
+  // The cluster was opened by tapping a grey building inside its area (not the ring): the card then says so.
+  const [viaFootprint, setViaFootprint] = useState<string | null>(null);
+
+  // Named places (arenas, malls, hotels, parks): the main map only.
+  const [venues, setVenues] = useState<Venues | null>(null);
+  const venuesRef = useRef<Venues | null>(null);
+  venuesRef.current = venues;
+  const venuePopupRef = useRef<maplibregl.Popup | null>(null);
 
   const [noWebgl, setNoWebgl] = useState(false);
   const [raw, setRaw] = useState<Collection | null>(null);
@@ -355,12 +368,13 @@ export default function BuildingMap({
   const lang = useLang();
   const tRef = useRef(t);
   tRef.current = t;
-  const live = useRef({ settings, currency, theme, selected, mode: "buildings" as MapMode, areas: [] as GeoJSON.Feature<GeoJSON.Geometry, MasterAreaProps>[], padH: 0, burjLoaded: false, overlays: DEFAULT_OVERLAYS as Overlays, burj: null as { slug: string } | null, hover: null as string | null, baseKey: null as string | null, restored: false });
+  const live = useRef({ settings, currency, theme, selected, mode: "buildings" as MapMode, areas: [] as GeoJSON.Feature<GeoJSON.Geometry, MasterAreaProps>[], padH: 0, burjLoaded: false, overlays: DEFAULT_OVERLAYS as Overlays, burj: null as { slug: string } | null, lang: "en" as string, hover: null as string | null, baseKey: null as string | null, restored: false });
   live.current.settings = settings;
   live.current.currency = currency;
   live.current.theme = theme;
   live.current.selected = selected;
   live.current.mode = mode;
+  live.current.lang = lang;
   live.current.padH = padH;
   compareOpen.current = compare.length > 0;
 
@@ -450,7 +464,7 @@ export default function BuildingMap({
     live.current.theme = savedTheme;
     try {
       const o = JSON.parse(load(STORE.overlays) ?? "{}");
-      const ov = { metro: o.metro === true, roads: o.roads === true };
+      const ov = { metro: o.metro === true, roads: o.roads === true, landmarks: o.landmarks !== false };
       live.current.overlays = ov;
       setOverlays(ov);
     } catch { /* overlays stay off */ }
@@ -604,6 +618,15 @@ export default function BuildingMap({
         }
         return;
       }
+      // A named place: a pointer, and its card on click.
+      if (venueAt(map, e.point)) {
+        if (leaveTimer) { clearTimeout(leaveTimer); leaveTimer = null; }
+        setHover(null);
+        setBaseHover(null);
+        popup.remove();
+        map.getCanvas().style.cursor = "pointer";
+        return;
+      }
       // Not a priced building. The grey OpenStreetMap buildings around ours lift on hover too, so every building
       // reacts the same way, but they have no figures and no page: no card and no pointer cursor.
       const base = map.getLayer("base-hover-3d") && map.getLayer("base-3d") ? map.queryRenderedFeatures(e.point, { layers: ["base-3d"] })[0] : undefined;
@@ -655,8 +678,12 @@ export default function BuildingMap({
       el.append(ul);
       chooser.setLngLat([list[0].lng, list[0].lat]).setDOMContent(el).addTo(map);
     };
+    // The card of a named place (a mall, a hotel, an arena).
+    const venuePopup = new maplibregl.Popup({ closeButton: true, closeOnClick: false, offset: 12, maxWidth: "240px", className: "dpi-popup" });
+    venuePopupRef.current = venuePopup;
     map.on("click", (e) => {
       chooser.remove();
+      venuePopup.remove();
       if (live.current.mode === "communities") {
         popup.remove();
         setPlace(null);
@@ -672,6 +699,7 @@ export default function BuildingMap({
         popup.remove();
         setPlace(null);
         const at = vhit.properties as { slug: string };
+        setViaFootprint(null);
         const url = villaUrl(at.slug);
         if (new URLSearchParams(window.location.search).has("villa")) window.history.replaceState(null, "", url);
         else window.history.pushState(null, "", url);
@@ -699,8 +727,30 @@ export default function BuildingMap({
           setHover(null);
           popup.remove();
         }
+        // A named place wins over the grey building under it, never over one of our priced buildings.
+        const venue = venueAt(map, e.point);
+        if (venue) {
+          popup.remove();
+          setPlace(null);
+          setBaseHover(null);
+          const asOf = venuesRef.current?.meta.asOf ?? "";
+          venuePopup.setLngLat(venue.lngLat).setDOMContent(venueCard(venue.props, asOf, live.current.lang === "ar", tRef.current, asOf ? day(asOf) : "")).addTo(map);
+          return;
+        }
         // A grey building: no record in our database, but it still opens a card that says so.
         const base = map.getLayer("base-3d") ? map.queryRenderedFeatures(e.point, { layers: ["base-3d"] })[0] : undefined;
+        // A grey building inside a villa project's area opens that project's card (the figures are for the whole project).
+        const inArea = base && cardMode ? clusterAt(villasRef.current, e.lngLat.lng, e.lngLat.lat) : null;
+        if (inArea) {
+          popup.remove();
+          setPlace(null);
+          setBaseHover(null);
+          setViaFootprint(inArea.slug);
+          const url = villaUrl(inArea.slug);
+          if (new URLSearchParams(window.location.search).has("villa")) window.history.replaceState(null, "", url);
+          else window.history.pushState(null, "", url);
+          return;
+        }
         if (base) {
           setBaseHover(base, e.lngLat);
           setPlace({ lng: e.lngLat.lng, lat: e.lngLat.lat, height: tileHeight(base.properties?.render_height) });
@@ -726,14 +776,20 @@ export default function BuildingMap({
     if (cardMode) {
       fetch("/api/villa-clusters")
         .then((r) => (r.ok ? r.json() : null))
-        .then((geo: { features?: { geometry: { coordinates: [number, number] }; properties: { slug: string; name: string; kind: ClusterKind } }[] } | null) => {
-          if (geo?.features?.length) setVillas(geo.features.map((f) => ({ slug: f.properties.slug, name: f.properties.name, kind: f.properties.kind, lng: f.geometry.coordinates[0], lat: f.geometry.coordinates[1] })));
+        .then((geo: { features?: { geometry: { coordinates: [number, number] }; properties: { slug: string; name: string; kind: ClusterKind; plots?: number | null } }[] } | null) => {
+          if (geo?.features?.length) setVillas(geo.features.map((f) => ({ slug: f.properties.slug, name: f.properties.name, kind: f.properties.kind, lng: f.geometry.coordinates[0], lat: f.geometry.coordinates[1], plots: f.properties.plots })));
         })
         .catch(() => {});
       for (const l of VILLA_LAYERS) {
         map.on("mouseenter", l, () => { map.getCanvas().style.cursor = "pointer"; });
         map.on("mouseleave", l, () => { map.getCanvas().style.cursor = ""; });
       }
+    }
+    if (cardMode) {
+      fetch(VENUES_URL)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((geo: Venues | null) => { if (geo?.features?.length) setVenues(geo); })
+        .catch(() => {});
     }
     fetch("/api/buildings")
       .then((r) => (r.ok ? r.json() : null))
@@ -746,6 +802,7 @@ export default function BuildingMap({
     return () => {
       popup.remove();
       chooser.remove();
+      venuePopup.remove();
       map.remove();
       mapRef.current = null;
     };
@@ -1071,14 +1128,59 @@ export default function BuildingMap({
     const map = mapRef.current;
     const src = map?.getSource("dpi-villas") as maplibregl.GeoJSONSource | undefined;
     if (!map || !styleGen || !src) return;
-    src.setData({ type: "FeatureCollection", features: villas.map((v) => ({ type: "Feature", geometry: { type: "Point", coordinates: [v.lng, v.lat] }, properties: { slug: v.slug, name: v.name, kind: v.kind } })) });
-  }, [villas, styleGen]);
+    const dot: VillaPoint[] = focusDot && focus ? [{ slug: "", name: "", kind: "villa", lng: focus.lng, lat: focus.lat }] : villas;
+    src.setData({ type: "FeatureCollection", features: dot.map((v) => ({ type: "Feature", geometry: { type: "Point", coordinates: [v.lng, v.lat] }, properties: { slug: v.slug, name: v.name, kind: v.kind } })) });
+  }, [villas, styleGen, focusDot, focus?.lng, focus?.lat]);
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !styleGen) return;
     if (map.getLayer("dpi-villas-selected")) map.setFilter("dpi-villas-selected", ["==", ["get", "slug"], villaSlug ?? ""]);
     for (const l of [...VILLA_LAYERS, "dpi-villas-selected"]) if (map.getLayer(l)) map.setLayoutProperty(l, "visibility", mode === "buildings" ? "visible" : "none");
   }, [villaSlug, mode, styleGen]);
+  // The footprints inside the selected project's area are tinted amber, so it is clear which buildings the card is about.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !styleGen) return;
+    const clear = () => { (map.getSource("villa-area") as maplibregl.GeoJSONSource | undefined)?.setData(EMPTY); };
+    if (!villa || mode !== "buildings") { clear(); return; }
+    if (!map.getSource("villa-area")) {
+      map.addSource("villa-area", { type: "geojson", data: EMPTY });
+      map.addLayer({ id: "villa-area-3d", type: "fill-extrusion", source: "villa-area", paint: {
+        "fill-extrusion-color": "#f59e0b", "fill-extrusion-height": ["+", ["get", "h"], 0.6], "fill-extrusion-base": ["get", "b"], "fill-extrusion-opacity": 0.8 } }, map.getLayer("dpi-venues-3") ? "dpi-venues-3" : undefined);
+    }
+    const radius = clusterRadiusM(villa.plots, villa.kind);
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const paint = () => {
+      const src = map.getSource("villa-area") as maplibregl.GeoJSONSource | undefined;
+      if (!src || !tileSourceRef.current || !map.getLayer("base-3d") || map.getZoom() < 14) return;
+      const seen = new Set<string>();
+      const features: GeoJSON.Feature[] = [];
+      // Every footprint in the loaded tiles (not only the padded part of the view that is above the card).
+      const all = map.querySourceFeatures(tileSourceRef.current ?? "", { sourceLayer: "building", filter: ["!", ["has", "hide_3d"]] });
+      for (const f of all) {
+        const g = f.geometry;
+        // One tile feature can hold many buildings (a MultiPolygon): test each building on its own.
+        const polys: GeoJSON.Position[][][] = g.type === "Polygon" ? [g.coordinates] : g.type === "MultiPolygon" ? g.coordinates : [];
+        for (const rings of polys) {
+          const [x, y] = rings[0][0];
+          if (metresBetween(x, y, villa.lng, villa.lat) > radius) continue;
+          const key = `${x.toFixed(6)},${y.toFixed(6)}`;
+          if (seen.has(key)) continue; // the same building cut by a tile edge, or listed in two tiles
+          seen.add(key);
+          features.push({ type: "Feature", geometry: { type: "Polygon", coordinates: rings }, properties: { h: Number(f.properties?.render_height ?? 4), b: Number(f.properties?.render_min_height ?? 0) } });
+        }
+      }
+      if (features.length === lastCount && map.getZoom() === lastZoom) return; // nothing new: do not redraw (setData would re-trigger idle)
+      lastCount = features.length; lastZoom = map.getZoom();
+      src.setData({ type: "FeatureCollection", features });
+    };
+    let lastCount = -1, lastZoom = -1;
+    const later = () => { if (timer) clearTimeout(timer); timer = setTimeout(paint, 250); };
+    map.on("moveend", later);
+    map.on("idle", later); // tiles arrive after the move ends
+    later();
+    return () => { map.off("moveend", later); map.off("idle", later); if (timer) clearTimeout(timer); };
+  }, [villa, mode, styleGen]);
   const movedToVilla = useRef<string | null>(null);
   useEffect(() => {
     const map = mapRef.current;
@@ -1092,6 +1194,16 @@ export default function BuildingMap({
     return () => clearTimeout(timer);
   }, [villa, dataDone]);
   useEffect(() => { if (!villaSlug) movedToVilla.current = null; }, [villaSlug]);
+
+  // Named places, drawn above the buildings. Out of the way in the Communities view and while the nearby lines are on.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !styleGen || !venues) return;
+    const on = overlays.landmarks && mode === "buildings" && !nearby;
+    addVenueLayers(map, venues, THEMES[live.current.theme].dark);
+    setVenueVisibility(map, on);
+    if (!on) venuePopupRef.current?.remove();
+  }, [venues, overlays.landmarks, mode, nearby, styleGen]);
 
   // Phones: with a community card open, the left tool rail and Guide button step aside, like they do for a building.
   useEffect(() => {
@@ -1422,7 +1534,7 @@ export default function BuildingMap({
         />
       )}
       {cardMode && villa && (
-        <VillaClusterCard key={villa.slug} slug={villa.slug} name={villa.name} kind={villa.kind} currency={currency} onClose={() => window.history.replaceState(null, "", villaUrl(null))} />
+        <VillaClusterCard key={villa.slug} slug={villa.slug} name={villa.name} kind={villa.kind} currency={currency} fromFootprint={viaFootprint === villa.slug} onClose={() => window.history.replaceState(null, "", villaUrl(null))} />
       )}
       {place && !selected && !villa && <PlaceCard place={place} onClose={() => setPlace(null)} />}
       {cardMode && selected && cardHidden && (

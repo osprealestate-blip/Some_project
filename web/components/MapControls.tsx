@@ -92,7 +92,7 @@ export default function MapControls(p: Props) {
   }
 
   return (
-    <div data-map-legend className="absolute bottom-[5.5rem] start-2 z-10 flex max-h-[calc(100%-7rem)] w-[min(300px,calc(100%-1rem))] sm:bottom-auto sm:start-auto sm:end-2 sm:top-2 sm:max-h-[calc(100%-9rem)] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--panel)]/95 text-xs shadow-lg backdrop-blur">
+    <div data-map-legend className="absolute bottom-[5.5rem] start-2 z-10 max-md:z-30 flex max-h-[calc(100%-7rem)] w-[min(300px,calc(100%-1rem))] sm:bottom-auto sm:start-auto sm:end-2 sm:top-2 sm:max-h-[calc(100%-9rem)] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--panel)]/95 text-xs shadow-lg backdrop-blur">
       <div className="flex items-center gap-1.5 border-b border-[var(--border)] px-2.5 py-2">
         {metricSelect}
         {!p.compact && (
@@ -192,7 +192,7 @@ export default function MapControls(p: Props) {
             <fieldset>
               <legend className="mb-1 font-medium">{t("Map layers")}</legend>
               <div className="flex flex-wrap gap-1.5">
-                {([["metro", "Metro and tram"], ["roads", "Major highways"]] as const).map(([key, label]) => (
+                {([["landmarks", "Landmarks"], ["metro", "Metro and tram"], ["roads", "Major highways"]] as const).map(([key, label]) => (
                   <button
                     key={key}
                     type="button"
@@ -205,6 +205,7 @@ export default function MapControls(p: Props) {
                 ))}
               </div>
               <p className="mt-1 text-[11px] text-[var(--muted)]">{t("Lines and stations as mapped in OpenStreetMap.")}</p>
+              <p className="text-[11px] text-[var(--muted)]">{t("Landmarks: names of malls, hotels, arenas, parks and sights from OpenStreetMap. Zoom in for more.")}</p>
             </fieldset>
 
             <fieldset>
@@ -227,7 +228,7 @@ export default function MapControls(p: Props) {
 
             <button
               type="button"
-              onClick={() => { p.onSettings(DEFAULT_SETTINGS); p.onTheme(DEFAULT_THEME); p.onOverlay("metro", false); p.onOverlay("roads", false); }}
+              onClick={() => { p.onSettings(DEFAULT_SETTINGS); p.onTheme(DEFAULT_THEME); p.onOverlay("metro", false); p.onOverlay("roads", false); p.onOverlay("landmarks", true); }}
               className="link text-[11px]"
             >
               {t("Reset to defaults")}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bedLabel, bedroomMix, type ClusterRoomRow } from "./villaCluster";
+import { bedLabel, bedroomMix, clusterAt, clusterRadiusM, type ClusterRoomRow } from "./villaCluster";
 
 const row = (rooms: number, n: number): ClusterRoomRow => ({ rooms, sale_count_12m: n, sale_median_psf_12m: null, sale_median_price_12m: null, sale_median_size_12m: null, rent_count_12m: 0, rent_median_12m: null });
 
@@ -19,5 +19,22 @@ describe("bedroomMix", () => {
   });
   it("labels bedrooms", () => {
     expect([bedLabel(0), bedLabel(1), bedLabel(7)]).toEqual(["Studio", "1 bed", "4+ bed"]);
+  });
+});
+
+describe("cluster area", () => {
+  it("sizes the area from the plot count, within limits", () => {
+    expect(clusterRadiusM(null)).toBe(150);
+    expect(clusterRadiusM(10)).toBe(90);
+    expect(clusterRadiusM(200)).toBe(Math.round(Math.sqrt((200 * 450) / Math.PI)));
+    expect(clusterRadiusM(100000)).toBe(450);
+    expect(clusterRadiusM(200, "townhouse")).toBeLessThan(clusterRadiusM(200, "villa"));
+  });
+  it("finds the cluster a point sits in, and none outside", () => {
+    const a = { slug: "a", kind: "villa" as const, lng: 55.2, lat: 25.0, plots: 200 };
+    const b = { slug: "b", kind: "villa" as const, lng: 55.2012, lat: 25.0, plots: 200 }; // ~120 m east of a
+    expect(clusterAt([a, b], 55.2, 25.0)?.slug).toBe("a");
+    expect(clusterAt([a, b], 55.2011, 25.0)?.slug).toBe("b"); // deeper inside b
+    expect(clusterAt([a, b], 55.3, 25.0)).toBeNull();
   });
 });
