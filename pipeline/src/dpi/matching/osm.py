@@ -285,8 +285,12 @@ def place(conn, osm_json: dict | None, manual_csv: Path | None, community_codes:
     with conn.cursor() as cur:
         # Approximate positions are rebuilt from the exact ones every run.
         in_scope = " and community_id in (select c.id from communities c where true" + where + ")"
+        # 'site' positions come from two places (the development's OSM feature, and a name search that finds
+        # several towers at one spot), so they are only cleared when this run can rebuild both. Otherwise a run
+        # without OSM data or without --nominatim would wipe them and not bring them back.
+        clear = [s for s in DERIVED if s != "site" or (osm and lookup is not None)]
         cur.execute("update buildings set geom = null, geom_source = null where geom_source = any(%s)" + in_scope,
-                    [list(DERIVED), *params])
+                    [clear, *params])
         if osm:  # OSM positions come back below if they still match
             cur.execute("update buildings set geom = null, geom_source = null, osm_id = null "
                         "where geom_source = 'osm' and osm_id is not null" + in_scope, params)
